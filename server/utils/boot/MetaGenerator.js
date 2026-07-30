@@ -1,3 +1,7 @@
+const DEFAULT_APP_NAME = "SkyBao";
+const DEFAULT_PAGE_TITLE = "SkyBao";
+const DEFAULT_FAVICON = "/skybao-logo.svg";
+
 /**
  * @typedef MetaTagDefinition
  * @property {('link'|'meta')} tag - the type of meta tag element
@@ -27,14 +31,14 @@ class MetaGenerator {
   #customConfig = null;
 
   #defaultManifest = {
-    name: "AnythingLLM",
-    short_name: "AnythingLLM",
+    name: DEFAULT_APP_NAME,
+    short_name: DEFAULT_APP_NAME,
     display: "standalone",
     orientation: "portrait",
     start_url: "/",
     icons: [
       {
-        src: "/favicon.png",
+        src: DEFAULT_FAVICON,
         sizes: "any",
       },
     ],
@@ -53,27 +57,27 @@ class MetaGenerator {
     return [
       {
         tag: "link",
-        props: { type: "image/svg+xml", href: "/favicon.png" },
+        props: { type: "image/svg+xml", href: DEFAULT_FAVICON },
         content: null,
       },
       {
         tag: "title",
         props: null,
-        content: "AnythingLLM | Your personal LLM trained on anything",
+        content: DEFAULT_PAGE_TITLE,
       },
 
       {
         tag: "meta",
         props: {
           name: "title",
-          content: "AnythingLLM | Your personal LLM trained on anything",
+          content: DEFAULT_PAGE_TITLE,
         },
       },
       {
         tag: "meta",
         props: {
           description: "title",
-          content: "AnythingLLM | Your personal LLM trained on anything",
+          content: DEFAULT_PAGE_TITLE,
         },
       },
 
@@ -87,14 +91,14 @@ class MetaGenerator {
         tag: "meta",
         props: {
           property: "og:title",
-          content: "AnythingLLM | Your personal LLM trained on anything",
+          content: DEFAULT_PAGE_TITLE,
         },
       },
       {
         tag: "meta",
         props: {
           property: "og:description",
-          content: "AnythingLLM | Your personal LLM trained on anything",
+          content: DEFAULT_PAGE_TITLE,
         },
       },
       {
@@ -119,14 +123,14 @@ class MetaGenerator {
         tag: "meta",
         props: {
           property: "twitter:title",
-          content: "AnythingLLM | Your personal LLM trained on anything",
+          content: DEFAULT_PAGE_TITLE,
         },
       },
       {
         tag: "meta",
         props: {
           property: "twitter:description",
-          content: "AnythingLLM | Your personal LLM trained on anything",
+          content: DEFAULT_PAGE_TITLE,
         },
       },
       {
@@ -138,8 +142,11 @@ class MetaGenerator {
         },
       },
 
-      { tag: "link", props: { rel: "icon", href: "/favicon.png" } },
-      { tag: "link", props: { rel: "apple-touch-icon", href: "/favicon.png" } },
+      { tag: "link", props: { rel: "icon", href: DEFAULT_FAVICON } },
+      {
+        tag: "link",
+        props: { rel: "apple-touch-icon", href: DEFAULT_FAVICON },
+      },
 
       // PWA specific tags
       {
@@ -188,12 +195,12 @@ class MetaGenerator {
   }
 
   #validUrl(faviconUrl = null) {
-    if (faviconUrl === null) return "/favicon.png";
+    if (faviconUrl === null) return DEFAULT_FAVICON;
     try {
       const url = new URL(faviconUrl);
       return url.toString();
     } catch {
-      return "/favicon.png";
+      return DEFAULT_FAVICON;
     }
   }
 
@@ -227,9 +234,7 @@ class MetaGenerator {
           return {
             tag: "title",
             props: null,
-            content:
-              customTitle ??
-              "AnythingLLM | Your personal LLM trained on anything",
+            content: customTitle ?? DEFAULT_PAGE_TITLE,
           };
         }
         // Override meta title
@@ -238,9 +243,7 @@ class MetaGenerator {
             tag: "meta",
             props: {
               name: "title",
-              content:
-                customTitle ??
-                "AnythingLLM | Your personal LLM trained on anything",
+              content: customTitle ?? DEFAULT_PAGE_TITLE,
             },
           };
         }
@@ -250,9 +253,7 @@ class MetaGenerator {
             tag: "meta",
             props: {
               property: "og:title",
-              content:
-                customTitle ??
-                "AnythingLLM | Your personal LLM trained on anything",
+              content: customTitle ?? DEFAULT_PAGE_TITLE,
             },
           };
         }
@@ -262,9 +263,7 @@ class MetaGenerator {
             tag: "meta",
             props: {
               property: "twitter:title",
-              content:
-                customTitle ??
-                "AnythingLLM | Your personal LLM trained on anything",
+              content: customTitle ?? DEFAULT_PAGE_TITLE,
             },
           };
         }
@@ -330,20 +329,20 @@ class MetaGenerator {
       const { SystemSettings } = require("../../models/systemSettings");
       const manifestName = await SystemSettings.getValueOrFallback(
         { label: "meta_page_title" },
-        "AnythingLLM"
+        DEFAULT_APP_NAME
       );
       const faviconURL = await SystemSettings.getValueOrFallback(
         { label: "meta_page_favicon" },
         null
       );
 
-      let iconUrl = "/favicon.png";
+      let iconUrl = DEFAULT_FAVICON;
       if (faviconURL) {
         try {
           new URL(faviconURL);
           iconUrl = faviconURL;
         } catch {
-          iconUrl = "/favicon.png";
+          iconUrl = DEFAULT_FAVICON;
         }
       }
 

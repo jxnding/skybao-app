@@ -31,11 +31,12 @@ export function useTheme() {
     return stored || "system";
   });
 
-  const [systemTheme, setSystemTheme] = useState(() =>
-    window.matchMedia?.("(prefers-color-scheme: light)").matches
-      ? "light"
-      : "dark"
-  );
+  const [systemTheme, setSystemTheme] = useState(() => {
+    // SkyBao default: light theme when the OS preference is light or cannot be detected.
+    if (window.matchMedia?.("(prefers-color-scheme: light)").matches) return "light";
+    if (window.matchMedia?.("(prefers-color-scheme: dark)").matches) return "dark";
+    return "light";
+  });
 
   // Listen for OS level theme changes
   useEffect(() => {

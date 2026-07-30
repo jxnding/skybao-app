@@ -16,10 +16,12 @@ export default function PasswordModal({ mode = "single" }) {
       <img
         src={loginLogo}
         alt="Logo"
-        className={`max-h-[80px] ${isCustomLogo ? "rounded-lg" : ""}`}
+        className={`relative z-[2] max-h-[80px] ${isCustomLogo ? "rounded-lg" : ""}`}
         style={{ objectFit: "contain" }}
       />
-      {mode === "single" ? <SingleUserAuth /> : <MultiUserAuth />}
+      <div className="relative z-[2]">
+        {mode === "single" ? <SingleUserAuth /> : <MultiUserAuth />}
+      </div>
     </div>
   );
 }

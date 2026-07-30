@@ -8,7 +8,7 @@ const TRANSLATIONS = {
     llm: {
       title: "Preferovaný LLM",
       description:
-        "AnythingLLM může pracovat s mnoha poskytovateli LLM. Toto bude služba, která bude zpracovávat chatování.",
+        "SkyBao může pracovat s mnoha poskytovateli LLM. Toto bude služba, která bude zpracovávat chatování.",
     },
     userSetup: {
       title: "Nastavení uživatele",
@@ -35,15 +35,15 @@ const TRANSLATIONS = {
         "Tato nastavení lze kdykoliv znovu nakonfigurovat v nastavení.",
     },
     survey: {
-      title: "Vítejte v AnythingLLM",
+      title: "Vítejte v SkyBao",
       description:
-        "Pomozte nám vybudovat AnythingLLM pro vaše potřeby. Volitelné.",
+        "Pomozte nám vybudovat SkyBao pro vaše potřeby. Volitelné.",
       email: "Jaký je váš e-mail?",
-      useCase: "K čemu budete AnythingLLM používat?",
+      useCase: "K čemu budete SkyBao používat?",
       useCaseWork: "Pro práci",
       useCasePersonal: "Pro osobní použití",
       useCaseOther: "Jiné",
-      comment: "Jak jste se o AnythingLLM dozvěděli?",
+      comment: "Jak jste se o SkyBao dozvěděli?",
       commentPlaceholder:
         "Reddit, Twitter, GitHub, YouTube atd. - Dejte nám vědět, jak jste nás našli!",
       skip: "Přeskočit průzkum",
@@ -105,7 +105,7 @@ const TRANSLATIONS = {
     "experimental-features": "Experimentální funkce",
     contact: "Kontaktovat podporu",
     "browser-extension": "Rozšíření prohlížeče",
-    "mobile-app": "AnythingLLM Mobile",
+    "mobile-app": "SkyBao Mobile",
     "community-hub": {
       title: "Centrální místo pro komunitu",
       trending: "Prozkoumejte aktuální trendy",
@@ -172,7 +172,7 @@ const TRANSLATIONS = {
       add: "Přidat novou zprávu",
       save: "Uložit zprávy",
       heading: "Vysvětlit mi",
-      body: "výhody AnythingLLM",
+      body: "výhody SkyBao",
     },
     delete: {
       title: "Smazat pracovní prostor",
@@ -761,7 +761,7 @@ const TRANSLATIONS = {
       "intelligent-skill-selection": {
         title: "Inteligentní výběr dovedností",
         description:
-          "Umožněte použití libovolného počtu nástrojů a snížit využití tokenů až o 80 % pro každou dotaz — AnythingLLM automaticky vybírá vhodné dovednosti pro každou žádost.",
+          "Umožněte použití libovolného počtu nástrojů a snížit využití tokenů až o 80 % pro každou dotaz — SkyBao automaticky vybírá vhodné dovednosti pro každou žádost.",
         "max-tools": {
           title: "Nástroje Max",
           description:
@@ -798,16 +798,16 @@ const TRANSLATIONS = {
   customization: {
     interface: {
       title: "Předvolby rozhraní",
-      description: "Nastavte své předvolby rozhraní pro AnythingLLM.",
+      description: "Nastavte své předvolby rozhraní pro SkyBao.",
     },
     branding: {
       title: "Značení a bílé označení",
       description:
-        "Bílé označení instance AnythingLLM pomocí vlastního značení.",
+        "Bílé označení instance SkyBao pomocí vlastního značení.",
     },
     chat: {
       title: "Chat",
-      description: "Nastavte své předvolby chatu pro AnythingLLM.",
+      description: "Nastavte své předvolby chatu pro SkyBao.",
       auto_submit: {
         title: "Automatické odeslání hlasového vstupu",
         description: "Automaticky odeslat hlasový vstup po období ticha",
@@ -844,7 +844,7 @@ const TRANSLATIONS = {
       "display-language": {
         title: "Zobrazovací jazyk",
         description:
-          "Vyberte preferovaný jazyk pro vykreslení rozhraní AnythingLLM - pokud jsou k dispozici překlady.",
+          "Vyberte preferovaný jazyk pro vykreslení rozhraní SkyBao - pokud jsou k dispozici překlady.",
       },
       logo: {
         title: "Logo značky",
@@ -891,7 +891,7 @@ const TRANSLATIONS = {
   api: {
     title: "API klíče",
     description:
-      "API klíče umožňují držiteli programově přistupovat a spravovat tuto instanci AnythingLLM.",
+      "API klíče umožňují držiteli programově přistupovat a spravovat tuto instanci SkyBao.",
     link: "Přečíst dokumentaci API",
     generate: "Generovat nový API klíč",
     empty: "Nebyly nalezeny žádné API klíče",
@@ -905,7 +905,7 @@ const TRANSLATIONS = {
       close: "Zavřít",
       create: "Vytvořit API klíč",
       helper:
-        "Po vytvoření lze API klíč použít pro programový přístup k této instanci AnythingLLM a její správu.",
+        "Po vytvoření lze API klíč použít pro programový přístup k této instanci SkyBao a její správu.",
       name: {
         label: "Název",
         placeholder: "Produkční integrace",
@@ -930,7 +930,7 @@ const TRANSLATIONS = {
   llm: {
     title: "Preferovaný LLM",
     description:
-      "Toto jsou přihlašovací údaje a nastavení pro vašeho preferovaného poskytovatele chatu a embeddingu LLM. Je důležité, aby tyto klíče byly aktuální a správné, jinak AnythingLLM nebude fungovat správně.",
+      "Toto jsou přihlašovací údaje a nastavení pro vašeho preferovaného poskytovatele chatu a embeddingu LLM. Je důležité, aby tyto klíče byly aktuální a správné, jinak SkyBao nebude fungovat správně.",
     provider: "Poskytovatel LLM",
     providers: {
       azure_openai: {
@@ -952,7 +952,7 @@ const TRANSLATIONS = {
       "Toto jsou přihlašovací údaje a nastavení pro vašeho preferovaného poskytovatele modelu přepisu. Je důležité, aby tyto klíče byly aktuální a správné, jinak mediální soubory a audio nebudou přepisovány.",
     provider: "Poskytovatel přepisu",
     "warn-start":
-      "Použití místního modelu whisper na strojích s omezenou RAM nebo CPU může zastavit AnythingLLM při zpracování mediálních souborů.",
+      "Použití místního modelu whisper na strojích s omezenou RAM nebo CPU může zastavit SkyBao při zpracování mediálních souborů.",
     "warn-recommend": "Doporučujeme alespoň 2GB RAM a nahrávat soubory <10Mb.",
     "warn-end": "Vestavěný model se automaticky stáhne při prvním použití.",
   },
@@ -961,7 +961,7 @@ const TRANSLATIONS = {
     "desc-start":
       "Při použití LLM, který nativně nepodporuje engine embeddingu - možná budete muset additionally uvést přihlašovací údaje pro embeddingování textu.",
     "desc-end":
-      "Embedding je proces převodu textu na vektory. Tyto přihlašovací údaje jsou nutné k převodu vašich souborů a výzev do formátu, který AnythingLLM může použít ke zpracování.",
+      "Embedding je proces převodu textu na vektory. Tyto přihlašovací údaje jsou nutné k převodu vašich souborů a výzev do formátu, který SkyBao může použít ke zpracování.",
     provider: {
       title: "Poskytovatel embeddingu",
     },
@@ -987,7 +987,7 @@ const TRANSLATIONS = {
   vector: {
     title: "Vektorová databáze",
     description:
-      "Toto jsou přihlašovací údaje a nastavení, jak bude vaše instance AnythingLLM fungovat. Je důležité, aby tyto klíče byly aktuální a správné.",
+      "Toto jsou přihlašovací údaje a nastavení, jak bude vaše instance SkyBao fungovat. Je důležité, aby tyto klíče byly aktuální a správné.",
     provider: {
       title: "Poskytovatel vektorové databáze",
       description: "Pro LanceDB není potřeba žádná konfigurace.",
@@ -1036,7 +1036,7 @@ const TRANSLATIONS = {
     password: {
       title: "Ochrana heslem",
       description:
-        "Chraňte svou instanci AnythingLLM heslem. Pokud zapomenete, neexistuje způsob obnovení, proto se ujistěte, že heslo uložíte.",
+        "Chraňte svou instanci SkyBao heslem. Pokud zapomenete, neexistuje způsob obnovení, proto se ujistěte, že heslo uložíte.",
       "password-label": "Heslo instance",
     },
   },
@@ -1054,7 +1054,7 @@ const TRANSLATIONS = {
   privacy: {
     title: "Soukromí a zpracování dat",
     description:
-      "Toto je vaše konfigurace, jak připojené třetí strany a AnythingLLM zpracovávají vaše data.",
+      "Toto je vaše konfigurace, jak připojené třetí strany a SkyBao zpracovávají vaše data.",
     anonymous: "Anonymní telemetrie je povolena",
   },
   connectors: {
@@ -1224,22 +1224,22 @@ const TRANSLATIONS = {
       fetching: "Načítání...",
       "fetch-website": "Stáhnout webovou stránku",
       "privacy-notice":
-        "Tyto soubory budou nahrány na procesor dokumentů běžící na této instanci AnythingLLM. Tyto soubory nejsou odesílány nebo sdíleny s třetí stranou.",
+        "Tyto soubory budou nahrány na procesor dokumentů běžící na této instanci SkyBao. Tyto soubory nejsou odesílány nebo sdíleny s třetí stranou.",
     },
     pinning: {
       what_pinning: "Co je připínání dokumentů?",
       pin_explained_block1:
-        "Když <b>připnete</b> dokument v AnythingLLM, vložíme celý obsah dokumentu do vašeho okna výzvy, aby ho LLM plně pochopil.",
+        "Když <b>připnete</b> dokument v SkyBao, vložíme celý obsah dokumentu do vašeho okna výzvy, aby ho LLM plně pochopil.",
       pin_explained_block2:
         "To funguje nejlépe s <b>modely s velkým kontextem</b> nebo malými soubory, které jsou kritické pro jejich znalostní základ.",
       pin_explained_block3:
-        "Pokud nedostáváte odpovědi, které si přejete od AnythingLLM ve výchozím nastavení, pak připínání je skvělý způsob získání kvalitnějších odpovědí jedním kliknutím.",
+        "Pokud nedostáváte odpovědi, které si přejete od SkyBao ve výchozím nastavení, pak připínání je skvělý způsob získání kvalitnějších odpovědí jedním kliknutím.",
       accept: "OK, rozumím",
     },
     watching: {
       what_watching: "Co dělá sledování dokumentu?",
       watch_explained_block1:
-        "Když <b>sledujete</b> dokument v AnythingLLM, <i>automaticky</i> synchronizujeme obsah dokumentu z jeho původního zdroje v pravidelných intervalech. Tím se automaticky aktualizuje obsah v každém pracovním prostoru, kde je tento soubor spravován.",
+        "Když <b>sledujete</b> dokument v SkyBao, <i>automaticky</i> synchronizujeme obsah dokumentu z jeho původního zdroje v pravidelných intervalech. Tím se automaticky aktualizuje obsah v každém pracovním prostoru, kde je tento soubor spravován.",
       watch_explained_block2:
         "Tato funkce v současné době podporuje onlineový obsah a nebude k dispozici pro ručně nahrané dokumenty.",
       watch_explained_block3_start:
@@ -1376,7 +1376,7 @@ const TRANSLATIONS = {
         edit_description: "Aktualizujte obsah této paměti.",
         label: "Paměť",
         placeholder:
-          "např. Jméno uživatele je Joe, uživatel pracuje na AnythingLLM, atd.",
+          "např. Jméno uživatele je Joe, uživatel pracuje na SkyBao, atd.",
         create: "Vytvořit",
         save: "Uložit",
         cancel: "Zrušit",
@@ -1509,7 +1509,7 @@ const TRANSLATIONS = {
         unauthenticated: {
           title: "Vyžadováno ověření",
           description:
-            "Musíte se ověřit pomocí komunitního centra AnythingLLM před publikováním položek.",
+            "Musíte se ověřit pomocí komunitního centra SkyBao před publikováním položek.",
           button: "Připojit se ke komunitnímu centru",
         },
       },
@@ -1518,7 +1518,7 @@ const TRANSLATIONS = {
   telegram: {
     title: "Bot pro Telegram",
     description:
-      "Propojte svůj instance AnythingLLM s aplikací Telegram, abyste mohli komunikovat se svými pracovními prostory odkudkoli.",
+      "Propojte svůj instance SkyBao s aplikací Telegram, abyste mohli komunikovat se svými pracovními prostory odkudkoli.",
     setup: {
       step1: {
         title: "Krok 1: Vytvořte svého Telegramového robota",

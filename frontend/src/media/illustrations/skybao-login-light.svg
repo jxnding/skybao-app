@@ -1,0 +1,31 @@
+<svg width="93" height="93" viewBox="0 0 93 93" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="SkyBao">
+  <defs>
+    <linearGradient id="sb-login-sky" x1="0" y1="0" x2="93" y2="93" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#38bdf8"/>
+      <stop offset="0.55" stop-color="#0ea5e9"/>
+      <stop offset="1" stop-color="#0284c7"/>
+    </linearGradient>
+    <linearGradient id="sb-login-cloud" x1="28" y1="35" x2="69" y2="65" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#e0f2fe"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Tile matches original login-logo layout: rounded rect with 4px top offset -->
+  <rect x="4" width="84.1875" height="84.1875" rx="20" fill="url(#sb-login-sky)"/>
+  <circle cx="46" cy="43" r="28" fill="#ffffff" opacity="0.08"/>
+
+  <!-- Cloud mark, scaled into the tile -->
+  <path
+    d="M35 62c-7.2 0-13.05-5.85-13.05-13.05 0-6.4 4.6-11.7 10.7-12.8 1.97-6.99 8.42-12.1 16-12.1 8.45 0 15.35 6.7 15.7 15.06 5.07 1.65 8.75 6.5 8.75 12.24 0 7.2-5.85 13.05-13.05 13.05H36.5c-.48 0-.96-.02-1.43-.07.6.16 1.24.24 1.88.24z"
+    fill="url(#sb-login-cloud)"
+  />
+  <path
+    d="M28 65c8-5 18-5 26-1.5s16 5 25 0"
+    stroke="#0c4a6e"
+    stroke-opacity="0.18"
+    stroke-width="2.2"
+    stroke-linecap="round"
+    fill="none"
+  />
+</svg>

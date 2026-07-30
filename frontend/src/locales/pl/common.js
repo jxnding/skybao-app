@@ -8,7 +8,7 @@ const TRANSLATIONS = {
     llm: {
       title: "Preferencje modeli językowych",
       description:
-        "AnythingLLM może współpracować z wieloma dostawcami modeli językowych",
+        "SkyBao może współpracować z wieloma dostawcami modeli językowych",
     },
     userSetup: {
       title: "Konfiguracja użytkownika",
@@ -35,15 +35,15 @@ const TRANSLATIONS = {
         "Ustawienia te można zmienić w dowolnym momencie w ustawieniach.",
     },
     survey: {
-      title: "Witamy w AnythingLLM",
+      title: "Witamy w SkyBao",
       description:
-        "Pomóż nam stworzyć AnythingLLM dostosowany do Twoich potrzeb. Opcjonalnie.",
+        "Pomóż nam stworzyć SkyBao dostosowany do Twoich potrzeb. Opcjonalnie.",
       email: "Jaki jest Twój adres e-mail?",
-      useCase: "Do czego będziesz używać AnythingLLM?",
+      useCase: "Do czego będziesz używać SkyBao?",
       useCaseWork: "Do pracy",
       useCasePersonal: "Do użytku osobistego",
       useCaseOther: "Inne",
-      comment: "Skąd dowiedziałeś się o AnythingLLM?",
+      comment: "Skąd dowiedziałeś się o SkyBao?",
       commentPlaceholder:
         "Reddit, Twitter, GitHub, YouTube itp. - Daj nam znać, jak nas znalazłeś!",
       skip: "Pomiń ankietę",
@@ -98,7 +98,7 @@ const TRANSLATIONS = {
     "experimental-features": "Funkcje eksperymentalne",
     contact: "Kontakt z pomocą techniczną",
     "browser-extension": "Rozszerzenie przeglądarki",
-    "mobile-app": "AnythingLLM Mobile",
+    "mobile-app": "SkyBao Mobile",
     "community-hub": {
       title: "Centrum Społeczności",
       trending: "Odkryj popularne",
@@ -164,7 +164,7 @@ const TRANSLATIONS = {
       add: "Dodaj nową wiadomość",
       save: "Zapisz wiadomości",
       heading: "Wyjaśnij mi",
-      body: "Korzyści z AnythingLLM",
+      body: "Korzyści z SkyBao",
     },
     delete: {
       title: "Usuń obszar roboczy",
@@ -805,16 +805,16 @@ const TRANSLATIONS = {
   customization: {
     interface: {
       title: "Preferencje interfejsu użytkownika",
-      description: "Ustaw preferencje interfejsu użytkownika dla AnythingLLM.",
+      description: "Ustaw preferencje interfejsu użytkownika dla SkyBao.",
     },
     branding: {
       title: "Branding i white-labeling",
       description:
-        "Oznakuj swoją instancję AnythingLLM niestandardowym brandingiem.",
+        "Oznakuj swoją instancję SkyBao niestandardowym brandingiem.",
     },
     chat: {
       title: "Czat",
-      description: "Ustaw preferencje czatu dla AnythingLLM.",
+      description: "Ustaw preferencje czatu dla SkyBao.",
       auto_submit: {
         title: "Automatyczne przesyłanie mowy",
         description: "Automatyczne przesyłanie mowy po wykryciu ciszy.",
@@ -851,7 +851,7 @@ const TRANSLATIONS = {
       "display-language": {
         title: "Język",
         description:
-          "Wybierz preferowany język interfejsu użytkownika AnythingLLM - jeśli dostępne są tłumaczenia.",
+          "Wybierz preferowany język interfejsu użytkownika SkyBao - jeśli dostępne są tłumaczenia.",
       },
       logo: {
         title: "Logo",
@@ -898,7 +898,7 @@ const TRANSLATIONS = {
   api: {
     title: "Klucze API",
     description:
-      "Klucze API umożliwiają dostęp do instancji AnythingLLM i zarządzanie nią.",
+      "Klucze API umożliwiają dostęp do instancji SkyBao i zarządzanie nią.",
     link: "Przeczytaj dokumentację API",
     generate: "Generuj nowy klucz API",
     empty: "Nie znaleziono kluczy API",
@@ -912,7 +912,7 @@ const TRANSLATIONS = {
       close: "Zamknij",
       create: "Utwórz klucz API",
       helper:
-        "Po utworzeniu klucz API może być używany do programowego dostępu do tej instancji AnythingLLM i jej konfiguracji.",
+        "Po utworzeniu klucz API może być używany do programowego dostępu do tej instancji SkyBao i jej konfiguracji.",
       name: {
         label: "Nazwa",
         placeholder: "Integracja produkcyjna",
@@ -937,7 +937,7 @@ const TRANSLATIONS = {
   llm: {
     title: "Preferencje LLM",
     description:
-      "Tutaj skonfigurujesz dostawcę modeli językowych używanych do czatów i embeddingów. Upewnij się, że wszystkie klucze są aktualne i poprawne - bez tego AnythingLLM nie będzie działać.",
+      "Tutaj skonfigurujesz dostawcę modeli językowych używanych do czatów i embeddingów. Upewnij się, że wszystkie klucze są aktualne i poprawne - bez tego SkyBao nie będzie działać.",
     provider: "Dostawca LLM",
     providers: {
       azure_openai: {
@@ -959,7 +959,7 @@ const TRANSLATIONS = {
       "Tutaj skonfigurujesz dostawcę modeli używanych do transkrypcji plików audio i wideo. Upewnij się, że klucze są poprawne - bez tego pliki audio nie będą transkrybowane.",
     provider: "Dostawca usług transkrypcji",
     "warn-start":
-      "Korzystanie z lokalnego modelu Whisper na komputerach z ograniczoną pamięcią RAM lub procesorem może spowodować przerwanie pracy AnythingLLM podczas przetwarzania plików multimedialnych.",
+      "Korzystanie z lokalnego modelu Whisper na komputerach z ograniczoną pamięcią RAM lub procesorem może spowodować przerwanie pracy SkyBao podczas przetwarzania plików multimedialnych.",
     "warn-recommend":
       "Zalecana konfiguracja to co najmniej 2 GB pamięci RAM, przesyłaj pliki <10 MB.",
     "warn-end":
@@ -996,7 +996,7 @@ const TRANSLATIONS = {
   vector: {
     title: "Wektorowa baza danych",
     description:
-      "Tutaj skonfigurujesz wektorową bazę danych dla AnythingLLM. Upewnij się, że wszystkie ustawienia są poprawne.",
+      "Tutaj skonfigurujesz wektorową bazę danych dla SkyBao. Upewnij się, że wszystkie ustawienia są poprawne.",
     provider: {
       title: "Wektorowa baza danych",
       description: "LanceDB nie wymaga żadnej konfiguracji.",
@@ -1040,7 +1040,7 @@ const TRANSLATIONS = {
   privacy: {
     title: "Prywatność i obsługa danych",
     description:
-      "Jest to konfiguracja sposobu, w jaki połączeni dostawcy zewnętrzni i AnythingLLM przetwarzają dane użytkownika.",
+      "Jest to konfiguracja sposobu, w jaki połączeni dostawcy zewnętrzni i SkyBao przetwarzają dane użytkownika.",
     anonymous: "Włączona anonimowa telemetria",
   },
   connectors: {
@@ -1212,22 +1212,22 @@ const TRANSLATIONS = {
       fetching: "Pobieranie...",
       "fetch-website": "Pobierz zawartość strony",
       "privacy-notice":
-        "Pliki zostaną przetworzone w obrębie danej instancji AnythingLLM. Pliki te nie będą udostępniane innym podmiotom.",
+        "Pliki zostaną przetworzone w obrębie danej instancji SkyBao. Pliki te nie będą udostępniane innym podmiotom.",
     },
     pinning: {
       what_pinning: "Czym jest przypinanie dokumentów?",
       pin_explained_block1:
-        "Kiedy <b>przypinasz</b> dokument w AnythingLLM, dodamy całą zawartość dokumentu do okna promptu, aby LLM mógł w pełni zrozumieć jego treść.",
+        "Kiedy <b>przypinasz</b> dokument w SkyBao, dodamy całą zawartość dokumentu do okna promptu, aby LLM mógł w pełni zrozumieć jego treść.",
       pin_explained_block2:
         "Działa to najlepiej w przypadku <b>dużych modeli kontekstowych</b> lub małych plików, które są krytyczne dla bazy wiedzy.",
       pin_explained_block3:
-        "Jeśli domyślnie nie otrzymujesz pożądanych odpowiedzi z AnythingLLM, przypinanie jest świetnym sposobem na uzyskanie wyższej jakości odpowiedzi za jednym kliknięciem.",
+        "Jeśli domyślnie nie otrzymujesz pożądanych odpowiedzi z SkyBao, przypinanie jest świetnym sposobem na uzyskanie wyższej jakości odpowiedzi za jednym kliknięciem.",
       accept: "Ok, rozumiem",
     },
     watching: {
       what_watching: "Do czego służy oglądanie dokumentu?",
       watch_explained_block1:
-        "Podczas <b>obserwowania</b> dokumentu w AnythingLLM będziemy <i>automatycznie</i> synchronizować zawartość dokumentu z jego oryginalnym źródłem w regularnych odstępach czasu. Spowoduje to automatyczną aktualizację zawartości w każdym obszarze roboczym, w którym ten plik jest zarządzany.",
+        "Podczas <b>obserwowania</b> dokumentu w SkyBao będziemy <i>automatycznie</i> synchronizować zawartość dokumentu z jego oryginalnym źródłem w regularnych odstępach czasu. Spowoduje to automatyczną aktualizację zawartości w każdym obszarze roboczym, w którym ten plik jest zarządzany.",
       watch_explained_block2:
         "Ta funkcja obsługuje obecnie treści online i nie będzie dostępna dla dokumentów przesyłanych ręcznie.",
       watch_explained_block3_start:
@@ -1366,7 +1366,7 @@ const TRANSLATIONS = {
         edit_description: "Zaktualizuj zawartość tej pamięci.",
         label: "Pamięć",
         placeholder:
-          "np. Imię użytkownika to Joe, użytkownik pracuje w firmie AnythingLLM, itp.",
+          "np. Imię użytkownika to Joe, użytkownik pracuje w firmie SkyBao, itp.",
         create: "Stwórz",
         save: "Zapisz",
         cancel: "Anuluj",
@@ -1501,7 +1501,7 @@ const TRANSLATIONS = {
         unauthenticated: {
           title: "Wymagane uwierzytelnienie",
           description:
-            "Przed opublikowaniem elementów należy uwierzytelnić się w centrum społeczności AnythingLLM.",
+            "Przed opublikowaniem elementów należy uwierzytelnić się w centrum społeczności SkyBao.",
           button: "Połączenie z centrum społeczności",
         },
       },
@@ -1525,7 +1525,7 @@ const TRANSLATIONS = {
     password: {
       title: "Ochrona hasłem",
       description:
-        "Chroń swoją instancję AnythingLLM hasłem. Jeśli go zapomnisz, nie ma metody odzyskiwania, więc upewnij się, że zapisałeś to hasło.",
+        "Chroń swoją instancję SkyBao hasłem. Jeśli go zapomnisz, nie ma metody odzyskiwania, więc upewnij się, że zapisałeś to hasło.",
       "password-label": "Hasło instancji",
     },
   },
@@ -1539,7 +1539,7 @@ const TRANSLATIONS = {
   telegram: {
     title: "Bot na Telegramie",
     description:
-      "Połącz swoją instancję AnythingLLM z Telegramem, aby móc rozmawiać z przestrzeniami roboczymi z dowolnego urządzenia.",
+      "Połącz swoją instancję SkyBao z Telegramem, aby móc rozmawiać z przestrzeniami roboczymi z dowolnego urządzenia.",
     setup: {
       step1: {
         title: "Krok 1: Utwórz swojego bota w Telegramie",

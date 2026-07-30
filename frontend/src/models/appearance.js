@@ -7,7 +7,11 @@ import { safeJsonParse } from "@/utils/request";
  * 'autoPlayAssistantTtsResponse' |
  * 'enableSpellCheck' |
  * 'renderHTML' |
- * 'disableAutoScroll'
+ * 'disableAutoScroll' |
+ * 'cloudsOnSettings' |
+ * 'cloudsOnHome' |
+ * 'cloudsOnLogin' |
+ * 'cloudsOnChat'
  * } AvailableSettings - The supported settings for the appearance model.
  */
 
@@ -19,6 +23,11 @@ const Appearance = {
     enableSpellCheck: true,
     renderHTML: false,
     disableAutoScroll: false,
+    // Cloud background: enabled by default across every supported surface.
+    cloudsOnSettings: true,
+    cloudsOnHome: true,
+    cloudsOnLogin: true,
+    cloudsOnChat: true,
   },
 
   /**

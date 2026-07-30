@@ -1,0 +1,26 @@
+<svg width="620" height="99" viewBox="0 0 620 99" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="SkyBao">
+  <defs>
+    <linearGradient id="sb-mark" x1="0" y1="0" x2="99" y2="99" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#38bdf8"/>
+      <stop offset="0.55" stop-color="#0ea5e9"/>
+      <stop offset="1" stop-color="#0284c7"/>
+    </linearGradient>
+    <linearGradient id="sb-cloud-wm" x1="22" y1="34" x2="78" y2="72" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#e0f2fe"/>
+    </linearGradient>
+    <style>
+      .sb-text { font-family: "Space Grotesk", "Inter", system-ui, sans-serif; font-weight: 600; font-size: 56px; letter-spacing: -0.02em; }
+    </style>
+  </defs>
+
+  <!-- Cloud mark tile -->
+  <rect width="99" height="99" rx="22" fill="url(#sb-mark)"/>
+  <path
+    d="M36 70c-8.28 0-15-6.72-15-15 0-7.39 5.35-13.51 12.39-14.79C36.27 32.53 43.32 27 51.56 27c9.74 0 17.69 7.73 18.08 17.38C77.32 45.21 83 51.45 83 59c0 8.4-6.81 15.23-15.21 15.23H40.5c-.56 0-1.11-.03-1.66-.09.71.18 1.46.27 2.22.27z"
+    fill="url(#sb-cloud-wm)"
+  />
+
+  <!-- Wordmark (default: light/white for dark theme backgrounds) -->
+  <text x="124" y="67" class="sb-text" fill="#ffffff">SkyBao</text>
+</svg>

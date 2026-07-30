@@ -1,0 +1,16 @@
+{
+  "name": "skybao-desktop",
+  "productName": "SkyBao",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Standalone Electron desktop wrapper for SkyBao. Launches the app in its own window instead of the system browser.",
+  "main": "main.js",
+  "author": "",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^33.0.0"
+  }
+}

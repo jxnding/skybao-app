@@ -226,9 +226,9 @@ function Directory({
               <Plus
                 size={18}
                 weight="bold"
-                className="text-theme-text-primary light:text-[#0ba5ec]"
+                className="text-theme-text-primary light:text-[#0ea5e9]"
               />
-              <div className="text-theme-text-primary light:text-[#0ba5ec] text-xs font-bold leading-[18px]">
+              <div className="text-theme-text-primary light:text-[#0ea5e9] text-xs font-bold leading-[18px]">
                 {t("connectors.directory.new-folder")}
               </div>
             </button>

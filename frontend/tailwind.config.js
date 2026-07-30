@@ -178,6 +178,7 @@ export default {
       },
       fontFamily: {
         sans: [
+          "Inter",
           "plus-jakarta-sans",
           "ui-sans-serif",
           "system-ui",
@@ -193,6 +194,13 @@ export default {
           '"Segoe UI Emoji"',
           '"Segoe UI Symbol"',
           '"Noto Color Emoji"'
+        ],
+        display: [
+          '"Space Grotesk"',
+          "Inter",
+          "ui-sans-serif",
+          "system-ui",
+          "sans-serif"
         ]
       },
       animation: {

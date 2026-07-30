@@ -3,6 +3,7 @@ import { isMobile } from "react-device-detect";
 import { useTranslation } from "react-i18next";
 import LanguagePreference from "../components/LanguagePreference";
 import ThemePreference from "../components/ThemePreference";
+import CloudBackgroundPreference from "../components/CloudBackgroundPreference";
 
 export default function InterfaceSettings() {
   const { t } = useTranslation();
@@ -26,6 +27,7 @@ export default function InterfaceSettings() {
             </p>
           </div>
           <ThemePreference />
+          <CloudBackgroundPreference />
           <LanguagePreference />
         </div>
       </div>

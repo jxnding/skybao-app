@@ -12,9 +12,9 @@ function parseEventData(event) {
     if (!payload) return;
   
     // options: https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerRegistration/showNotification#options
-    self.registration.showNotification(payload.title || 'AnythingLLM', {
+    self.registration.showNotification(payload.title || 'SkyBao', {
       ...payload,
-      icon: '/favicon.png',
+      icon: '/skybao-logo.svg',
     });
   });
   
