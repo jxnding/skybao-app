@@ -12,7 +12,14 @@ import { CLOUDS_UPDATED_EVENT } from "@/pages/GeneralSettings/Settings/component
  * @returns {"home" | "settings" | "login" | "chat" | null}
  */
 function surfaceFromPath(pathname) {
-  if (pathname === "/") return "home";
+  // The connected-work areas share the Assistant's application shell, so
+  // they intentionally follow its cloud preference instead of introducing a
+  // second, route-local background layer.
+  if (
+    pathname === "/" ||
+    ["/knowledge", "/communications", "/work", "/admin"].includes(pathname)
+  )
+    return "home";
   if (pathname.startsWith("/settings")) return "settings";
   if (pathname.startsWith("/login")) return "login";
   if (pathname.startsWith("/workspace")) return "chat";

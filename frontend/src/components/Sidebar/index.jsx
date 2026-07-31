@@ -1,5 +1,13 @@
 import React, { useEffect, useRef, useState } from "react";
-import { List, Plus } from "@phosphor-icons/react";
+import {
+  BookOpen,
+  ChatCircleDots,
+  GearSix,
+  Layout,
+  List,
+  PaperPlaneTilt,
+  Plus,
+} from "@phosphor-icons/react";
 import NewWorkspaceModal, {
   useNewWorkspaceModal,
 } from "../Modals/NewWorkspace";
@@ -8,13 +16,57 @@ import useLogo from "@/hooks/useLogo";
 import useUser from "@/hooks/useUser";
 import Footer from "../Footer";
 import SettingsButton from "../SettingsButton";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import paths from "@/utils/paths";
 import { useTranslation } from "react-i18next";
 import { useSidebarToggle, ToggleSidebarButton } from "./SidebarToggle";
 import SearchBox from "./SearchBox";
 import { Tooltip } from "react-tooltip";
 import { createPortal } from "react-dom";
+
+const PRIMARY_AREAS = [
+  { label: "Assistant", to: "/", icon: ChatCircleDots },
+  { label: "Knowledge", to: "/knowledge", icon: BookOpen },
+  {
+    label: "Communications",
+    to: "/communications",
+    icon: PaperPlaneTilt,
+    badge: "5",
+  },
+  { label: "Work", to: "/work", icon: Layout },
+  { label: "Admin", to: "/admin", icon: GearSix, admin: true },
+];
+
+function PrimaryAreas({ onNavigate }) {
+  const { pathname } = useLocation();
+  return (
+    <nav className="flex flex-col gap-1" aria-label="SkyBao primary areas">
+      {PRIMARY_AREAS.map(({ label, to, icon: Icon, badge, admin }) => {
+        const active =
+          to === "/"
+            ? pathname === "/" || pathname.startsWith("/workspace/")
+            : pathname.startsWith(to);
+        return (
+          <Link
+            key={to}
+            to={to}
+            onClick={onNavigate}
+            aria-current={active ? "page" : undefined}
+            className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${admin ? "mt-3 border-t border-white/10 pt-5 light:border-slate-300" : ""} ${active ? "bg-sky-500/20 text-sky-200 light:bg-sky-500/15 light:text-sky-800" : "text-slate-300 hover:bg-white/10 hover:text-white light:text-slate-600 light:hover:bg-sky-100 light:hover:text-sky-800"}`}
+          >
+            <Icon size={18} weight={active ? "fill" : "regular"} />
+            <span>{label}</span>
+            {badge && (
+              <span className="ml-auto rounded-full bg-sky-400/20 px-1.5 py-0.5 text-[9px] text-sky-100 light:bg-sky-200 light:text-sky-800">
+                {badge}
+              </span>
+            )}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
 
 export default function Sidebar() {
   const { user } = useUser();
@@ -34,7 +86,7 @@ export default function Sidebar() {
           width: showSidebar ? "292px" : "0px",
           paddingLeft: showSidebar ? "0px" : "16px",
         }}
-        className="relative transition-all duration-500"
+        className="app-sidebar relative transition-all duration-500"
       >
         {canToggleSidebar && (
           <ToggleSidebarButton
@@ -63,6 +115,7 @@ export default function Sidebar() {
                 <div className="relative h-[calc(100%-60px)] flex flex-col w-full justify-between pt-[10px] overflow-y-scroll no-scroll">
                   <div className="flex flex-col gap-y-[14px]">
                     <SearchBox user={user} showNewWsModal={showNewWsModal} />
+                    <PrimaryAreas />
                     <ActiveWorkspaces />
                   </div>
                 </div>
@@ -173,6 +226,7 @@ export function SidebarMobileHeader() {
                     user={user}
                     showNewWsModal={showNewWsModal}
                   />
+                  <PrimaryAreas onNavigate={() => setShowSidebar(false)} />
                   <ActiveWorkspaces />
                 </div>
               </div>

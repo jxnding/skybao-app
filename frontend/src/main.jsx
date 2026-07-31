@@ -11,7 +11,6 @@ import Login from "@/pages/Login";
 import SimpleSSOPassthrough from "@/pages/Login/SSO/simple";
 import OnboardingFlow from "@/pages/OnboardingFlow";
 import "@/index.css";
-import SkyBaoDemo from "@/pages/SkyBaoDemo";
 
 const isDev = import.meta.env.DEV;
 const REACTWRAP = isDev ? React.Fragment : React.StrictMode;
@@ -23,7 +22,68 @@ const router = createBrowserRouter([
     children: [
       {
         path: "/",
-        element: <SkyBaoDemo />,
+        lazy: async () => {
+          const { default: Main } = await import("@/pages/Main");
+          return { element: <PrivateRoute Component={Main} /> };
+        },
+      },
+      {
+        path: "/knowledge",
+        lazy: async () => {
+          const { default: NativeAreaShell } = await import(
+            "@/pages/Main/NativeArea"
+          );
+          return {
+            element: (
+              <PrivateRoute
+                Component={() => <NativeAreaShell area="knowledge" />}
+              />
+            ),
+          };
+        },
+      },
+      {
+        path: "/communications",
+        lazy: async () => {
+          const { default: NativeAreaShell } = await import(
+            "@/pages/Main/NativeArea"
+          );
+          return {
+            element: (
+              <PrivateRoute
+                Component={() => <NativeAreaShell area="communications" />}
+              />
+            ),
+          };
+        },
+      },
+      {
+        path: "/work",
+        lazy: async () => {
+          const { default: NativeAreaShell } = await import(
+            "@/pages/Main/NativeArea"
+          );
+          return {
+            element: (
+              <PrivateRoute Component={() => <NativeAreaShell area="work" />} />
+            ),
+          };
+        },
+      },
+      {
+        path: "/admin",
+        lazy: async () => {
+          const { default: NativeAreaShell } = await import(
+            "@/pages/Main/NativeArea"
+          );
+          return {
+            element: (
+              <PrivateRoute
+                Component={() => <NativeAreaShell area="admin" />}
+              />
+            ),
+          };
+        },
       },
       {
         path: "/login",

@@ -1,11 +1,10 @@
 import { createContext, useEffect, useState } from "react";
-import SkyBao from "./media/logo/skybao-wordmark.svg";
-import SkyBaoDark from "./media/logo/skybao-wordmark-dark.svg";
 import DefaultLoginLogoLight from "./media/illustrations/skybao-login.svg";
 import DefaultLoginLogoDark from "./media/illustrations/skybao-login-light.svg";
 import System from "./models/system";
 
 export const REFETCH_LOGO_EVENT = "refetch-logo";
+const DEFAULT_SKYBAO_LOGO = "/skybao-logo.svg";
 
 function isLightMode() {
   return document.documentElement.getAttribute("data-theme") === "light";
@@ -23,17 +22,17 @@ export function LogoProvider({ children }) {
       : DefaultLoginLogoLight;
     try {
       const { isCustomLogo, logoURL } = await System.fetchLogo();
-      if (logoURL) {
+      if (logoURL && isCustomLogo) {
         setLogo(logoURL);
-        setLoginLogo(isCustomLogo ? logoURL : DefaultLoginLogo);
-        setIsCustomLogo(isCustomLogo);
+        setLoginLogo(logoURL);
+        setIsCustomLogo(true);
       } else {
-        isLightMode() ? setLogo(SkyBaoDark) : setLogo(SkyBao);
+        setLogo(DEFAULT_SKYBAO_LOGO);
         setLoginLogo(DefaultLoginLogo);
         setIsCustomLogo(false);
       }
     } catch (err) {
-      isLightMode() ? setLogo(SkyBaoDark) : setLogo(SkyBao);
+      setLogo(DEFAULT_SKYBAO_LOGO);
       setLoginLogo(DefaultLoginLogo);
       setIsCustomLogo(false);
       console.error("Failed to fetch logo:", err);

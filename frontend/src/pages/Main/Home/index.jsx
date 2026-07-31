@@ -28,6 +28,7 @@ import WorkspaceModelPicker from "@/components/WorkspaceChat/ChatContainer/Works
 import { ChatTooltips } from "@/components/WorkspaceChat/ChatContainer/ChatTooltips";
 import { ChatSidebarProvider } from "@/components/WorkspaceChat/ChatContainer/ChatSidebar";
 import MemoriesSidebar from "@/components/WorkspaceChat/ChatContainer/MemoriesSidebar";
+import WorkspaceFrame, { WorkspaceSurface } from "@/components/WorkspaceFrame";
 
 async function getTargetWorkspace() {
   const lastVisited = safeJsonParse(
@@ -135,10 +136,9 @@ export default function Home() {
 
   if (workspaceLoading) {
     return (
-      <div
-        style={{ height: isMobile ? "100%" : "calc(100% - 32px)" }}
-        className="transition-all duration-500 relative md:ml-[2px] md:mr-[16px] md:my-[16px] md:rounded-[16px] bg-zinc-900 light:bg-white w-full h-full overflow-hidden"
-      />
+      <WorkspaceFrame>
+        <WorkspaceSurface />
+      </WorkspaceFrame>
     );
   }
 
@@ -284,12 +284,9 @@ function HomeContent({ workspace, setWorkspace, threadSlug, setThreadSlug }) {
 
   return (
     <ChatSidebarProvider>
-      <div
-        style={{ height: isMobile ? "100%" : "calc(100% - 32px)" }}
-        className="relative flex md:ml-[2px] md:mr-[16px] md:my-[16px] w-full h-full z-[2]"
-      >
+      <WorkspaceFrame>
         <ChatSettingsMenu />
-        <div className="flex-1 min-w-0 transition-all duration-500 relative md:rounded-[16px] bg-zinc-900 light:bg-white w-full h-full overflow-hidden border-none light:border-solid light:border light:border-theme-modal-border">
+        <WorkspaceSurface bordered>
           {isMobile && <SidebarMobileHeader />}
           <WorkspaceModelPicker workspaceSlug={workspace?.slug} />
           <DnDFileUploaderWrapper>
@@ -324,9 +321,9 @@ function HomeContent({ workspace, setWorkspace, threadSlug, setThreadSlug }) {
             </div>
           </DnDFileUploaderWrapper>
           <ChatTooltips />
-        </div>
+        </WorkspaceSurface>
         <MemoriesSidebar workspace={workspace} />
-      </div>
+      </WorkspaceFrame>
     </ChatSidebarProvider>
   );
 }
@@ -334,15 +331,14 @@ function HomeContent({ workspace, setWorkspace, threadSlug, setThreadSlug }) {
 function NoWorkspacesAssigned() {
   const { t } = useTranslation();
   return (
-    <div
-      style={{ height: isMobile ? "100%" : "calc(100% - 32px)" }}
-      className="transition-all duration-500 relative md:ml-[2px] md:mr-[16px] md:my-[16px] md:rounded-[16px] bg-zinc-900 light:bg-white w-full h-full overflow-hidden"
-    >
-      <div className="flex flex-col h-full w-full items-center justify-center">
-        <p className="text-white/60 text-sm text-center whitespace-pre-line">
-          {t("home.notAssigned")}
-        </p>
-      </div>
-    </div>
+    <WorkspaceFrame>
+      <WorkspaceSurface>
+        <div className="flex flex-col h-full w-full items-center justify-center">
+          <p className="text-white/60 text-sm text-center whitespace-pre-line">
+            {t("home.notAssigned")}
+          </p>
+        </div>
+      </WorkspaceSurface>
+    </WorkspaceFrame>
   );
 }

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   DndContext,
   DragOverlay,
@@ -30,6 +31,9 @@ import {
   X,
 } from "@phosphor-icons/react";
 import { useDraggable } from "@dnd-kit/core";
+import { PENDING_HOME_MESSAGE } from "@/utils/constants";
+import Workspace from "@/models/workspace";
+import paths from "@/utils/paths";
 import "./styles.css";
 
 const AREAS = [
@@ -283,16 +287,13 @@ function MetricCard({ value, label, note, tone = "blue" }) {
   );
 }
 
-function SideNav({ area, setArea, sub, setSub }) {
+export function NativeAreaNavigationPreview({ area, setArea, sub, setSub }) {
   return (
     <>
       <aside className="sb-sidebar">
         <div className="sb-brand">
-          <span className="sb-brand-mark">
-            <Sparkle weight="fill" />
-          </span>
-          <span>skybao</span>
-          <b>•</b>
+          <img src="/skybao-logo.svg" alt="" aria-hidden="true" />
+          <span>SkyBao</span>
         </div>
         <nav className="sb-primary-nav" aria-label="Primary navigation">
           {AREAS.map((item) => {
@@ -375,7 +376,7 @@ function SideNav({ area, setArea, sub, setSub }) {
   );
 }
 
-function AssistantView({ onAsk }) {
+export function AssistantView({ onAsk }) {
   const [message, setMessage] = useState("");
   const [submitted, setSubmitted] = useState("");
   const [attachment, setAttachment] = useState("");
@@ -544,7 +545,7 @@ function SourcePreview({ title, close }) {
   );
 }
 
-function AssistantHistory({ onOpen }) {
+export function AssistantHistory({ onOpen }) {
   const history = [
     ["Northstar renewal plan", "Today · 10:42 AM", "4 cited sources"],
     ["Acme escalation reply", "Yesterday · 3:20 PM", "Slack + email"],
@@ -2052,20 +2053,28 @@ function SkillPanel({ skill, close }) {
   );
 }
 
-export default function SkyBaoDemo() {
-  const [area, setArea] = useState("assistant");
-  const [sub, setSub] = useState("Chat");
+export default function NativeArea({ area }) {
+  const navigate = useNavigate();
+  const [sub, setSub] = useState(
+    AREAS.find((item) => item.id === area)?.children[0] || "Files"
+  );
   const [askOpen, setAskOpen] = useState(false);
   const [skill, setSkill] = useState(null);
   const [toast, setToast] = useState("");
   const [askMessage, setAskMessage] = useState("");
-  const ask = (text) => {
-    setAskOpen(true);
-    setToast(text);
-  };
-  const submitAsk = () => {
+  const submitAsk = async () => {
     if (!askMessage.trim()) return;
-    setToast(`SkyBao: I found relevant context for “${askMessage.trim()}”.`);
+    sessionStorage.setItem(
+      PENDING_HOME_MESSAGE,
+      JSON.stringify({ message: askMessage.trim(), attachments: [] })
+    );
+    const workspaces = await Workspace.all();
+    if (workspaces.length > 0) {
+      navigate(paths.workspace.chat(workspaces[0].slug));
+    } else {
+      setToast("Create or join a workspace before sending a SkyBao question.");
+      setAskOpen(true);
+    }
     setAskMessage("");
   };
   useEffect(() => {
@@ -2082,13 +2091,11 @@ export default function SkyBaoDemo() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
+  useEffect(() => {
+    setSub(AREAS.find((item) => item.id === area)?.children[0] || "Files");
+    setSkill(null);
+  }, [area]);
   const view = useMemo(() => {
-    if (area === "assistant")
-      return sub === "History" ? (
-        <AssistantHistory onOpen={ask} />
-      ) : (
-        <AssistantView onAsk={ask} />
-      );
     if (area === "knowledge")
       return <KnowledgeView sub={sub} setSkill={setSkill} />;
     if (area === "communications") return <CommunicationsView sub={sub} />;
@@ -2096,27 +2103,25 @@ export default function SkyBaoDemo() {
     return <AdminView sub={sub} />;
   }, [area, sub]);
   return (
-    <main className="sb-shell">
-      <SideNav area={area} setArea={setArea} sub={sub} setSub={setSub} />
-      <div className="sb-main">
-        <header className="sb-topbar">
-          <div className="sb-breadcrumb">
-            <span>{AREAS.find((a) => a.id === area)?.label}</span>
-            <b>/</b>
-            <strong>{sub}</strong>
-          </div>
-          <div>
-            <IconButton label="Search workspace">
-              <MagnifyingGlass />
-            </IconButton>
-            <IconButton label="Notifications" className="has-dot">
-              <Bell />
-            </IconButton>
-            <button className="sb-help">?</button>
-          </div>
-        </header>
-        <div className="sb-content">{view}</div>
-      </div>
+    <main className="sb-shell sb-native-area">
+      <header className="sb-native-head">
+        <div>
+          <span className="sb-eyebrow">SKYBAO WORKSPACE</span>
+          <h1>{AREAS.find((item) => item.id === area)?.label}</h1>
+        </div>
+        <nav className="sb-native-tabs" aria-label={`${area} navigation`}>
+          {AREAS.find((item) => item.id === area)?.children.map((item) => (
+            <button
+              key={item}
+              className={sub === item ? "selected" : ""}
+              onClick={() => setSub(item)}
+            >
+              {item}
+            </button>
+          ))}
+        </nav>
+      </header>
+      <div className="sb-content">{view}</div>
       <button
         className={`sb-ask-float ${askOpen ? "open" : ""}`}
         onClick={() => setAskOpen(!askOpen)}

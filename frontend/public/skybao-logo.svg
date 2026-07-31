@@ -1,35 +1,63 @@
-<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="SkyBao">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" width="800" height="800">
   <defs>
-    <linearGradient id="sb-sky" x1="0" y1="0" x2="256" y2="256" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#38bdf8"/>
-      <stop offset="0.55" stop-color="#0ea5e9"/>
-      <stop offset="1" stop-color="#0284c7"/>
+    <mask id="logoMask" maskUnits="userSpaceOnUse" mask-type="luminance" x="0" y="0" width="800" height="800">
+
+      <rect width="800" height="800" fill="black"/>
+      <circle cx="606.22" cy="517.56" r="500" fill="white"/>
+      <circle cx="109.33" cy="541.11" r="103.30" fill="white"/>
+      <circle cx="769.33" cy="146" r="188" fill="black"/>
+      <circle cx="625.33" cy="346" r="188" fill="white"/>
+      <circle cx="890.67" cy="351.33" r="288" fill="black"/>
+      <circle cx="656.89" cy="531.33" r="188" fill="white"/>
+      <circle cx="901.78" cy="548.67" r="288" fill="black"/>
+      <circle cx="648" cy="717.11" r="188" fill="white"/>
+      <circle cx="871.11" cy="738" r="288" fill="black"/>
+      <rect x="-228.45" y="643.56" width="1314.67" height="340.89" fill="black"/>
+
+    </mask>
+
+    <!-- Bottom edge: equal saturation/lightness; hue moves blue → violet. -->
+    <linearGradient id="bottomHue" x1="0" y1="1" x2="1" y2="1">
+      <stop offset="0" stop-color="#344E6F"/>
+      <stop offset="0.48" stop-color="#3E416F"/>
+      <stop offset="1" stop-color="#4E346F"/>
     </linearGradient>
-    <linearGradient id="sb-cloud" x1="78" y1="96" x2="190" y2="180" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#ffffff"/>
-      <stop offset="1" stop-color="#e0f2fe"/>
+
+    <!-- Narrow isosceles light field: apex high, lower vertices closer together. -->
+    <linearGradient id="triangleLight" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#B5ECFF" stop-opacity="0.98"/>
+      <stop offset="0.20" stop-color="#7CD3F8" stop-opacity="0.92"/>
+      <stop offset="0.58" stop-color="#7CD3F8" stop-opacity="0.35"/>
+      <stop offset="0.88" stop-color="#7CD3F8" stop-opacity="0"/>
     </linearGradient>
-  </defs>
+    <filter id="softTriangle" x="-35%" y="-25%" width="170%" height="160%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="70"/>
+    </filter>
 
-  <!-- Rounded tile background -->
-  <rect width="256" height="256" rx="56" fill="url(#sb-sky)"/>
+    <radialGradient id="apexGlow" cx="0.64" cy="0.03" r="0.76" fx="0.64" fy="0.03">
+      <stop offset="0" stop-color="#B5ECFF" stop-opacity="0.86"/>
+      <stop offset="0.28" stop-color="#7CD3F8" stop-opacity="0.48"/>
+      <stop offset="0.72" stop-color="#7CD3F8" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="bottomShade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0.32" stop-color="#020618" stop-opacity="0"/>
+      <stop offset="1" stop-color="#020618" stop-opacity="0.22"/>
+    </linearGradient>
 
-  <!-- Soft sky glow -->
-  <circle cx="128" cy="118" r="86" fill="#ffffff" opacity="0.08"/>
+    <!-- Small diagonal highlight ties it back to the hero gradient. -->
+    <linearGradient id="heroSheen" x1="0.18" y1="0.08" x2="0.78" y2="0.86">
+      <stop offset="0" stop-color="#00BCFF" stop-opacity="0.25"/>
+      <stop offset="0.46" stop-color="#155DFC" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#155DFC" stop-opacity="0"/>
+    </linearGradient>
+</defs>
+  <rect width="800" height="800" fill="#F8FAFC"/>
 
-  <!-- Stylized cloud mark -->
-  <path
-    d="M96 172c-19.882 0-36-16.118-36-36 0-17.739 12.832-32.426 29.731-35.515C95.059 82.072 111.982 68 132 68c23.384 0 42.464 18.547 43.404 41.708C194.618 112.515 208 127.488 208 145.5 208 165.653 191.653 182 171.5 182H100c-1.34 0-2.67-.073-3.976-.215C95.357 171.918 95.687 172 96 172z"
-    fill="url(#sb-cloud)"
-  />
-
-  <!-- Contrasting horizon swoosh -->
-  <path
-    d="M70 184c22-14 50-14 72-4s44 14 70 0"
-    stroke="#0c4a6e"
-    stroke-opacity="0.18"
-    stroke-width="6"
-    stroke-linecap="round"
-    fill="none"
-  />
+  <g mask="url(#logoMask)">
+    <rect width="800" height="800" fill="url(#bottomHue)"/>
+    <polygon points="520,-70 365,820 675,820" fill="url(#triangleLight)" filter="url(#softTriangle)"/>
+    <rect width="800" height="800" fill="url(#apexGlow)"/>
+    <rect width="800" height="800" fill="url(#heroSheen)"/>
+    <rect width="800" height="800" fill="url(#bottomShade)"/>
+  </g>
 </svg>

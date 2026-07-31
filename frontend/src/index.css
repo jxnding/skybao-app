@@ -287,8 +287,8 @@ a {
    as a single continuous sky behind the sidebar, chat, and borders. Because
    the image is fixed (not per-panel), translucent sections over it line up
    seamlessly regardless of layout.
-   - Dark theme (default): clouds-dark.png — night-sky gradient + dusk blobs.
-   - Light theme ([data-theme="light"]): clouds-light.png — bright sky + clouds.
+   - Dark theme (default): clouds-dark.webp — night-sky gradient + dusk blobs.
+   - Light theme ([data-theme="light"]): clouds-light.webp — bright sky + clouds.
    Background-size: cover scales the 1920x1200 image to any viewport.
    ------------------------------------------------------------------------- */
 .cloud-bg {
@@ -297,14 +297,14 @@ a {
   z-index: 0;
   pointer-events: none;
   transform: translateZ(0);
-  background-image: url("/clouds-dark.png");
+  background-image: url("/clouds-dark.webp");
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
 }
 
 [data-theme="light"] .cloud-bg {
-  background-image: url("/clouds-light.png");
+  background-image: url("/clouds-light.webp");
 }
 
 /* When clouds are active on a surface, make every page-level background the
@@ -312,11 +312,11 @@ a {
    across the sidebar, chat area, and borders — no visible panel seams.
    All surfaces use 0.80 (dark) / 0.62 (light) opacity. */
 body.clouds-active {
-  --theme-bg-primary: rgba(14, 15, 15, 0.80);
-  --theme-bg-secondary: rgba(14, 15, 15, 0.80);
-  --theme-bg-container: rgba(14, 15, 15, 0.80);
-  --theme-bg-sidebar: rgba(14, 15, 15, 0.80);
-  --theme-bg-chat: rgba(14, 15, 15, 0.80);
+  --theme-bg-primary: rgba(14, 15, 15, 0.8);
+  --theme-bg-secondary: rgba(14, 15, 15, 0.8);
+  --theme-bg-container: rgba(14, 15, 15, 0.8);
+  --theme-bg-sidebar: rgba(14, 15, 15, 0.8);
+  --theme-bg-chat: rgba(14, 15, 15, 0.8);
 }
 
 body.clouds-active[data-theme="light"],
@@ -334,10 +334,10 @@ body.clouds-active[data-theme="light"],
    Light theme must come AFTER and with higher specificity so it wins the
    !important race over the dark rule when .light is on <body>. */
 body.clouds-active .bg-zinc-950 {
-  background-color: rgba(24, 24, 27, 0.80) !important;
+  background-color: rgba(24, 24, 27, 0.8) !important;
 }
 body.clouds-active .bg-zinc-900 {
-  background-color: rgba(24, 24, 27, 0.80) !important;
+  background-color: rgba(24, 24, 27, 0.8) !important;
 }
 /* In light mode the element keeps its dark utility class but should render
    with the light translucent color. Target the element directly. */
@@ -347,6 +347,15 @@ body.clouds-active.light .bg-zinc-900 {
 }
 body.clouds-active.light .bg-white {
   background-color: rgba(255, 255, 255, 0.62) !important;
+}
+
+/* The navigation panel stays opaque over the global cloud field. Scope this to
+   the shared Sidebar so Assistant and connected-work routes use one treatment. */
+body.clouds-active .app-sidebar {
+  --theme-bg-sidebar: #0e0f0f;
+}
+body.clouds-active.light .app-sidebar {
+  --theme-bg-sidebar: #e2e8f0;
 }
 
 .g327 {
@@ -398,7 +407,6 @@ body.clouds-active.light .bg-white {
     padding-top: 1rem;
   }
 }
-
 
 @media (prefers-color-scheme: light) {
   .sidebar-items:after {
