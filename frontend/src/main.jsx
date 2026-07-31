@@ -11,6 +11,7 @@ import Login from "@/pages/Login";
 import SimpleSSOPassthrough from "@/pages/Login/SSO/simple";
 import OnboardingFlow from "@/pages/OnboardingFlow";
 import "@/index.css";
+import SkyBaoDemo from "@/pages/SkyBaoDemo";
 
 const isDev = import.meta.env.DEV;
 const REACTWRAP = isDev ? React.Fragment : React.StrictMode;
@@ -22,10 +23,7 @@ const router = createBrowserRouter([
     children: [
       {
         path: "/",
-        lazy: async () => {
-          const { default: Main } = await import("@/pages/Main");
-          return { element: <PrivateRoute Component={Main} /> };
-        },
+        element: <SkyBaoDemo />,
       },
       {
         path: "/login",
