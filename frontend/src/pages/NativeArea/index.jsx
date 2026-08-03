@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   DndContext,
   DragOverlay,
@@ -27,13 +27,13 @@ import {
   PaperPlaneTilt,
   Plus,
   Sparkle,
-  Stack,
   X,
 } from "@phosphor-icons/react";
 import { useDraggable } from "@dnd-kit/core";
 import { PENDING_HOME_MESSAGE } from "@/utils/constants";
 import Workspace from "@/models/workspace";
 import paths from "@/utils/paths";
+import { ACME_STORY_PROMPT } from "./storyData";
 import "./styles.css";
 
 const AREAS = [
@@ -85,49 +85,49 @@ const AREAS = [
 
 const FILES = [
   [
-    "FY25 Renewal Strategy.pdf",
+    "Acme Master Services Agreement.pdf",
     "PDF",
-    "2.4 MB",
+    "3.8 MB",
     "Today, 10:42",
     "Ready",
-    "Revenue / Planning",
+    "Legal / Acme",
     "Google Drive",
   ],
   [
-    "Q2 customer health.xlsx",
-    "XLSX",
-    "684 KB",
-    "Today, 9:18",
+    "Acme Security Addendum.pdf",
+    "PDF",
+    "1.1 MB",
+    "Today, 10:40",
     "Ready",
-    "Customer Success",
-    "Local upload",
+    "Legal / Acme",
+    "SharePoint",
   ],
   [
-    "Master services agreement.docx",
+    "Acme customer record.xlsx",
+    "XLSX",
+    "248 KB",
+    "Today, 10:38",
+    "Ready",
+    "Customer Success / Acme",
+    "PostgreSQL export",
+  ],
+  [
+    "Acme agreement email thread.pdf",
+    "PDF",
+    "612 KB",
+    "Today, 10:36",
+    "Ready",
+    "Communications / Acme",
+    "Gmail",
+  ],
+  [
+    "Atlas contract review playbook.docx",
     "DOCX",
-    "1.8 MB",
+    "924 KB",
     "Yesterday",
     "Ready",
     "Legal",
     "Microsoft 365",
-  ],
-  [
-    "Product feedback export.csv",
-    "CSV",
-    "482 KB",
-    "Jul 28",
-    "Indexing",
-    "Research",
-    "Slack export",
-  ],
-  [
-    "On-call handoff.txt",
-    "TXT",
-    "18 KB",
-    "Jul 27",
-    "Ready",
-    "Engineering",
-    "Local upload",
   ],
 ];
 
@@ -194,8 +194,8 @@ const INITIAL_TASKS = {
   todo: [
     {
       id: "t1",
-      title: "Review renewal terms for Northstar",
-      meta: "Legal · Today",
+      title: "Confirm Acme security contacts",
+      meta: "Customer Success · Today",
       priority: "High",
       avatar: "ME",
     },
@@ -210,14 +210,14 @@ const INITIAL_TASKS = {
   progress: [
     {
       id: "t3",
-      title: "Draft Q2 incident report",
-      meta: "Incident summary · 70%",
+      title: "Refresh legal playbook index",
+      meta: "Knowledge sync · 70%",
       priority: "High",
       avatar: "AI",
     },
     {
       id: "t4",
-      title: "Research Acme expansion",
+      title: "Prepare Acme account brief",
       meta: "Customer research · Fri",
       priority: "Medium",
       avatar: "LN",
@@ -242,6 +242,39 @@ const INITIAL_TASKS = {
     },
   ],
 };
+
+const ACME_REVIEW_TASK = {
+  id: "acme-review",
+  title: "Review Acme obligations & response",
+  meta: "Contract review · Draft attached",
+  priority: "High",
+  avatar: "AI",
+  owner: "Marina Brooks",
+  due: "Today · 3:00 PM",
+  origin: "Acme agreement email",
+  sources: "3 cited sources",
+  attachment: "Draft response to Priya Shah",
+  recent: true,
+};
+
+const TASK_COLUMN_LABELS = {
+  todo: "To do",
+  progress: "In progress",
+  review: "Needs review",
+  complete: "Complete",
+};
+
+function initialTasks(includeAcmeTask) {
+  return {
+    ...INITIAL_TASKS,
+    todo: [...INITIAL_TASKS.todo],
+    progress: [...INITIAL_TASKS.progress],
+    review: includeAcmeTask
+      ? [ACME_REVIEW_TASK, ...INITIAL_TASKS.review]
+      : [...INITIAL_TASKS.review],
+    complete: [...INITIAL_TASKS.complete],
+  };
+}
 
 function Status({ children, tone = "green" }) {
   return <span className={`sb-status ${tone}`}>{children}</span>;
@@ -376,154 +409,11 @@ export function NativeAreaNavigationPreview({ area, setArea, sub, setSub }) {
   );
 }
 
-export function AssistantView({ onAsk }) {
-  const [message, setMessage] = useState("");
-  const [submitted, setSubmitted] = useState("");
-  const [attachment, setAttachment] = useState("");
-  const [source, setSource] = useState("Atlas knowledge · 24 sources");
-  const [preview, setPreview] = useState("");
-  const submit = (value = message) => {
-    if (!value.trim()) return;
-    setSubmitted(value.trim());
-    setMessage("");
-  };
-  const reset = () => {
-    setMessage("");
-    setSubmitted("");
-    setAttachment("");
-    setPreview("");
-  };
-  return (
-    <div className="sb-assistant-view">
-      <header className="sb-page-head sb-assistant-head">
-        <div>
-          <div className="sb-eyebrow">
-            ATLAS WORKSPACE <span>•</span> ALL CONNECTED SOURCES
-          </div>
-          <h1>What can I help you move forward?</h1>
-          <p>
-            SkyBao can reason across your documents, messages, datasets, and
-            approved skills.
-          </p>
-        </div>
-        <button className="sb-button" onClick={reset}>
-          <Plus size={17} /> New conversation
-        </button>
-      </header>
-      <section className="sb-chat-card">
-        <div className="sb-conversation">
-          <div className="sb-sky-avatar">
-            <Sparkle weight="fill" />
-          </div>
-          <div>
-            <p className="sb-chat-label">SKYBAO</p>
-            <h3>Good morning, Marina.</h3>
-            <p>
-              I’ve found three items that need a decision today. I can prepare
-              the context, draft the response, or turn them into work.
-            </p>
-            <div className="sb-source-chip-row">
-              <button onClick={() => setPreview("Q2 customer health.xlsx")}>
-                ↗ Q2 customer health.xlsx
-              </button>
-              <button onClick={() => setPreview("FY25 Renewal Strategy.pdf")}>
-                ↗ FY25 Renewal Strategy.pdf
-              </button>
-            </div>
-          </div>
-        </div>
-        {submitted && <div className="sb-user-message">{submitted}</div>}
-        {submitted && (
-          <div className="sb-ai-reply">
-            <div className="sb-sky-avatar small">
-              <Sparkle weight="fill" />
-            </div>
-            <div>
-              <p>
-                I’m grounding this in your connected knowledge. The renewal plan
-                identifies Northstar’s July 31 decision date, while the health
-                workbook flags adoption as the only open risk.
-              </p>
-              <button
-                className="sb-citation"
-                onClick={() => setPreview("FY25 Renewal Strategy.pdf")}
-              >
-                <FileText /> <span>FY25 Renewal Strategy.pdf</span>
-                <small>p. 4 · Click to preview</small>
-              </button>
-              <button
-                className="sb-text-button"
-                onClick={() => onAsk("Create a review task for Northstar")}
-              >
-                Create review task <span>→</span>
-              </button>
-            </div>
-          </div>
-        )}
-        <div className="sb-composer">
-          <button
-            className="sb-attach"
-            aria-label="Attach file"
-            onClick={() => setAttachment(attachment ? "" : "Q2 notes.pdf")}
-          >
-            <Plus size={20} />
-          </button>
-          <input
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && submit()}
-            placeholder="Ask SkyBao anything…"
-          />
-          <button className="sb-send" onClick={() => submit()}>
-            <PaperPlaneTilt weight="fill" />
-          </button>
-        </div>
-        <div className="sb-composer-bottom">
-          <label className="sb-source-select">
-            <Stack size={14} />
-            <select
-              value={source}
-              onChange={(event) => setSource(event.target.value)}
-            >
-              <option>Atlas knowledge · 24 sources</option>
-              <option>Customer Success collection</option>
-              <option>Legal collection</option>
-            </select>
-          </label>
-          <span>⌘ ↵ to send</span>
-        </div>
-        {attachment && (
-          <div className="sb-attachment-state">
-            <FileText /> {attachment}
-            <button
-              onClick={() => setAttachment("")}
-              aria-label="Remove attachment"
-            >
-              <X />
-            </button>
-          </div>
-        )}
-      </section>
-      <div className="sb-suggested">
-        <span>Try asking</span>
-        {[
-          "What needs my review?",
-          "Draft a reply to the Acme thread",
-          "Compare the two contract versions",
-        ].map((t) => (
-          <button key={t} onClick={() => submit(t)}>
-            {t} <span>→</span>
-          </button>
-        ))}
-      </div>
-      {preview && (
-        <SourcePreview title={preview} close={() => setPreview("")} />
-      )}
-    </div>
-  );
-}
-
 function SourcePreview({ title, close }) {
+  const isSecurity = title.toLowerCase().includes("security");
+  const passage = isSecurity
+    ? "Provider will notify Customer within 24 hours of confirming a Security Incident and will obtain written approval before a new subprocessor accesses Customer Data."
+    : "Provider will give Customer no less than thirty (30) days’ written notice before implementing a material change to the Services.";
   return (
     <div
       className="sb-source-preview"
@@ -535,47 +425,17 @@ function SourcePreview({ title, close }) {
       </button>
       <span className="sb-eyebrow">SOURCE PREVIEW</span>
       <h3>{title}</h3>
+      <blockquote>
+        {passage.split(isSecurity ? "24 hours" : "thirty (30) days")[0]}
+        <mark>{isSecurity ? "24 hours" : "thirty (30) days"}</mark>
+        {passage.split(isSecurity ? "24 hours" : "thirty (30) days")[1]}
+      </blockquote>
       <p>
-        Northstar’s renewal decision is due July 31. The attached source
-        highlights adoption and expansion terms as the remaining discussion
-        points.
+        SkyBao matched this passage to the Acme request and cross-checked it
+        against the latest email thread and customer record.
       </p>
-      <small>Google Drive · Indexed today · Clickable source preview</small>
+      <small>Approved company source · Indexed today · Citation verified</small>
     </div>
-  );
-}
-
-export function AssistantHistory({ onOpen }) {
-  const history = [
-    ["Northstar renewal plan", "Today · 10:42 AM", "4 cited sources"],
-    ["Acme escalation reply", "Yesterday · 3:20 PM", "Slack + email"],
-    ["Q2 health score analysis", "Jul 28", "Customer dataset"],
-  ];
-  return (
-    <section>
-      <PageTitle
-        title="Conversation history"
-        text="Recent work across your connected knowledge."
-        action="New conversation"
-        onAction={() => onOpen("New conversation started")}
-      />
-      <div className="sb-list-card">
-        {history.map((item) => (
-          <button
-            className="sb-history-row"
-            key={item[0]}
-            onClick={() => onOpen(`Opened ${item[0]}`)}
-          >
-            <ChatCircleDots />
-            <div>
-              <b>{item[0]}</b>
-              <p>{item[2]}</p>
-            </div>
-            <small>{item[1]}</small>
-          </button>
-        ))}
-      </div>
-    </section>
   );
 }
 
@@ -693,10 +553,10 @@ function KnowledgeView({ sub, setSkill }) {
           {[
             [
               "Customer Success",
-              "42 files",
-              "Health scores, success plans, renewal notes",
+              "186 files",
+              "Account records, success plans, and renewal notes",
             ],
-            ["Legal", "28 files", "Contracts, redlines, and policy guidance"],
+            ["Legal", "214 files", "Contracts, addenda, and policy guidance"],
             [
               "Product Research",
               "36 files",
@@ -725,10 +585,38 @@ function KnowledgeView({ sub, setSkill }) {
     <section>
       <PageTitle
         title="Files"
-        text="Search, preview, and manage the documents that power SkyBao."
+        text="Every approved source for the Acme workflow, searchable in one place."
         action="Upload files"
         onAction={() => setUploaded(true)}
       />
+      <div
+        className="sb-knowledge-pulse"
+        aria-label="Connected knowledge summary"
+      >
+        {[
+          ["436", "PDF documents", "Indexed and searchable"],
+          ["128", "Spreadsheets", "Structured for analysis"],
+          ["Connected", "PostgreSQL", "Synced 2 minutes ago"],
+          ["8 enabled", "Company skills", "Contract review ready"],
+        ].map(([value, label, note], index) => (
+          <article key={label}>
+            <span className={`sb-knowledge-icon i${index}`}>
+              {index === 2 ? (
+                <Database />
+              ) : index === 3 ? (
+                <Robot />
+              ) : (
+                <FileText />
+              )}
+            </span>
+            <div>
+              <strong>{value}</strong>
+              <b>{label}</b>
+              <small>{note}</small>
+            </div>
+          </article>
+        ))}
+      </div>
       <div className="sb-toolbar">
         <div className="sb-search">
           <MagnifyingGlass />
@@ -822,8 +710,8 @@ function DataView() {
         ["arr", "currency"],
       ],
       rows: [
-        ["Northstar", "Enterprise", "Healthy", "$124,000"],
-        ["Acme Co.", "Enterprise", "At risk", "$96,000"],
+        ["Acme Industries", "Enterprise", "Healthy", "$124,000"],
+        ["Vantage Group", "Enterprise", "At risk", "$96,000"],
         ["Redwood Labs", "Growth", "Healthy", "$42,000"],
         ["Vantage", "Growth", "Watch", "$31,000"],
       ],
@@ -837,8 +725,8 @@ function DataView() {
         ["status", "enum"],
       ],
       rows: [
-        ["Northstar MSA", "Renewal", "Jul 31", "In review"],
-        ["Acme DPA", "New", "Aug 12", "Waiting"],
+        ["Acme MSA", "Active", "Jul 31", "In review"],
+        ["Acme Security Addendum", "Active", "Jul 31", "Verified"],
         ["Redwood MSA", "Renewal", "Sep 02", "Signed"],
       ],
     },
@@ -851,8 +739,8 @@ function DataView() {
         ["status", "enum"],
       ],
       rows: [
-        ["INV-1942", "Northstar", "$31,000", "Paid"],
-        ["INV-1943", "Acme Co.", "$24,000", "Due Aug 1"],
+        ["INV-1942", "Acme Industries", "$31,000", "Paid"],
+        ["INV-1943", "Vantage Group", "$24,000", "Due Aug 1"],
         ["INV-1944", "Vantage", "$9,200", "Paid"],
       ],
     },
@@ -865,7 +753,7 @@ function DataView() {
         ["status", "enum"],
       ],
       rows: [
-        ["Renewal readiness", "Marina", "Jul 31", "At risk"],
+        ["Acme agreement review", "Marina", "Today", "Needs review"],
         ["Support deflection", "Jordan", "Aug 9", "On track"],
         ["Q3 planning", "Lena", "Aug 16", "Planning"],
       ],
@@ -879,8 +767,8 @@ function DataView() {
         ["state", "enum"],
       ],
       rows: [
-        ["SUP-4031", "Acme Co.", "High", "Open"],
-        ["SUP-4029", "Northstar", "Medium", "Investigating"],
+        ["SUP-4031", "Acme Industries", "High", "Open"],
+        ["SUP-4029", "Redwood Labs", "Medium", "Investigating"],
         ["SUP-4018", "Vantage", "Low", "Resolved"],
       ],
     },
@@ -995,9 +883,12 @@ function DataView() {
   );
 }
 
-function CommunicationsView({ sub }) {
+function CommunicationsView({ sub, onAsk, onCreateTask }) {
   const [selected, setSelected] = useState(0);
   const [draft, setDraft] = useState(false);
+  const [draftText, setDraftText] = useState(
+    "Hi Priya — I’ll confirm the relevant obligations in the Acme agreement and send a cited response for review today."
+  );
   const [query, setQuery] = useState("");
   const [source, setSource] = useState("All sources");
   const [priority, setPriority] = useState("Priority");
@@ -1006,17 +897,17 @@ function CommunicationsView({ sub }) {
   const messages = [
     [
       "Gmail",
-      "Northstar renewal — updated terms",
-      "Lena Ortiz",
-      "The legal team has included the proposed renewal language. Can you confirm…",
+      "Acme agreement — obligations and response",
+      "Priya Shah",
+      "Can you confirm our obligations under the Acme agreement and prepare a response?",
       "10:42 AM",
       true,
     ],
     [
       "Slack",
-      "#customer-success · Acme escalation",
+      "#customer-success · Acme account update",
       "Jordan Chen",
-      "I added the latest health notes. We need a customer response before EOD.",
+      "I added the latest Acme account notes and verified the security contacts.",
       "9:18 AM",
       true,
     ],
@@ -1086,7 +977,7 @@ function CommunicationsView({ sub }) {
           <option>Priority</option>
           <option>Priority only</option>
         </select>
-        <span className="sb-unread">5 unread</span>
+        <span className="sb-unread">1 priority request</span>
       </div>
       <div className="sb-mail-layout">
         <div className="sb-thread-list">
@@ -1138,9 +1029,9 @@ function CommunicationsView({ sub }) {
               <time>{current[4]}</time>
             </div>
             <p className="sb-message-body">
-              {current[3]} I’ve attached the relevant context and the decision
-              we need from your team. Let me know if you would like us to set up
-              a short working session.
+              {current[1].startsWith("Acme agreement")
+                ? "Hi Marina — can you confirm our obligations under the Acme agreement and prepare a response? Please check the notice period for service changes, the security incident timeline, and whether we need approval for any new subprocessors. I’ve attached the agreement for context."
+                : `${current[3]} I’ve attached the relevant context and the decision we need from your team.`}
             </p>
             <div className="sb-thread-summary">
               <div>
@@ -1148,8 +1039,9 @@ function CommunicationsView({ sub }) {
                 <b>SkyBao summary</b>
               </div>
               <p>
-                Northstar needs confirmation on the revised renewal terms. The
-                only unresolved item is the expansion option language.
+                {current[1].startsWith("Acme agreement")
+                  ? "Priya needs a cited confirmation of three contract obligations and a customer-ready response. Human approval is required before sending."
+                  : "This conversation needs a decision and a clear next step today."}
               </p>
               <button onClick={() => setPreview(true)}>
                 View cited context <span>→</span>
@@ -1158,7 +1050,10 @@ function CommunicationsView({ sub }) {
             {draft ? (
               <div className="sb-draft">
                 <b>Suggested reply</b>
-                <textarea defaultValue="Thanks, Lena — I’ll review the expansion language with the team today and confirm our position by 3 PM." />
+                <textarea
+                  value={draftText}
+                  onChange={(event) => setDraftText(event.target.value)}
+                />
                 <div>
                   <button
                     className="sb-outline"
@@ -1182,22 +1077,20 @@ function CommunicationsView({ sub }) {
               </div>
             ) : (
               <div className="sb-message-actions">
-                <button className="sb-button" onClick={() => setDraft(true)}>
-                  <Sparkle weight="fill" /> Draft reply
-                </button>
                 <button
-                  className="sb-outline"
-                  onClick={() => setNotice("Task created from this message")}
+                  className="sb-button"
+                  onClick={() => onAsk(ACME_STORY_PROMPT)}
                 >
-                  Convert to task
+                  <Sparkle weight="fill" /> Ask SkyBao
+                </button>
+                <button className="sb-outline" onClick={() => setDraft(true)}>
+                  Draft reply
                 </button>
                 <button
                   className="sb-text-button"
-                  onClick={() =>
-                    setNotice("SkyBao opened with this conversation")
-                  }
+                  onClick={() => onCreateTask(current[1])}
                 >
-                  Ask SkyBao about this conversation →
+                  Convert to task <span>→</span>
                 </button>
               </div>
             )}
@@ -1218,7 +1111,7 @@ function CommunicationsView({ sub }) {
       )}
       {preview && (
         <SourcePreview
-          title="Northstar renewal context"
+          title="Acme Master Services Agreement.pdf"
           close={() => setPreview(false)}
         />
       )}
@@ -1235,7 +1128,9 @@ function TaskCard({ task, onOpen }) {
       {...listeners}
       {...attributes}
       style={{ transform: CSS.Translate.toString(transform) }}
-      className={`sb-task-card ${isDragging ? "dragging" : ""}`}
+      className={`sb-task-card ${isDragging ? "dragging" : ""} ${
+        task.recent ? "recent" : ""
+      }`}
     >
       <div className="sb-task-top">
         <Status
@@ -1251,7 +1146,11 @@ function TaskCard({ task, onOpen }) {
         </Status>
         <DotsThree size={19} />
       </div>
-      <button className="sb-task-title" onClick={() => onOpen(task)}>
+      <button
+        className="sb-task-title"
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={() => onOpen(task)}
+      >
         {task.title}
       </button>
       <p>{task.meta}</p>
@@ -1259,12 +1158,16 @@ function TaskCard({ task, onOpen }) {
         <span className={`sb-mini-avatar ${task.avatar === "AI" ? "ai" : ""}`}>
           {task.avatar}
         </span>
-        {task.meta.includes("Today") && <span>◷ Today</span>}
+        {task.due ? (
+          <span>◷ {task.due}</span>
+        ) : (
+          task.meta.includes("Today") && <span>◷ Today</span>
+        )}
       </div>
     </article>
   );
 }
-function BoardColumn({ id, title, tasks, onOpen }) {
+function BoardColumn({ id, title, tasks, onOpen, onAdd }) {
   const { setNodeRef, isOver } = useDroppable({ id });
   return (
     <section
@@ -1277,7 +1180,7 @@ function BoardColumn({ id, title, tasks, onOpen }) {
           <b>{title}</b>
           <small>{tasks.length}</small>
         </div>
-        <IconButton label={`Add to ${title}`}>
+        <IconButton label={`Add to ${title}`} onClick={() => onAdd(id)}>
           <Plus />
         </IconButton>
       </div>
@@ -1286,21 +1189,68 @@ function BoardColumn({ id, title, tasks, onOpen }) {
           <TaskCard task={t} key={t.id} onOpen={onOpen} />
         ))}
       </div>
-      <button className="sb-add-task">
+      <button className="sb-add-task" onClick={() => onAdd(id)}>
         <Plus /> Add task
       </button>
     </section>
   );
 }
 
-function WorkView({ sub }) {
-  const [tasks, setTasks] = useState(INITIAL_TASKS);
+function WorkView({ sub, includeAcmeTask = false }) {
+  const [tasks, setTasks] = useState(() => initialTasks(includeAcmeTask));
   const [active, setActive] = useState(null);
   const [detail, setDetail] = useState(null);
+  const [notice, setNotice] = useState("");
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor)
   );
+  useEffect(() => {
+    setTasks(initialTasks(includeAcmeTask));
+    if (includeAcmeTask) {
+      const timer = window.setTimeout(() => setDetail(ACME_REVIEW_TASK), 500);
+      return () => window.clearTimeout(timer);
+    }
+  }, [includeAcmeTask]);
+
+  const addTask = (column) => {
+    const title = window.prompt("Task name", "New follow-up task");
+    if (!title?.trim()) return;
+    const task = {
+      id: `task-${Date.now()}`,
+      title: title.trim(),
+      meta: "Created by Marina · Today",
+      priority: "Medium",
+      avatar: "ME",
+      due: "Today",
+    };
+    setTasks((current) => ({
+      ...current,
+      [column]: [...current[column], task],
+    }));
+    setNotice(`${task.title} added to the board`);
+  };
+
+  const approveTask = (task) => {
+    const from = Object.keys(tasks).find((key) =>
+      tasks[key].some((item) => item.id === task.id)
+    );
+    if (!from) return;
+    setTasks((current) => ({
+      ...current,
+      [from]: current[from].filter((item) => item.id !== task.id),
+      complete: [
+        { ...task, recent: false, meta: "Approved by Marina · Just now" },
+        ...current.complete.filter((item) => item.id !== task.id),
+      ],
+    }));
+    sessionStorage.setItem(
+      "skybao_acme_story_task",
+      JSON.stringify({ state: "approved", approvedAt: Date.now() })
+    );
+    setDetail(null);
+    setNotice("Acme response approved — ready for the controlled send");
+  };
   const handleDragEnd = ({ active, over }) => {
     setActive(null);
     if (!over || !tasks[over.id]) return;
@@ -1321,8 +1271,9 @@ function WorkView({ sub }) {
       <section>
         <PageTitle
           title="Work board"
-          text="Drag work between stages to keep the day moving."
+          text="Track the Acme response from grounded answer to human approval."
           action="New task"
+          onAction={() => addTask("todo")}
         />
         <DndContext
           sensors={sensors}
@@ -1336,24 +1287,28 @@ function WorkView({ sub }) {
               title="To do"
               tasks={tasks.todo}
               onOpen={setDetail}
+              onAdd={addTask}
             />
             <BoardColumn
               id="progress"
               title="In progress"
               tasks={tasks.progress}
               onOpen={setDetail}
+              onAdd={addTask}
             />
             <BoardColumn
               id="review"
               title="Needs review"
               tasks={tasks.review}
               onOpen={setDetail}
+              onAdd={addTask}
             />
             <BoardColumn
               id="complete"
               title="Complete"
               tasks={tasks.complete}
               onOpen={setDetail}
+              onAdd={addTask}
             />
           </div>
           <DragOverlay>
@@ -1366,7 +1321,11 @@ function WorkView({ sub }) {
           </DragOverlay>
         </DndContext>
         {detail && (
-          <div className="sb-task-detail">
+          <div
+            className={`sb-task-detail ${
+              detail.id === ACME_REVIEW_TASK.id ? "sb-story-task-detail" : ""
+            }`}
+          >
             <button onClick={() => setDetail(null)}>
               <X />
             </button>
@@ -1374,19 +1333,50 @@ function WorkView({ sub }) {
             <h3>{detail.title}</h3>
             <p>
               Status:{" "}
-              {Object.keys(tasks).find((key) =>
-                tasks[key].some((task) => task.id === detail.id)
-              )}{" "}
+              {
+                TASK_COLUMN_LABELS[
+                  Object.keys(tasks).find((key) =>
+                    tasks[key].some((task) => task.id === detail.id)
+                  )
+                ]
+              }{" "}
               · Priority: {detail.priority}
             </p>
             <p>
-              Owner: {detail.avatar} · Due:{" "}
-              {detail.meta.includes("Today") ? "Today" : "This week"}
+              Owner: {detail.owner || detail.avatar} · Due:{" "}
+              {detail.due ||
+                (detail.meta.includes("Today") ? "Today" : "This week")}
             </p>
             <p>
               Related item: {detail.meta} · Origin:{" "}
-              {detail.avatar === "AI" ? "agent" : "user"}
+              {detail.origin || (detail.avatar === "AI" ? "agent" : "user")}
             </p>
+            {detail.attachment && (
+              <div className="sb-task-attachment">
+                <FileText />
+                <span>
+                  <b>{detail.attachment}</b>
+                  <small>{detail.sources} · Human approval required</small>
+                </span>
+              </div>
+            )}
+            {detail.id === ACME_REVIEW_TASK.id &&
+              !tasks.complete.some((task) => task.id === detail.id) && (
+                <button
+                  className="sb-button sb-task-approve"
+                  onClick={() => approveTask(detail)}
+                >
+                  <CheckCircle weight="fill" /> Approve response
+                </button>
+              )}
+          </div>
+        )}
+        {notice && (
+          <div className="sb-action-notice sb-board-notice">
+            <CheckCircle weight="fill" /> {notice}
+            <button onClick={() => setNotice("")}>
+              <X />
+            </button>
           </div>
         )}
       </section>
@@ -1441,13 +1431,13 @@ function WorkOverview() {
           </div>
           {[
             [
-              "Review Northstar renewal terms",
+              "Review Acme obligations & response",
               "Contract review",
               "Today · 2:00 PM",
               "orange",
             ],
             [
-              "Reply to Acme escalation",
+              "Approve response to Priya Shah",
               "Email drafting",
               "Today · 3:00 PM",
               "blue",
@@ -1529,7 +1519,7 @@ function WorkOverview() {
             <span />
             <div>
               <b>Customer health review</b>
-              <p>Northstar & Acme accounts</p>
+              <p>Acme account and contract</p>
             </div>
           </div>
           <div className="sb-reminder">
@@ -1611,7 +1601,7 @@ function TaskList({ reminders }) {
           priority: "Medium",
           owner: "Lena",
           due: "Today · 2:00 PM",
-          related: "File: Northstar MSA",
+          related: "File: Acme MSA",
           origin: "message",
         },
         {
@@ -1626,12 +1616,12 @@ function TaskList({ reminders }) {
       ]
     : [
         {
-          title: "Review Northstar renewal terms",
+          title: "Review Acme obligations & response",
           status: "Needs review",
           priority: "High",
           owner: "Marina",
           due: "Today",
-          related: "Message: Northstar renewal",
+          related: "Message: Acme agreement request",
           origin: "message",
         },
         {
@@ -1653,7 +1643,7 @@ function TaskList({ reminders }) {
           origin: "agent",
         },
         {
-          title: "Research Acme expansion",
+          title: "Verify Acme account contacts",
           status: "To do",
           priority: "Medium",
           owner: "Lena",
@@ -1711,13 +1701,13 @@ function Approvals() {
         {[
           [
             "Draft email",
-            "Reply to Acme escalation",
+            "Reply to Acme agreement request",
             "Created from #customer-success · 2 min ago",
             "Email drafting",
           ],
           [
             "Contract summary",
-            "Northstar MSA renewal summary",
+            "Acme MSA obligations summary",
             "Includes 4 highlighted clauses · 19 min ago",
             "Contract review",
           ],
@@ -1874,8 +1864,8 @@ function AgentRuns() {
 function AdminView({ sub }) {
   const content = {
     Privacy: [
-      "Privacy & data",
-      "Monitored SkyBao application metrics for how information is processed and transferred.",
+      "Private by design",
+      "Verify where the Acme request was processed and what left the workspace.",
     ],
     Users: ["Users", "Workspace members and their current access."],
     Permissions: [
@@ -1898,15 +1888,15 @@ function AdminView({ sub }) {
       />
       <div className="sb-admin-top">
         {[
-          ["Processing location", "US West · monitored application setting"],
-          ["Active model", "SkyBao Reasoning · Balanced"],
-          ["External AI requests", "18 today"],
-          ["External AI data transferred", "42.6 MB today"],
+          ["Processing location", "Local"],
+          ["Private model", "Active"],
+          ["External AI data transferred", "0 bytes"],
+          ["System", "Healthy"],
         ].map((x) => (
           <article key={x[0]}>
             <span>{x[0]}</span>
             <b>{x[1]}</b>
-            <small>Observed by SkyBao</small>
+            <small>Protected by Atlas workspace policy</small>
           </article>
         ))}
       </div>
@@ -1944,10 +1934,10 @@ function AdminView({ sub }) {
                 </div>
               ))
             : [
-                ["Indexed documents", "1,248", "+18 this week"],
-                ["Storage usage", "48.2 GB of 100 GB", "48% used"],
-                ["Last successful sync", "2 minutes ago", "All core sources"],
-                ["Server status", "Operational", "99.98% last 30 days"],
+                ["Acme request", "Processed locally", "Completed just now"],
+                ["Sources consulted", "3 approved", "No public web sources"],
+                ["External transfer", "Blocked", "0 bytes transferred"],
+                ["Approval policy", "Enforced", "Marina reviewed the action"],
               ].map((x) => (
                 <div className="sb-admin-row" key={x[0]}>
                   <div>
@@ -1967,11 +1957,11 @@ function AdminView({ sub }) {
             <button>View logs →</button>
           </div>
           {[
+            ["Private model", "Active", "green"],
             ["Knowledge indexing", "Operational", "green"],
             ["Google Drive sync", "Operational", "green"],
-            ["Microsoft 365 sync", "Syncing", "blue"],
-            ["Slack connector", "Attention required", "orange"],
-            ["GPU / compute", "Available", "green"],
+            ["PostgreSQL sync", "Operational", "green"],
+            ["Local compute", "Available", "green"],
           ].map((x) => (
             <div className="sb-health-row" key={x[0]}>
               <span className={`sb-run-dot ${x[2]}`} />
@@ -2055,13 +2045,39 @@ function SkillPanel({ skill, close }) {
 
 export default function NativeArea({ area }) {
   const navigate = useNavigate();
+  const { search } = useLocation();
+  const searchParams = useMemo(() => new URLSearchParams(search), [search]);
+  const requestedSub = searchParams.get("view");
+  const validSub = AREAS.find((item) => item.id === area)?.children.includes(
+    requestedSub
+  )
+    ? requestedSub
+    : null;
+  const transparent = searchParams.get("capture") === "transparent";
+  const includeAcmeTask = searchParams.get("created") === "1";
   const [sub, setSub] = useState(
-    AREAS.find((item) => item.id === area)?.children[0] || "Files"
+    validSub || AREAS.find((item) => item.id === area)?.children[0] || "Files"
   );
   const [askOpen, setAskOpen] = useState(false);
   const [skill, setSkill] = useState(null);
   const [toast, setToast] = useState("");
   const [askMessage, setAskMessage] = useState("");
+  const openAcmeStory = useCallback(() => {
+    navigate(
+      `/?demo=acme&autoplay=1${transparent ? "&capture=transparent" : ""}`
+    );
+  }, [navigate, transparent]);
+  const createTaskFromMessage = useCallback(() => {
+    sessionStorage.setItem(
+      "skybao_acme_story_task",
+      JSON.stringify({ state: "created", createdAt: Date.now() })
+    );
+    navigate(
+      `/work?view=Board&created=1&focus=acme${
+        transparent ? "&capture=transparent" : ""
+      }`
+    );
+  }, [navigate, transparent]);
   const submitAsk = async () => {
     if (!askMessage.trim()) return;
     sessionStorage.setItem(
@@ -2092,18 +2108,32 @@ export default function NativeArea({ area }) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
   useEffect(() => {
-    setSub(AREAS.find((item) => item.id === area)?.children[0] || "Files");
+    setSub(
+      validSub || AREAS.find((item) => item.id === area)?.children[0] || "Files"
+    );
     setSkill(null);
-  }, [area]);
+  }, [area, validSub]);
   const view = useMemo(() => {
     if (area === "knowledge")
       return <KnowledgeView sub={sub} setSkill={setSkill} />;
-    if (area === "communications") return <CommunicationsView sub={sub} />;
-    if (area === "work") return <WorkView sub={sub} />;
+    if (area === "communications")
+      return (
+        <CommunicationsView
+          sub={sub}
+          onAsk={openAcmeStory}
+          onCreateTask={createTaskFromMessage}
+        />
+      );
+    if (area === "work")
+      return <WorkView sub={sub} includeAcmeTask={includeAcmeTask} />;
     return <AdminView sub={sub} />;
-  }, [area, sub]);
+  }, [area, createTaskFromMessage, includeAcmeTask, openAcmeStory, sub]);
   return (
-    <main className="sb-shell sb-native-area">
+    <main
+      className={`sb-shell sb-native-area ${
+        transparent ? "sb-capture-transparent" : ""
+      }`}
+    >
       <header className="sb-native-head">
         <div>
           <span className="sb-eyebrow">SKYBAO WORKSPACE</span>

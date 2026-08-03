@@ -31,7 +31,7 @@ const PRIMARY_AREAS = [
     label: "Communications",
     to: "/communications",
     icon: PaperPlaneTilt,
-    badge: "5",
+    badge: "1",
   },
   { label: "Work", to: "/work", icon: Layout },
   { label: "Admin", to: "/admin", icon: GearSix, admin: true },
@@ -68,9 +68,31 @@ function PrimaryAreas({ onNavigate }) {
   );
 }
 
+function StoryWorkspace() {
+  return (
+    <div className="flex items-center gap-2.5 rounded-lg border border-sky-400/15 bg-sky-500/10 px-3 py-2.5 light:border-sky-700/10 light:bg-sky-100/70">
+      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-sky-400 to-blue-600 text-[9px] font-bold text-white">
+        AT
+      </span>
+      <div className="min-w-0">
+        <p className="truncate text-[11px] font-semibold text-slate-100 light:text-slate-800">
+          Atlas workspace
+        </p>
+        <span className="block truncate text-[9px] text-slate-400 light:text-slate-500">
+          Acme agreement workflow
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export default function Sidebar() {
   const { user } = useUser();
   const { logo } = useLogo();
+  const { pathname, search } = useLocation();
+  const useStoryWorkspace =
+    ["/knowledge", "/communications", "/work", "/admin"].includes(pathname) ||
+    (pathname === "/" && new URLSearchParams(search).get("demo") === "acme");
   const sidebarRef = useRef(null);
   const { showSidebar, setShowSidebar, canToggleSidebar } = useSidebarToggle();
   const {
@@ -116,7 +138,11 @@ export default function Sidebar() {
                   <div className="flex flex-col gap-y-[14px]">
                     <SearchBox user={user} showNewWsModal={showNewWsModal} />
                     <PrimaryAreas />
-                    <ActiveWorkspaces />
+                    {useStoryWorkspace ? (
+                      <StoryWorkspace />
+                    ) : (
+                      <ActiveWorkspaces />
+                    )}
                   </div>
                 </div>
                 <div className="absolute bottom-0 left-0 right-0 pb-3 rounded-b-[16px] bg-theme-bg-sidebar light:bg-slate-200 bg-opacity-80 backdrop-filter backdrop-blur-md z-10">

@@ -41,7 +41,9 @@ const SETTING_KEY_BY_SURFACE = {
  * re-evaluated on every navigation and whenever a toggle changes.
  */
 export default function CloudBackgroundLayer() {
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
+  const transparentCapture =
+    new URLSearchParams(search).get("capture") === "transparent";
   // A counter that bumps on `clouds-updated` so we re-read settings live
   // without a navigation. (Appearance is not reactive on its own.)
   const [, setRevision] = useState(0);
@@ -54,7 +56,11 @@ export default function CloudBackgroundLayer() {
 
   const surface = surfaceFromPath(pathname);
   const settingKey = surface ? SETTING_KEY_BY_SURFACE[surface] : null;
-  const showClouds = settingKey ? Appearance.get(settingKey) : false;
+  const showClouds = transparentCapture
+    ? false
+    : settingKey
+      ? Appearance.get(settingKey)
+      : false;
 
   const toggleBodyClass = (active) => {
     document.body.classList.toggle("clouds-active", active);
@@ -65,6 +71,15 @@ export default function CloudBackgroundLayer() {
     toggleBodyClass(showClouds);
     return () => toggleBodyClass(false);
   }, [showClouds]);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle(
+      "capture-transparent",
+      transparentCapture
+    );
+    return () =>
+      document.documentElement.classList.remove("capture-transparent");
+  }, [transparentCapture]);
 
   if (!showClouds) return null;
   return <CloudBackground />;
