@@ -6,38 +6,42 @@ import Sidebar, { SidebarMobileHeader } from "@/components/Sidebar";
 import NativeArea from "@/pages/NativeArea";
 import WorkspaceFrame, { WorkspaceSurface } from "@/components/WorkspaceFrame";
 import { useLocation } from "react-router-dom";
+import { CaptureProvider, getCaptureConfig } from "@/pages/NativeArea/capture";
 
 /** Native application chrome for SkyBao's connected-work areas. */
 export default function NativeAreaShell({ area }) {
   const { loading, requiresAuth, mode } = usePasswordModal();
   const { search } = useLocation();
-  const transparent =
-    new URLSearchParams(search).get("capture") === "transparent";
+  const capture = getCaptureConfig(search);
+  const workspaceOnly = capture.artifact && capture.framing === "workspace";
 
-  if (loading) return <FullScreenLoader />;
-  if (requiresAuth !== false)
+  if (!capture.artifact && loading) return <FullScreenLoader />;
+  if (!capture.artifact && requiresAuth !== false)
     return <>{requiresAuth !== null && <PasswordModal mode={mode} />}</>;
 
   return (
-    <div
-      className={`relative z-[2] w-screen h-screen overflow-hidden bg-zinc-950 light:bg-slate-50 flex ${
-        transparent ? "sb-capture-stage" : ""
-      }`}
-    >
-      {!isMobile ? <Sidebar /> : <SidebarMobileHeader />}
-      <WorkspaceFrame
-        className="min-w-0 flex-1 overflow-hidden"
-        mobileHeaderOffset
+    <CaptureProvider config={capture}>
+      <div
+        data-capture-id="app-shell"
+        className={`relative z-[2] w-screen h-screen overflow-hidden bg-zinc-950 light:bg-slate-50 flex ${
+          capture.transparent ? "sb-capture-stage" : ""
+        } ${workspaceOnly ? "sb-artifact-workspace-only" : ""}`}
       >
-        <WorkspaceSurface
-          bordered
-          className={`overflow-y-auto ${
-            transparent ? "sb-capture-surface" : ""
-          }`}
+        {!workspaceOnly && (!isMobile ? <Sidebar /> : <SidebarMobileHeader />)}
+        <WorkspaceFrame
+          className="min-w-0 flex-1 overflow-hidden"
+          mobileHeaderOffset
         >
-          <NativeArea area={area} />
-        </WorkspaceSurface>
-      </WorkspaceFrame>
-    </div>
+          <WorkspaceSurface
+            bordered
+            className={`overflow-y-auto ${
+              capture.transparent ? "sb-capture-surface" : ""
+            }`}
+          >
+            <NativeArea area={area} />
+          </WorkspaceSurface>
+        </WorkspaceFrame>
+      </div>
+    </CaptureProvider>
   );
 }

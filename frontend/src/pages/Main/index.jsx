@@ -5,6 +5,7 @@ import Home from "./Home";
 import { isMobile } from "react-device-detect";
 import Sidebar, { SidebarMobileHeader } from "@/components/Sidebar";
 import { useLocation } from "react-router-dom";
+import { CaptureProvider, getCaptureConfig } from "@/pages/NativeArea/capture";
 
 const AssistantStory = lazy(() => import("@/pages/NativeArea/AssistantStory"));
 
@@ -13,26 +14,30 @@ export default function Main() {
   const { search } = useLocation();
   const searchParams = new URLSearchParams(search);
   const storyMode = searchParams.get("demo") === "acme";
-  const transparent = searchParams.get("capture") === "transparent";
+  const capture = getCaptureConfig(search);
+  const workspaceOnly = capture.artifact && capture.framing === "workspace";
 
-  if (loading) return <FullScreenLoader />;
-  if (requiresAuth !== false)
+  if (!capture.artifact && loading) return <FullScreenLoader />;
+  if (!capture.artifact && requiresAuth !== false)
     return <>{requiresAuth !== null && <PasswordModal mode={mode} />}</>;
 
   return (
-    <div
-      className={`relative z-[2] w-screen h-screen overflow-hidden bg-zinc-950 light:bg-slate-50 flex ${
-        transparent ? "sb-capture-stage" : ""
-      }`}
-    >
-      {!isMobile ? <Sidebar /> : <SidebarMobileHeader />}
-      {storyMode ? (
-        <Suspense fallback={<FullScreenLoader />}>
-          <AssistantStory />
-        </Suspense>
-      ) : (
-        <Home />
-      )}
-    </div>
+    <CaptureProvider config={capture}>
+      <div
+        data-capture-id="app-shell"
+        className={`relative z-[2] w-screen h-screen overflow-hidden bg-zinc-950 light:bg-slate-50 flex ${
+          capture.transparent ? "sb-capture-stage" : ""
+        } ${workspaceOnly ? "sb-artifact-workspace-only" : ""}`}
+      >
+        {!workspaceOnly && (!isMobile ? <Sidebar /> : <SidebarMobileHeader />)}
+        {storyMode ? (
+          <Suspense fallback={<FullScreenLoader />}>
+            <AssistantStory />
+          </Suspense>
+        ) : (
+          <Home />
+        )}
+      </div>
+    </CaptureProvider>
   );
 }

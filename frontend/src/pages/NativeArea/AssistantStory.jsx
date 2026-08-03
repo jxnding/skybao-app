@@ -17,6 +17,7 @@ import {
 } from "@phosphor-icons/react";
 import WorkspaceFrame, { WorkspaceSurface } from "@/components/WorkspaceFrame";
 import { ACME_STORY_PROMPT } from "./storyData";
+import { useCapture } from "./capture";
 import "./styles.css";
 
 const RESEARCH_STEPS = [
@@ -46,7 +47,11 @@ function StorySourcePreview({ source, onClose }) {
       role="dialog"
       aria-label={`${source.title} preview`}
     >
-      <button onClick={onClose} aria-label="Close source preview">
+      <button
+        onClick={onClose}
+        aria-label="Close source preview"
+        data-capture-id="assistant-source-close"
+      >
         <X />
       </button>
       <span className="sb-eyebrow">CITED SOURCE</span>
@@ -68,8 +73,10 @@ function StorySourcePreview({ source, onClose }) {
 export default function AssistantStory() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const capture = useCapture();
   const autoplay = searchParams.get("autoplay") === "1";
-  const transparent = searchParams.get("capture") === "transparent";
+  const transparent =
+    capture.transparent || searchParams.get("capture") === "transparent";
   const [message, setMessage] = useState(ACME_STORY_PROMPT);
   const [question, setQuestion] = useState("");
   const [phase, setPhase] = useState("idle");
@@ -96,14 +103,64 @@ export default function AssistantStory() {
   }, []);
 
   useEffect(() => {
-    if (!autoplay || autoplayed.current) return;
+    if (capture.artifact || !autoplay || autoplayed.current) return;
     autoplayed.current = true;
     const timer = window.setTimeout(() => submit(ACME_STORY_PROMPT), 550);
     return () => window.clearTimeout(timer);
-  }, [autoplay, submit]);
+  }, [autoplay, capture.artifact, submit]);
 
   useEffect(() => {
-    if (!runId || phase !== "research") return;
+    if (!capture.artifact) return;
+
+    const state = capture.state || "assistant-idle";
+    setMessage(ACME_STORY_PROMPT);
+    setQuestion("");
+    setPhase("idle");
+    setVisibleSteps(0);
+    setTypedResponse("");
+    setDraftOpen(false);
+    setDraft(DEFAULT_DRAFT);
+    setSource(null);
+
+    if (state === "assistant-idle") return;
+
+    setMessage("");
+    setQuestion(ACME_STORY_PROMPT);
+    if (state === "assistant-research") {
+      setPhase("research");
+      return;
+    }
+    if (state === "assistant-answer-typing") {
+      setPhase("typing");
+      return;
+    }
+
+    setPhase("done");
+    setTypedResponse(RESPONSE);
+  }, [capture.artifact, capture.state]);
+
+  useEffect(() => {
+    if (!capture.artifact) return;
+    if (capture.state === "assistant-research") {
+      setVisibleSteps(
+        Math.min(
+          RESEARCH_STEPS.length,
+          Math.max(0, Math.floor((capture.frame - 10) / 24) + 1)
+        )
+      );
+      return;
+    }
+    if (capture.state !== "assistant-answer-typing") return;
+
+    const lastFrame = 179;
+    const progress = Math.min(1, capture.frame / lastFrame);
+    const visibleTokenCount = Math.floor(progress * tokens.length);
+    setTypedResponse(tokens.slice(0, visibleTokenCount).join(""));
+    setPhase(capture.frame >= lastFrame ? "done" : "typing");
+  }, [capture.artifact, capture.frame, capture.state, tokens]);
+
+  useEffect(() => {
+    if (capture.artifact || !runId || phase !== "research") return;
     const timers = RESEARCH_STEPS.map((_, index) =>
       window.setTimeout(() => setVisibleSteps(index + 1), 320 + index * 430)
     );
@@ -114,10 +171,10 @@ export default function AssistantStory() {
       )
     );
     return () => timers.forEach(window.clearTimeout);
-  }, [phase, runId]);
+  }, [capture.artifact, phase, runId]);
 
   useEffect(() => {
-    if (phase !== "typing") return;
+    if (capture.artifact || phase !== "typing") return;
     let index = 0;
     const timer = window.setInterval(() => {
       index += 1;
@@ -128,7 +185,7 @@ export default function AssistantStory() {
       }
     }, 24);
     return () => window.clearInterval(timer);
-  }, [phase, tokens]);
+  }, [capture.artifact, phase, tokens]);
 
   const reset = () => {
     setMessage(ACME_STORY_PROMPT);
@@ -145,11 +202,18 @@ export default function AssistantStory() {
       "skybao_acme_story_task",
       JSON.stringify({ state: "created", createdAt: Date.now() })
     );
-    navigate(
-      `/work?view=Board&created=1&focus=acme${
-        transparent ? "&capture=transparent" : ""
-      }`
-    );
+    const params = new URLSearchParams({
+      view: "Board",
+      created: "1",
+      focus: "acme",
+    });
+    if (transparent) params.set("capture", "transparent");
+    if (capture.artifact) {
+      params.set("artifact", "1");
+      params.set("framing", capture.framing);
+      params.set("state", "work-board-detail");
+    }
+    navigate(`/work?${params.toString()}`);
   };
 
   const isWorking = phase === "research" || phase === "typing";
@@ -161,6 +225,7 @@ export default function AssistantStory() {
         className={`overflow-y-auto ${transparent ? "sb-capture-surface" : ""}`}
       >
         <main
+          data-capture-id="assistant-root"
           className={`sb-shell sb-native-area sb-assistant-story ${
             transparent ? "sb-capture-transparent" : ""
           }`}
@@ -189,7 +254,11 @@ export default function AssistantStory() {
                     business data, and company skills.
                   </p>
                 </div>
-                <button className="sb-outline" onClick={reset}>
+                <button
+                  className="sb-outline"
+                  onClick={reset}
+                  data-capture-id="assistant-new-conversation"
+                >
                   New conversation
                 </button>
               </header>
@@ -296,6 +365,7 @@ export default function AssistantStory() {
                           <div className="sb-story-citations">
                             <button
                               className="sb-citation"
+                              data-capture-id="assistant-citation-acme-msa"
                               onClick={() =>
                                 setSource({
                                   title: "Acme Master Services Agreement.pdf",
@@ -309,6 +379,7 @@ export default function AssistantStory() {
                             </button>
                             <button
                               className="sb-citation"
+                              data-capture-id="assistant-citation-security"
                               onClick={() =>
                                 setSource({
                                   title: "Acme Security Addendum.pdf",
@@ -322,6 +393,7 @@ export default function AssistantStory() {
                             </button>
                             <button
                               className="sb-citation"
+                              data-capture-id="assistant-citation-customer"
                               onClick={() =>
                                 setSource({
                                   title: "Acme customer record",
@@ -344,6 +416,7 @@ export default function AssistantStory() {
                                 <span>Human approval required</span>
                               </div>
                               <textarea
+                                data-capture-id="assistant-draft-text"
                                 value={draft}
                                 onChange={(event) =>
                                   setDraft(event.target.value)
@@ -356,11 +429,16 @@ export default function AssistantStory() {
                           <div className="sb-story-actions">
                             <button
                               className="sb-outline"
+                              data-capture-id="assistant-draft-toggle"
                               onClick={() => setDraftOpen((open) => !open)}
                             >
                               {draftOpen ? "Hide draft" : "View draft"}
                             </button>
-                            <button className="sb-button" onClick={createTask}>
+                            <button
+                              className="sb-button"
+                              data-capture-id="assistant-create-task"
+                              onClick={createTask}
+                            >
                               <CheckCircle weight="fill" /> Create review task
                             </button>
                           </div>
@@ -373,6 +451,7 @@ export default function AssistantStory() {
                 <div className="sb-composer sb-story-composer">
                   <Stack size={18} />
                   <input
+                    data-capture-id="assistant-prompt"
                     value={message}
                     onChange={(event) => setMessage(event.target.value)}
                     onKeyDown={(event) => {
@@ -382,6 +461,7 @@ export default function AssistantStory() {
                   />
                   <button
                     className="sb-send"
+                    data-capture-id="assistant-send"
                     onClick={() => submit(message)}
                     disabled={isWorking || !message.trim()}
                     aria-label="Send message"

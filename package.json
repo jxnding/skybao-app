@@ -37,6 +37,7 @@
     "desktop:setup": "cd desktop && yarn install && cd ../server && npx prisma generate && npx prisma migrate deploy && cd ..",
     "desktop:build": "node desktop/scripts/build.js",
     "desktop": "cd desktop && yarn start",
+    "video:assets": "yarn --cwd frontend/scripts/video install --frozen-lockfile && node frontend/scripts/video/capture-skybao-assets.mjs",
     "generate:cloudformation": "node cloud-deployments/aws/cloudformation/generate.mjs",
     "generate::gcp_deployment": "node cloud-deployments/gcp/deployment/generate.mjs",
     "translations:verify": "cd frontend/src/locales && node verifyTranslations.mjs",

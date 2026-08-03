@@ -3797,6 +3797,23 @@ html[data-theme="light"] .sb-capture-transparent .sb-native-head {
   background: rgba(248, 250, 252, 0.74);
 }
 
+html.skybao-artifact-capture {
+  color-scheme: dark;
+}
+html.skybao-artifact-capture *,
+html.skybao-artifact-capture *::before,
+html.skybao-artifact-capture *::after {
+  animation-duration: 0s !important;
+  animation-delay: 0s !important;
+  transition-duration: 0s !important;
+  scroll-behavior: auto !important;
+}
+.sb-artifact-workspace-only > div {
+  width: auto !important;
+  height: calc(100% - 32px) !important;
+  margin: 16px !important;
+}
+
 @keyframes sb-story-spin {
   to {
     transform: rotate(360deg);

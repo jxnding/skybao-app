@@ -34,6 +34,7 @@ import { PENDING_HOME_MESSAGE } from "@/utils/constants";
 import Workspace from "@/models/workspace";
 import paths from "@/utils/paths";
 import { ACME_STORY_PROMPT } from "./storyData";
+import { useCapture } from "./capture";
 import "./styles.css";
 
 const AREAS = [
@@ -291,7 +292,7 @@ function IconButton({ children, label, className = "", ...props }) {
   );
 }
 
-function PageTitle({ title, text, action, onAction }) {
+function PageTitle({ title, text, action, onAction, captureId }) {
   return (
     <header className="sb-page-head">
       <div>
@@ -299,7 +300,12 @@ function PageTitle({ title, text, action, onAction }) {
         <p>{text}</p>
       </div>
       {action && (
-        <button className="sb-button" onClick={onAction} disabled={!onAction}>
+        <button
+          className="sb-button"
+          onClick={onAction}
+          disabled={!onAction}
+          data-capture-id={captureId}
+        >
           <Plus size={17} /> {action}
         </button>
       )}
@@ -420,7 +426,11 @@ function SourcePreview({ title, close }) {
       role="dialog"
       aria-label={`${title} preview`}
     >
-      <button onClick={close} aria-label="Close preview">
+      <button
+        onClick={close}
+        aria-label="Close preview"
+        data-capture-id="source-preview-close"
+      >
         <X />
       </button>
       <span className="sb-eyebrow">SOURCE PREVIEW</span>
@@ -462,6 +472,7 @@ function KnowledgeView({ sub, setSkill }) {
             <article
               className="sb-skill-card"
               key={s[0]}
+              data-capture-id={`knowledge-skill-${i}`}
               onClick={() => setSkill(s)}
               onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") setSkill(s);
@@ -588,6 +599,7 @@ function KnowledgeView({ sub, setSkill }) {
         text="Every approved source for the Acme workflow, searchable in one place."
         action="Upload files"
         onAction={() => setUploaded(true)}
+        captureId="knowledge-upload"
       />
       <div
         className="sb-knowledge-pulse"
@@ -621,6 +633,7 @@ function KnowledgeView({ sub, setSkill }) {
         <div className="sb-search">
           <MagnifyingGlass />
           <input
+            data-capture-id="knowledge-file-search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search files and source metadata"
@@ -631,6 +644,7 @@ function KnowledgeView({ sub, setSkill }) {
         </button>
         <select
           className="sb-filter"
+          data-capture-id="knowledge-type-filter"
           value={typeFilter}
           onChange={(event) => setTypeFilter(event.target.value)}
         >
@@ -670,6 +684,7 @@ function KnowledgeView({ sub, setSkill }) {
             </Status>
             <button
               className="sb-text-button"
+              data-capture-id={`knowledge-file-preview-${FILES.indexOf(f)}`}
               onClick={() => setFilePreview(f[0])}
             >
               Preview
@@ -792,11 +807,12 @@ function DataView() {
             "Invoices",
             "Projects",
             "Support tickets",
-          ].map((d) => (
+          ].map((d, index) => (
             <button
               className={dataset === d ? "selected" : ""}
               onClick={() => setDataset(d)}
               key={d}
+              data-capture-id={`knowledge-dataset-${index}`}
             >
               <Database /> {d}
               <small>
@@ -820,6 +836,7 @@ function DataView() {
             </div>
             <button
               className="sb-outline"
+              data-capture-id="knowledge-data-ask"
               onClick={() =>
                 setAskResult(
                   `SkyBao is ready to analyze ${dataset}: ${rows.length} matching records are in scope.`
@@ -833,6 +850,7 @@ function DataView() {
             <div className="sb-search">
               <MagnifyingGlass />
               <input
+                data-capture-id="knowledge-data-search"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder={`Search ${dataset.toLowerCase()}`}
@@ -946,6 +964,7 @@ function CommunicationsView({ sub, onAsk, onCreateTask }) {
         <div className="sb-search">
           <MagnifyingGlass />
           <input
+            data-capture-id="communications-search"
             value={query}
             onChange={(event) => {
               setQuery(event.target.value);
@@ -956,6 +975,7 @@ function CommunicationsView({ sub, onAsk, onCreateTask }) {
         </div>
         <select
           className="sb-filter"
+          data-capture-id="communications-source-filter"
           value={source}
           onChange={(event) => {
             setSource(event.target.value);
@@ -968,6 +988,7 @@ function CommunicationsView({ sub, onAsk, onCreateTask }) {
         </select>
         <select
           className="sb-filter"
+          data-capture-id="communications-priority-filter"
           value={priority}
           onChange={(event) => {
             setPriority(event.target.value);
@@ -986,6 +1007,7 @@ function CommunicationsView({ sub, onAsk, onCreateTask }) {
               className={`sb-thread ${i === selected ? "selected" : ""}`}
               onClick={() => setSelected(i)}
               key={m[1]}
+              data-capture-id={`communications-thread-${messages.indexOf(m)}`}
             >
               <div>
                 <span className={`sb-message-source ${m[0].toLowerCase()}`}>
@@ -1043,7 +1065,10 @@ function CommunicationsView({ sub, onAsk, onCreateTask }) {
                   ? "Priya needs a cited confirmation of three contract obligations and a customer-ready response. Human approval is required before sending."
                   : "This conversation needs a decision and a clear next step today."}
               </p>
-              <button onClick={() => setPreview(true)}>
+              <button
+                onClick={() => setPreview(true)}
+                data-capture-id="communications-cited-context"
+              >
                 View cited context <span>→</span>
               </button>
             </div>
@@ -1051,12 +1076,14 @@ function CommunicationsView({ sub, onAsk, onCreateTask }) {
               <div className="sb-draft">
                 <b>Suggested reply</b>
                 <textarea
+                  data-capture-id="communications-draft-text"
                   value={draftText}
                   onChange={(event) => setDraftText(event.target.value)}
                 />
                 <div>
                   <button
                     className="sb-outline"
+                    data-capture-id="communications-draft-save"
                     onClick={() => {
                       setDraft(false);
                       setNotice("Draft saved");
@@ -1066,6 +1093,7 @@ function CommunicationsView({ sub, onAsk, onCreateTask }) {
                   </button>
                   <button
                     className="sb-button"
+                    data-capture-id="communications-draft-approve"
                     onClick={() => {
                       setDraft(false);
                       setNotice("Reply sent for approval");
@@ -1079,15 +1107,21 @@ function CommunicationsView({ sub, onAsk, onCreateTask }) {
               <div className="sb-message-actions">
                 <button
                   className="sb-button"
+                  data-capture-id="communications-ask"
                   onClick={() => onAsk(ACME_STORY_PROMPT)}
                 >
                   <Sparkle weight="fill" /> Ask SkyBao
                 </button>
-                <button className="sb-outline" onClick={() => setDraft(true)}>
+                <button
+                  className="sb-outline"
+                  data-capture-id="communications-draft-open"
+                  onClick={() => setDraft(true)}
+                >
                   Draft reply
                 </button>
                 <button
                   className="sb-text-button"
+                  data-capture-id="communications-convert-task"
                   onClick={() => onCreateTask(current[1])}
                 >
                   Convert to task <span>→</span>
@@ -1127,6 +1161,7 @@ function TaskCard({ task, onOpen }) {
       ref={setNodeRef}
       {...listeners}
       {...attributes}
+      data-capture-id={`work-task-${task.id}`}
       style={{ transform: CSS.Translate.toString(transform) }}
       className={`sb-task-card ${isDragging ? "dragging" : ""} ${
         task.recent ? "recent" : ""
@@ -1172,6 +1207,7 @@ function BoardColumn({ id, title, tasks, onOpen, onAdd }) {
   return (
     <section
       ref={setNodeRef}
+      data-capture-id={`work-column-${id}`}
       className={`sb-board-column ${isOver ? "over" : ""}`}
     >
       <div className="sb-board-header">
@@ -1196,7 +1232,7 @@ function BoardColumn({ id, title, tasks, onOpen, onAdd }) {
   );
 }
 
-function WorkView({ sub, includeAcmeTask = false }) {
+function WorkView({ sub, includeAcmeTask = false, captureState = "" }) {
   const [tasks, setTasks] = useState(() => initialTasks(includeAcmeTask));
   const [active, setActive] = useState(null);
   const [detail, setDetail] = useState(null);
@@ -1207,11 +1243,21 @@ function WorkView({ sub, includeAcmeTask = false }) {
   );
   useEffect(() => {
     setTasks(initialTasks(includeAcmeTask));
-    if (includeAcmeTask) {
+    setDetail(null);
+    setNotice("");
+    if (
+      includeAcmeTask &&
+      ["work-board-detail", "work-task-approval"].includes(captureState)
+    ) {
+      setDetail(ACME_REVIEW_TASK);
+      return undefined;
+    }
+    if (includeAcmeTask && !captureState) {
       const timer = window.setTimeout(() => setDetail(ACME_REVIEW_TASK), 500);
       return () => window.clearTimeout(timer);
     }
-  }, [includeAcmeTask]);
+    return undefined;
+  }, [captureState, includeAcmeTask]);
 
   const addTask = (column) => {
     const title = window.prompt("Task name", "New follow-up task");
@@ -1364,6 +1410,7 @@ function WorkView({ sub, includeAcmeTask = false }) {
               !tasks.complete.some((task) => task.id === detail.id) && (
                 <button
                   className="sb-button sb-task-approve"
+                  data-capture-id="work-task-approve"
                   onClick={() => approveTask(detail)}
                 >
                   <CheckCircle weight="fill" /> Approve response
@@ -1732,12 +1779,14 @@ function Approvals() {
             <div>
               <button
                 className="sb-outline"
+                data-capture-id={`work-approval-preview-${i}`}
                 onClick={() => setResult(`Previewing ${a[1]}`)}
               >
                 Preview
               </button>
               <button
                 className="sb-button"
+                data-capture-id={`work-approval-approve-${i}`}
                 onClick={() =>
                   setResult(`${a[1]} approved — mock action complete`)
                 }
@@ -1746,6 +1795,7 @@ function Approvals() {
               </button>
               <button
                 className="sb-text-button"
+                data-capture-id={`work-approval-reject-${i}`}
                 onClick={() =>
                   setResult(`${a[1]} rejected — returned to draft`)
                 }
@@ -1834,7 +1884,11 @@ function AgentRuns() {
                 </div>
               )}
             </div>
-            <button className="sb-outline" onClick={() => setDetail(r)}>
+            <button
+              className="sb-outline"
+              data-capture-id={`work-agent-run-open-${i}`}
+              onClick={() => setDetail(r)}
+            >
               Open run
             </button>
           </article>
@@ -1989,7 +2043,11 @@ function SkillPanel({ skill, close }) {
             <h2>{skill[0]}</h2>
           </div>
         </div>
-        <IconButton label="Close skill" onClick={close}>
+        <IconButton
+          label="Close skill"
+          onClick={close}
+          data-capture-id="knowledge-skill-close"
+        >
           <X />
         </IconButton>
       </div>
@@ -2038,7 +2096,9 @@ function SkillPanel({ skill, close }) {
           </span>
         </div>
       </div>
-      <button className="sb-button wide">Save configuration</button>
+      <button className="sb-button wide" data-capture-id="knowledge-skill-save">
+        Save configuration
+      </button>
     </aside>
   );
 }
@@ -2046,6 +2106,7 @@ function SkillPanel({ skill, close }) {
 export default function NativeArea({ area }) {
   const navigate = useNavigate();
   const { search } = useLocation();
+  const capture = useCapture();
   const searchParams = useMemo(() => new URLSearchParams(search), [search]);
   const requestedSub = searchParams.get("view");
   const validSub = AREAS.find((item) => item.id === area)?.children.includes(
@@ -2053,7 +2114,8 @@ export default function NativeArea({ area }) {
   )
     ? requestedSub
     : null;
-  const transparent = searchParams.get("capture") === "transparent";
+  const transparent =
+    capture.transparent || searchParams.get("capture") === "transparent";
   const includeAcmeTask = searchParams.get("created") === "1";
   const [sub, setSub] = useState(
     validSub || AREAS.find((item) => item.id === area)?.children[0] || "Files"
@@ -2063,21 +2125,33 @@ export default function NativeArea({ area }) {
   const [toast, setToast] = useState("");
   const [askMessage, setAskMessage] = useState("");
   const openAcmeStory = useCallback(() => {
-    navigate(
-      `/?demo=acme&autoplay=1${transparent ? "&capture=transparent" : ""}`
-    );
-  }, [navigate, transparent]);
+    const params = new URLSearchParams({ demo: "acme", autoplay: "1" });
+    if (transparent) params.set("capture", "transparent");
+    if (capture.artifact) {
+      params.set("artifact", "1");
+      params.set("framing", capture.framing);
+      params.set("state", "assistant-research");
+    }
+    navigate(`/?${params.toString()}`);
+  }, [capture.artifact, capture.framing, navigate, transparent]);
   const createTaskFromMessage = useCallback(() => {
     sessionStorage.setItem(
       "skybao_acme_story_task",
       JSON.stringify({ state: "created", createdAt: Date.now() })
     );
-    navigate(
-      `/work?view=Board&created=1&focus=acme${
-        transparent ? "&capture=transparent" : ""
-      }`
-    );
-  }, [navigate, transparent]);
+    const params = new URLSearchParams({
+      view: "Board",
+      created: "1",
+      focus: "acme",
+    });
+    if (transparent) params.set("capture", "transparent");
+    if (capture.artifact) {
+      params.set("artifact", "1");
+      params.set("framing", capture.framing);
+      params.set("state", "work-board-detail");
+    }
+    navigate(`/work?${params.toString()}`);
+  }, [capture.artifact, capture.framing, navigate, transparent]);
   const submitAsk = async () => {
     if (!askMessage.trim()) return;
     sessionStorage.setItem(
@@ -2113,6 +2187,13 @@ export default function NativeArea({ area }) {
     );
     setSkill(null);
   }, [area, validSub]);
+  useEffect(() => {
+    if (!capture.artifact) return;
+    setAskOpen(capture.state === "global-ask-open");
+    setAskMessage("");
+    setToast("");
+    setSkill(capture.state === "knowledge-skill-open" ? SKILLS[0] : null);
+  }, [capture.artifact, capture.state]);
   const view = useMemo(() => {
     if (area === "knowledge")
       return <KnowledgeView sub={sub} setSkill={setSkill} />;
@@ -2125,11 +2206,27 @@ export default function NativeArea({ area }) {
         />
       );
     if (area === "work")
-      return <WorkView sub={sub} includeAcmeTask={includeAcmeTask} />;
+      return (
+        <WorkView
+          sub={sub}
+          includeAcmeTask={includeAcmeTask}
+          captureState={capture.state}
+        />
+      );
     return <AdminView sub={sub} />;
-  }, [area, createTaskFromMessage, includeAcmeTask, openAcmeStory, sub]);
+  }, [
+    area,
+    capture.state,
+    createTaskFromMessage,
+    includeAcmeTask,
+    openAcmeStory,
+    sub,
+  ]);
   return (
     <main
+      data-capture-id="native-area-root"
+      data-capture-area={area}
+      data-capture-view={sub}
       className={`sb-shell sb-native-area ${
         transparent ? "sb-capture-transparent" : ""
       }`}
@@ -2144,6 +2241,7 @@ export default function NativeArea({ area }) {
             <button
               key={item}
               className={sub === item ? "selected" : ""}
+              data-capture-id={`native-tab-${item.toLowerCase().replaceAll(" ", "-")}`}
               onClick={() => setSub(item)}
             >
               {item}
@@ -2154,6 +2252,7 @@ export default function NativeArea({ area }) {
       <div className="sb-content">{view}</div>
       <button
         className={`sb-ask-float ${askOpen ? "open" : ""}`}
+        data-capture-id="global-ask-toggle"
         onClick={() => setAskOpen(!askOpen)}
       >
         <span>
@@ -2175,13 +2274,18 @@ export default function NativeArea({ area }) {
           <b>Ask SkyBao</b>
           <p>{toast || "I’m ready to help with the context on this screen."}</p>
           <input
+            data-capture-id="global-ask-input"
             autoFocus
             value={askMessage}
             onChange={(event) => setAskMessage(event.target.value)}
             onKeyDown={(event) => event.key === "Enter" && submitAsk()}
             placeholder="Ask about anything in SkyBao…"
           />
-          <button className="sb-send" onClick={submitAsk}>
+          <button
+            className="sb-send"
+            data-capture-id="global-ask-send"
+            onClick={submitAsk}
+          >
             <PaperPlaneTilt weight="fill" />
           </button>
         </div>
