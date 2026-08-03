@@ -28,6 +28,10 @@ const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const frontendDirectory = path.resolve(scriptDirectory, "../..");
 const repositoryDirectory = path.resolve(frontendDirectory, "..");
 const defaultOutput = path.join(repositoryDirectory, "artifacts/skybao-ui");
+const defaultSmokeOutput = path.join(
+  repositoryDirectory,
+  "artifacts/skybao-ui-smoke"
+);
 const outputSentinel = ".skybao-video-assets";
 
 function parseArguments(argv) {
@@ -37,6 +41,7 @@ function parseArguments(argv) {
     clipsOnly: false,
     only: null,
     output: defaultOutput,
+    outputExplicit: false,
     smoke: false,
     stillsOnly: false,
   };
@@ -52,8 +57,10 @@ function parseArguments(argv) {
     };
 
     if (flag === "--base-url") options.baseUrl = nextValue();
-    else if (flag === "--out") options.output = path.resolve(nextValue());
-    else if (flag === "--only") {
+    else if (flag === "--out") {
+      options.output = path.resolve(nextValue());
+      options.outputExplicit = true;
+    } else if (flag === "--only") {
       options.only = new Set(
         nextValue()
           .split(",")
@@ -71,6 +78,9 @@ function parseArguments(argv) {
   if (options.stillsOnly && options.clipsOnly)
     throw new Error("Choose either --stills-only or --clips-only, not both.");
 
+  if (options.smoke && !options.outputExplicit)
+    options.output = defaultSmokeOutput;
+
   return options;
 }
 
@@ -84,7 +94,7 @@ function printHelp() {
   process.stdout.write(`  --stills-only        Capture only baseline stills\n`);
   process.stdout.write(`  --clips-only         Capture only motion clips\n`);
   process.stdout.write(
-    `  --smoke              Capture start/middle/end frames only\n`
+    `  --smoke              Capture start/middle/end frames in a separate smoke directory\n`
   );
   process.stdout.write(
     `  --skip-build         Reuse the existing frontend build\n`

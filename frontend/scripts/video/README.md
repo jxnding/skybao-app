@@ -22,7 +22,7 @@ yarn video:assets --out=/absolute/path/to/skybao-ui
 yarn video:assets --skip-build --base-url=http://127.0.0.1:4173
 ```
 
-`--smoke` advances every interaction through its complete timeline but saves only the start, middle, and end frames. It is for fast selector and alpha validation, not editing.
+`--smoke` advances every interaction through its complete timeline but saves only the start, middle, and end frames. It is for fast selector and alpha validation, not editing. Unless `--out` is supplied, smoke runs write to `artifacts/skybao-ui-smoke/` so they cannot replace the complete library in `artifacts/skybao-ui/`.
 
 The default command builds with `VITE_SKYBAO_CAPTURE=1`. Artifact mode is compiled out of ordinary production builds, so query parameters cannot bypass the normal application shell or authentication flow. Use `--skip-build` only after a capture-enabled build; a custom `--base-url` must likewise have been started with that environment flag.
 

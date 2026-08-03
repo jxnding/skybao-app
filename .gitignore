@@ -11,3 +11,4 @@ yarn.lock
 *.bak
 .idea
 /artifacts/skybao-ui/
+/artifacts/skybao-ui-smoke/
