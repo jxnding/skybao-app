@@ -36,7 +36,7 @@ yarn video:film --final
 
 ## Output
 
-Generated files are intentionally ignored by Git:
+Generated files are checked into Git so the Blender edit and delivery master can be opened without first recapturing or rerendering the UI:
 
 ```text
 artifacts/skybao-film/

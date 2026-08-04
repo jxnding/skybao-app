@@ -10,6 +10,3 @@ aws_cf_deploy_anything_llm.json
 yarn.lock
 *.bak
 .idea
-/artifacts/skybao-ui/
-/artifacts/skybao-ui-smoke/
-/artifacts/skybao-film/

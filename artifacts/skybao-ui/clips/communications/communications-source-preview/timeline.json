@@ -1,0 +1,379 @@
+{
+  "id": "communications-source-preview",
+  "fps": 30,
+  "frameCount": 90,
+  "durationSeconds": 3,
+  "sampled": false,
+  "capturedFrames": [
+    {
+      "frame": 0,
+      "file": "frame-000001.png"
+    },
+    {
+      "frame": 1,
+      "file": "frame-000002.png"
+    },
+    {
+      "frame": 2,
+      "file": "frame-000003.png"
+    },
+    {
+      "frame": 3,
+      "file": "frame-000004.png"
+    },
+    {
+      "frame": 4,
+      "file": "frame-000005.png"
+    },
+    {
+      "frame": 5,
+      "file": "frame-000006.png"
+    },
+    {
+      "frame": 6,
+      "file": "frame-000007.png"
+    },
+    {
+      "frame": 7,
+      "file": "frame-000008.png"
+    },
+    {
+      "frame": 8,
+      "file": "frame-000009.png"
+    },
+    {
+      "frame": 9,
+      "file": "frame-000010.png"
+    },
+    {
+      "frame": 10,
+      "file": "frame-000011.png"
+    },
+    {
+      "frame": 11,
+      "file": "frame-000012.png"
+    },
+    {
+      "frame": 12,
+      "file": "frame-000013.png"
+    },
+    {
+      "frame": 13,
+      "file": "frame-000014.png"
+    },
+    {
+      "frame": 14,
+      "file": "frame-000015.png"
+    },
+    {
+      "frame": 15,
+      "file": "frame-000016.png"
+    },
+    {
+      "frame": 16,
+      "file": "frame-000017.png"
+    },
+    {
+      "frame": 17,
+      "file": "frame-000018.png"
+    },
+    {
+      "frame": 18,
+      "file": "frame-000019.png"
+    },
+    {
+      "frame": 19,
+      "file": "frame-000020.png"
+    },
+    {
+      "frame": 20,
+      "file": "frame-000021.png"
+    },
+    {
+      "frame": 21,
+      "file": "frame-000022.png"
+    },
+    {
+      "frame": 22,
+      "file": "frame-000023.png"
+    },
+    {
+      "frame": 23,
+      "file": "frame-000024.png"
+    },
+    {
+      "frame": 24,
+      "file": "frame-000025.png"
+    },
+    {
+      "frame": 25,
+      "file": "frame-000026.png"
+    },
+    {
+      "frame": 26,
+      "file": "frame-000027.png"
+    },
+    {
+      "frame": 27,
+      "file": "frame-000028.png"
+    },
+    {
+      "frame": 28,
+      "file": "frame-000029.png"
+    },
+    {
+      "frame": 29,
+      "file": "frame-000030.png"
+    },
+    {
+      "frame": 30,
+      "file": "frame-000031.png"
+    },
+    {
+      "frame": 31,
+      "file": "frame-000032.png"
+    },
+    {
+      "frame": 32,
+      "file": "frame-000033.png"
+    },
+    {
+      "frame": 33,
+      "file": "frame-000034.png"
+    },
+    {
+      "frame": 34,
+      "file": "frame-000035.png"
+    },
+    {
+      "frame": 35,
+      "file": "frame-000036.png"
+    },
+    {
+      "frame": 36,
+      "file": "frame-000037.png"
+    },
+    {
+      "frame": 37,
+      "file": "frame-000038.png"
+    },
+    {
+      "frame": 38,
+      "file": "frame-000039.png"
+    },
+    {
+      "frame": 39,
+      "file": "frame-000040.png"
+    },
+    {
+      "frame": 40,
+      "file": "frame-000041.png"
+    },
+    {
+      "frame": 41,
+      "file": "frame-000042.png"
+    },
+    {
+      "frame": 42,
+      "file": "frame-000043.png"
+    },
+    {
+      "frame": 43,
+      "file": "frame-000044.png"
+    },
+    {
+      "frame": 44,
+      "file": "frame-000045.png"
+    },
+    {
+      "frame": 45,
+      "file": "frame-000046.png"
+    },
+    {
+      "frame": 46,
+      "file": "frame-000047.png"
+    },
+    {
+      "frame": 47,
+      "file": "frame-000048.png"
+    },
+    {
+      "frame": 48,
+      "file": "frame-000049.png"
+    },
+    {
+      "frame": 49,
+      "file": "frame-000050.png"
+    },
+    {
+      "frame": 50,
+      "file": "frame-000051.png"
+    },
+    {
+      "frame": 51,
+      "file": "frame-000052.png"
+    },
+    {
+      "frame": 52,
+      "file": "frame-000053.png"
+    },
+    {
+      "frame": 53,
+      "file": "frame-000054.png"
+    },
+    {
+      "frame": 54,
+      "file": "frame-000055.png"
+    },
+    {
+      "frame": 55,
+      "file": "frame-000056.png"
+    },
+    {
+      "frame": 56,
+      "file": "frame-000057.png"
+    },
+    {
+      "frame": 57,
+      "file": "frame-000058.png"
+    },
+    {
+      "frame": 58,
+      "file": "frame-000059.png"
+    },
+    {
+      "frame": 59,
+      "file": "frame-000060.png"
+    },
+    {
+      "frame": 60,
+      "file": "frame-000061.png"
+    },
+    {
+      "frame": 61,
+      "file": "frame-000062.png"
+    },
+    {
+      "frame": 62,
+      "file": "frame-000063.png"
+    },
+    {
+      "frame": 63,
+      "file": "frame-000064.png"
+    },
+    {
+      "frame": 64,
+      "file": "frame-000065.png"
+    },
+    {
+      "frame": 65,
+      "file": "frame-000066.png"
+    },
+    {
+      "frame": 66,
+      "file": "frame-000067.png"
+    },
+    {
+      "frame": 67,
+      "file": "frame-000068.png"
+    },
+    {
+      "frame": 68,
+      "file": "frame-000069.png"
+    },
+    {
+      "frame": 69,
+      "file": "frame-000070.png"
+    },
+    {
+      "frame": 70,
+      "file": "frame-000071.png"
+    },
+    {
+      "frame": 71,
+      "file": "frame-000072.png"
+    },
+    {
+      "frame": 72,
+      "file": "frame-000073.png"
+    },
+    {
+      "frame": 73,
+      "file": "frame-000074.png"
+    },
+    {
+      "frame": 74,
+      "file": "frame-000075.png"
+    },
+    {
+      "frame": 75,
+      "file": "frame-000076.png"
+    },
+    {
+      "frame": 76,
+      "file": "frame-000077.png"
+    },
+    {
+      "frame": 77,
+      "file": "frame-000078.png"
+    },
+    {
+      "frame": 78,
+      "file": "frame-000079.png"
+    },
+    {
+      "frame": 79,
+      "file": "frame-000080.png"
+    },
+    {
+      "frame": 80,
+      "file": "frame-000081.png"
+    },
+    {
+      "frame": 81,
+      "file": "frame-000082.png"
+    },
+    {
+      "frame": 82,
+      "file": "frame-000083.png"
+    },
+    {
+      "frame": 83,
+      "file": "frame-000084.png"
+    },
+    {
+      "frame": 84,
+      "file": "frame-000085.png"
+    },
+    {
+      "frame": 85,
+      "file": "frame-000086.png"
+    },
+    {
+      "frame": 86,
+      "file": "frame-000087.png"
+    },
+    {
+      "frame": 87,
+      "file": "frame-000088.png"
+    },
+    {
+      "frame": 88,
+      "file": "frame-000089.png"
+    },
+    {
+      "frame": 89,
+      "file": "frame-000090.png"
+    }
+  ],
+  "cursor": [
+    {
+      "frame": 26,
+      "x": 713.48,
+      "y": 642,
+      "nx": 0.3716,
+      "ny": 0.59444,
+      "event": "click"
+    }
+  ]
+}

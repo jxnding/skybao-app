@@ -1,0 +1,31 @@
+{
+  "id": "assistant-citation",
+  "fps": 30,
+  "frameCount": 90,
+  "durationSeconds": 3,
+  "sampled": true,
+  "capturedFrames": [
+    {
+      "frame": 0,
+      "file": "frame-000001.png"
+    },
+    {
+      "frame": 44,
+      "file": "frame-000045.png"
+    },
+    {
+      "frame": 89,
+      "file": "frame-000090.png"
+    }
+  ],
+  "cursor": [
+    {
+      "frame": 24,
+      "x": 573.08,
+      "y": 587.11,
+      "nx": 0.29848,
+      "ny": 0.54362,
+      "event": "click"
+    }
+  ]
+}

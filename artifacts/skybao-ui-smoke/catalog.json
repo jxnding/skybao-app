@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-03T22:16:04.571Z",
+  "generator": "frontend/scripts/video/capture-skybao-assets.mjs",
+  "settings": {
+    "width": 1920,
+    "height": 1080,
+    "fps": 30,
+    "theme": "dark",
+    "alphaMode": "straight",
+    "colorSpace": "sRGB"
+  },
+  "sampled": true,
+  "assets": [
+    {
+      "id": "assistant-citation-start",
+      "area": "assistant",
+      "label": "Assistant · citation preview · start",
+      "route": "/?demo=acme",
+      "state": "assistant-citation",
+      "type": "still",
+      "framing": "workspace",
+      "file": "stills/workspace/assistant/assistant-citation-start.png",
+      "width": 1920,
+      "height": 1080,
+      "derivedFrom": "assistant-citation"
+    },
+    {
+      "id": "assistant-citation-end",
+      "area": "assistant",
+      "label": "Assistant · citation preview · end",
+      "route": "/?demo=acme",
+      "state": "assistant-citation",
+      "type": "still",
+      "framing": "workspace",
+      "file": "stills/workspace/assistant/assistant-citation-end.png",
+      "width": 1920,
+      "height": 1080,
+      "derivedFrom": "assistant-citation"
+    },
+    {
+      "id": "assistant-citation",
+      "area": "assistant",
+      "label": "Assistant · citation preview",
+      "route": "/?demo=acme",
+      "state": "assistant-citation",
+      "type": "clip",
+      "durationSeconds": 3,
+      "frameCount": 90,
+      "framing": "workspace",
+      "directory": "clips/assistant/assistant-citation",
+      "timeline": "clips/assistant/assistant-citation/timeline.json",
+      "sampled": true,
+      "capturedFrames": 3,
+      "width": 1920,
+      "height": 1080,
+      "fps": 30
+    }
+  ]
+}

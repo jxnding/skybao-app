@@ -10,7 +10,7 @@ From the repository root:
 yarn video:assets
 ```
 
-The capture tool requires Node 22.12 or newer; this requirement is isolated from the Node 18-compatible application and CI dependencies. The command installs its pinned tooling package, builds the frontend, serves the production bundle through a private local preview, captures at 1920×1080 and 30 fps, validates the result, and writes it to `artifacts/skybao-ui/`. That directory is generated and intentionally ignored by Git.
+The capture tool requires Node 22.12 or newer; this requirement is isolated from the Node 18-compatible application and CI dependencies. The command installs its pinned tooling package, builds the frontend, serves the production bundle through a private local preview, captures at 1920×1080 and 30 fps, validates the result, and writes it to `artifacts/skybao-ui/`. The current generated library is checked into Git for a self-contained video handoff, so rerunning the capture will produce normal tracked media changes.
 
 Useful targeted runs:
 

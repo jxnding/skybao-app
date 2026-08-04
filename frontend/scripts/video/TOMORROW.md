@@ -21,7 +21,7 @@ yarn video:film
 yarn video:film --final
 ```
 
-The final master is exactly 1,200 frames at 30 fps. Generated media stays under `artifacts/skybao-film/` and is ignored by Git. The tracked recipe lives in `frontend/scripts/video/film/`.
+The final master is exactly 1,200 frames at 30 fps. Generated media stays under `artifacts/skybao-film/` and is versioned alongside the tracked recipe in `frontend/scripts/video/film/`.
 
 ## Best places to personalize
 
