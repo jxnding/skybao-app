@@ -66,3 +66,14 @@ capture=transparent&artifact=1&framing=shell|workspace&state=<manifest-state>
 ```
 
 Artifact mode exposes `window.__SKYBAO_CAPTURE__` with `ready`, `setFrame(frame)`, and `getFrame()`. The API and capture styles do not exist during normal product use. Stable `data-capture-id` attributes let Puppeteer drive the existing React controls, including dnd-kit, instead of rendering separate fake interactions.
+
+## Automated 40-second edit
+
+The repository now also contains a reviewed Blender VSE edit, deterministic music/SFX generator, and H.264 delivery runner. Once the complete asset library exists, generate a review or final master with:
+
+```bash
+yarn video:film
+yarn video:film --final
+```
+
+See [`film/README.md`](film/README.md) for the storyboard, output paths, editable files, and Blender handoff details.

@@ -1,0 +1,350 @@
+{
+  "title": "SkyBao · The Acme Workspace Flow",
+  "format": {
+    "fps": 30,
+    "frames": 1200,
+    "durationSeconds": 40,
+    "width": 1920,
+    "height": 1080
+  },
+  "shotCount": 14,
+  "shots": [
+    {
+      "number": 1,
+      "title": "Open",
+      "narrative": "The workspace rests, quiet and composed, the assistant waiting at the heart of the frame.",
+      "frames": { "start": 1, "end": 60, "count": 60 },
+      "source": {
+        "type": "still",
+        "id": "assistant-idle",
+        "framing": "shell",
+        "frames": 1
+      },
+      "description": "Assistant · Acme story",
+      "camera": {
+        "start": { "scale": 1.0, "x": 0, "y": 0 },
+        "end": { "scale": 1.06, "x": 0, "y": -6 }
+      },
+      "transition": {
+        "in": "fade-from-black",
+        "out": "crossfade",
+        "duration": 12
+      },
+      "accent": { "kind": "aura", "tone": "soft-blue" },
+      "sfxCues": [
+        { "frame": 0, "type": "chime" },
+        { "frame": 30, "type": "click" }
+      ]
+    },
+    {
+      "number": 2,
+      "title": "Ask anywhere",
+      "narrative": "The global ask opens over the knowledge surface; SkyBao is summoned from anywhere.",
+      "frames": { "start": 61, "end": 135, "count": 75 },
+      "source": {
+        "type": "clip",
+        "id": "global-ask-popover",
+        "framing": "workspace",
+        "startFrame": 1,
+        "endFrame": 75
+      },
+      "camera": {
+        "start": { "scale": 1.06, "x": 0, "y": -6 },
+        "end": { "scale": 1.14, "x": -10, "y": -20 }
+      },
+      "transition": { "to": "crossfade", "out": "crossfade", "duration": 10 },
+      "accent": { "kind": "scan", "tone": "cyan" },
+      "sfxCues": [
+        { "frame": 3, "type": "whoosh" },
+        { "frame": 21, "type": "click" }
+      ]
+    },
+    {
+      "number": 3,
+      "title": "Tracing the sources",
+      "narrative": "SkyBao fans across the request, gathering the clauses and context it will answer from.",
+      "frames": { "start": 136, "end": 240, "count": 105 },
+      "source": {
+        "type": "clip",
+        "id": "assistant-research",
+        "framing": "workspace",
+        "startFrame": 1,
+        "endFrame": 105
+      },
+      "camera": {
+        "start": { "scale": 1.04, "x": 0, "y": 0 },
+        "end": { "scale": 1.12, "x": 6, "y": -10 }
+      },
+      "transition": { "to": "crossfade", "out": "crossfade", "duration": 10 },
+      "accent": { "kind": "dataflow", "tone": "teal" },
+      "sfxCues": [
+        { "frame": 2, "type": "whoosh" },
+        { "frame": 96, "type": "chime" }
+      ]
+    },
+    {
+      "number": 4,
+      "title": "The answer, grounded",
+      "narrative": "SkyBao types a measured reply, every claim tied to the request it was handed.",
+      "frames": { "start": 241, "end": 375, "count": 135 },
+      "source": {
+        "type": "clip",
+        "id": "assistant-answer-typing",
+        "framing": "workspace",
+        "startFrame": 46,
+        "endFrame": 180
+      },
+      "camera": {
+        "start": { "scale": 1.12, "x": 6, "y": -10 },
+        "end": { "scale": 1.2, "x": 0, "y": -16 }
+      },
+      "transition": { "to": "crossfade", "out": "crossfade", "duration": 10 },
+      "accent": { "kind": "keystroke", "tone": "blue" },
+      "sfxCues": [
+        { "frame": 4, "type": "whoosh" },
+        { "frame": 84, "type": "click" },
+        { "frame": 130, "type": "chime" }
+      ]
+    },
+    {
+      "number": 5,
+      "title": "Quality, by filter",
+      "narrative": "A quick filter narrows the knowledge base to the files the delivery depends on.",
+      "frames": { "start": 376, "end": 450, "count": 75 },
+      "source": {
+        "type": "clip",
+        "id": "knowledge-file-search",
+        "framing": "workspace",
+        "startFrame": 40,
+        "endFrame": 114
+      },
+      "camera": {
+        "start": { "scale": 1.1, "x": 0, "y": 0 },
+        "end": { "scale": 1.16, "x": -12, "y": -4 }
+      },
+      "transition": { "to": "crossfade", "out": "crossfade", "duration": 10 },
+      "accent": { "kind": "grid", "tone": "slate" },
+      "sfxCues": [
+        { "frame": 2, "type": "click" },
+        { "frame": 44, "type": "whoosh" }
+      ]
+    },
+    {
+      "number": 6,
+      "title": "A source, opened",
+      "narrative": "One clause is opened for a closer look, the full context laid bare.",
+      "frames": { "start": 451, "end": 510, "count": 60 },
+      "source": {
+        "type": "clip",
+        "id": "knowledge-source-preview",
+        "framing": "workspace",
+        "startFrame": 1,
+        "endFrame": 60
+      },
+      "camera": {
+        "start": { "scale": 1.05, "x": 0, "y": 0 },
+        "end": { "scale": 1.14, "x": 0, "y": -8 }
+      },
+      "transition": { "to": "crossfade", "out": "crossfade", "duration": 8 },
+      "accent": { "kind": "scan", "tone": "cyan" },
+      "sfxCues": [
+        { "frame": 2, "type": "whoosh" },
+        { "frame": 28, "type": "click" }
+      ]
+    },
+    {
+      "number": 7,
+      "title": "Analysis, requested",
+      "narrative": "A dataset is switched and an analysis is asked, turning numbers into narrative.",
+      "frames": { "start": 511, "end": 585, "count": 75 },
+      "source": {
+        "type": "clip",
+        "id": "knowledge-data-analysis",
+        "framing": "workspace",
+        "startFrame": 45,
+        "endFrame": 119
+      },
+      "camera": {
+        "start": { "scale": 1.12, "x": 0, "y": 0 },
+        "end": { "scale": 1.18, "x": 8, "y": -6 }
+      },
+      "transition": { "to": "crossfade", "out": "crossfade", "duration": 10 },
+      "accent": { "kind": "dataflow", "tone": "violet" },
+      "sfxCues": [
+        { "frame": 2, "type": "whoosh" },
+        { "frame": 41, "type": "chime" }
+      ]
+    },
+    {
+      "number": 8,
+      "title": "One inbox",
+      "narrative": "The disciplined inbox is filtered and the thread that matters is selected.",
+      "frames": { "start": 586, "end": 660, "count": 75 },
+      "source": {
+        "type": "clip",
+        "id": "communications-filter-select",
+        "framing": "workspace",
+        "startFrame": 1,
+        "endFrame": 75
+      },
+      "camera": {
+        "start": { "scale": 1.06, "x": 0, "y": 0 },
+        "end": { "scale": 1.13, "x": -8, "y": -10 }
+      },
+      "transition": { "to": "crossfade", "out": "crossfade", "duration": 10 },
+      "accent": { "kind": "grid", "tone": "amber" },
+      "sfxCues": [
+        { "frame": 2, "type": "whoosh" },
+        { "frame": 28, "type": "click" },
+        { "frame": 71, "type": "click" }
+      ]
+    },
+    {
+      "number": 9,
+      "title": "The draft matures",
+      "narrative": "A response is drafted — cited, reviewed, and sent up for approval with care.",
+      "frames": { "start": 661, "end": 780, "count": 120 },
+      "source": {
+        "type": "clip",
+        "id": "communications-draft-review",
+        "framing": "workspace",
+        "startFrame": 30,
+        "endFrame": 149
+      },
+      "camera": {
+        "start": { "scale": 1.1, "x": 0, "y": 0 },
+        "end": { "scale": 1.16, "x": 10, "y": -10 }
+      },
+      "transition": { "to": "crossfade", "out": "crossfade", "duration": 12 },
+      "accent": { "kind": "aura", "tone": "ice" },
+      "sfxCues": [
+        { "frame": 4, "type": "click" },
+        { "frame": 60, "type": "whoosh" },
+        { "frame": 96, "type": "chime" }
+      ]
+    },
+    {
+      "number": 10,
+      "title": "Turned into doing",
+      "narrative": "The approval matures into a task; intent becomes action in one click.",
+      "frames": { "start": 781, "end": 855, "count": 75 },
+      "source": {
+        "type": "clip",
+        "id": "communications-convert-task",
+        "framing": "workspace",
+        "startFrame": 1,
+        "endFrame": 75
+      },
+      "camera": {
+        "start": { "scale": 1.13, "x": 0, "y": 0 },
+        "end": { "scale": 1.2, "x": 0, "y": 4 }
+      },
+      "transition": { "to": "crossfade", "out": "crossfade", "duration": 8 },
+      "accent": { "kind": "spark", "tone": "gold" },
+      "sfxCues": [
+        { "frame": 2, "type": "whoosh" },
+        { "frame": 28, "type": "click" }
+      ]
+    },
+    {
+      "number": 11,
+      "title": "Across the board",
+      "narrative": "The review card is lifted and carried across the board to done.",
+      "frames": { "start": 856, "end": 975, "count": 120 },
+      "source": {
+        "type": "clip",
+        "id": "work-board-drag",
+        "framing": "workspace",
+        "startFrame": 1,
+        "endFrame": 120
+      },
+      "camera": {
+        "start": { "scale": 1.12, "x": 0, "y": 0 },
+        "end": { "scale": 1.18, "x": -14, "y": -8 }
+      },
+      "transition": { "to": "crossfade", "out": "crossfade", "duration": 12 },
+      "accent": { "kind": "grid", "tone": "slate" },
+      "sfxCues": [
+        { "frame": 4, "type": "click" },
+        { "frame": 30, "type": "whoosh" },
+        { "frame": 92, "type": "chime" }
+      ]
+    },
+    {
+      "number": 12,
+      "title": "Approved, with intent",
+      "narrative": "The proposed action is previewed, then approved with a single clean, confident click.",
+      "frames": { "start": 976, "end": 1065, "count": 90 },
+      "source": {
+        "type": "clip",
+        "id": "work-approval-action",
+        "framing": "workspace",
+        "startFrame": 1,
+        "endFrame": 90
+      },
+      "camera": {
+        "start": { "scale": 1.08, "x": 0, "y": 0 },
+        "end": { "scale": 1.15, "x": 0, "y": -6 }
+      },
+      "transition": { "to": "crossfade", "out": "crossfade", "duration": 10 },
+      "accent": { "kind": "spark", "tone": "gold" },
+      "sfxCues": [
+        { "frame": 2, "type": "whoosh" },
+        { "frame": 26, "type": "click" },
+        { "frame": 78, "type": "chime" }
+      ]
+    },
+    {
+      "number": 13,
+      "title": "Under the hood",
+      "narrative": "The agent run is opened; the careful work behind the answer becomes visible.",
+      "frames": { "start": 1066, "end": 1140, "count": 75 },
+      "source": {
+        "type": "clip",
+        "id": "work-agent-run-detail",
+        "framing": "workspace",
+        "startFrame": 1,
+        "endFrame": 75
+      },
+      "camera": {
+        "start": { "scale": 1.1, "x": 0, "y": 0 },
+        "end": { "scale": 1.16, "x": 8, "y": -10 }
+      },
+      "transition": { "to": "crossfade", "out": "crossfade", "duration": 10 },
+      "accent": { "kind": "scan", "tone": "violet" },
+      "sfxCues": [
+        { "frame": 2, "type": "whoosh" },
+        { "frame": 28, "type": "click" }
+      ]
+    },
+    {
+      "number": 14,
+      "title": "A draft, returned",
+      "narrative": "We land back on the assistant's editable draft — the whole loop in one durable page.",
+      "frames": { "start": 1141, "end": 1200, "count": 60 },
+      "source": {
+        "type": "clip",
+        "id": "assistant-draft",
+        "framing": "workspace",
+        "startFrame": 1,
+        "endFrame": 60
+      },
+      "camera": {
+        "start": { "scale": 1.12, "x": 0, "y": 0 },
+        "end": { "scale": 1.02, "x": 0, "y": 0 }
+      },
+      "transition": {
+        "to": "crossfade",
+        "out": "fade-to-background",
+        "duration": 10,
+        "outDuration": 44
+      },
+      "accent": { "kind": "aura", "tone": "soft-blue" },
+      "sfxCues": [
+        { "frame": 2, "type": "chime" },
+        { "frame": 30, "type": "click" },
+        { "frame": 54, "type": "chime" }
+      ]
+    }
+  ]
+}

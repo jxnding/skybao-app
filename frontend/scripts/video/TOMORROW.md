@@ -1,61 +1,33 @@
-# Tomorrow: make the SkyBao video
+# Tomorrow: open and refine the SkyBao film
 
-Goal: assemble a quick 45–60 second first cut from the transparent SkyBao UI assets, probably in Blender. Prioritize a clear product story over polishing every available clip.
+The 40-second first cut is automated now. You do not need to assemble thousands of PNGs by hand.
 
-## 1. Generate the full asset library
-
-From the repository root:
+## Open the current edit
 
 ```bash
-node --version
-yarn video:assets
-open artifacts/skybao-ui/contact-sheet.html
+open artifacts/skybao-film/skybao-film.blend
+open artifacts/skybao-film/deliverables/skybao-40s-master.mp4
 ```
 
-- Use Node 22.12 or newer.
-- Do not use `--smoke` for the edit; smoke output contains only three sampled frames per clip.
-- Confirm `catalog.json` has `"sampled": false`; if not, regenerate before editing.
-- For the current mock, a complete run contains 2,238 PNGs: 2,160 numbered frames across 19 clips plus 78 still/start/end images.
-- The current complete library takes about 8½ minutes to render and uses roughly 260 MB.
-- Keep the `.blend` file outside `artifacts/skybao-ui/`; the generator replaces that directory on every run.
+In Blender, switch to the **Video Editing** workspace. The timeline already contains the fourteen-shot story, transparent UI sequences, cloud stage, camera pushes and pans, crossfades, branded titles, motion accents, and the 40-second music/SFX mix.
 
-## 2. Suggested first-cut story
-
-Use this as a starting point, then prune aggressively:
-
-1. Full-shell Assistant still to establish SkyBao.
-2. Assistant research, answer typing, and citation preview.
-3. Edit the response draft and create the Acme task.
-4. Move the task across the Kanban board and approve it.
-5. Show Communications context or draft review briefly.
-6. Show one Knowledge moment: file search, source preview, or data analysis.
-7. Finish on Admin Privacy as the trust message.
-
-The asset IDs and exact file locations are listed in `catalog.json` and shown visually in `contact-sheet.html`.
-
-## 3. Blender setup
-
-1. Create a 1920×1080 project at 30 fps.
-2. Set color management to preserve UI colors: **View Transform: Standard**, exposure `0`, gamma `1`.
-3. Put the background or 3D scene on a lower video channel.
-4. Import each clip by selecting its `frame-000001.png` as an **Image/Sequence** strip—not as separate still images.
-5. Set the image strip to **Straight Alpha**.
-6. Use full-shell stills for establishing shots and workspace-only sequences for motion shots.
-7. Add `cursor/cursor.svg` on a separate layer only where it improves comprehension. Keyframe it from the matching `timeline.json` cursor events.
-8. Add restrained camera moves, titles, music, and small interaction sounds after the story works without them.
-
-## 4. Review and export
-
-- Watch once with no audio: the workflow should still be understandable.
-- Check that transparent edges are clean and no UI is cropped.
-- Hold important end states long enough to read.
-- Export a quick review MP4 first: FFmpeg video, MPEG-4 container, H.264, 1920×1080, 30 fps.
-- Keep the numbered PNG sequences as the source master; the MP4 is only the review/delivery copy.
-
-If a shot needs changing, retake only that asset:
+## Make a fresh render
 
 ```bash
-yarn video:assets --only=assistant-answer-typing,work-board-drag --out=/absolute/path/to/retakes
+# Fast 960x540 review
+yarn video:film
+
+# Delivery-quality 1920x1080 master
+yarn video:film --final
 ```
 
-Full capture and Blender details are in `frontend/scripts/video/README.md`.
+The final master is exactly 1,200 frames at 30 fps. Generated media stays under `artifacts/skybao-film/` and is ignored by Git. The tracked recipe lives in `frontend/scripts/video/film/`.
+
+## Best places to personalize
+
+- Change shot timing, clip trims, or camera endpoints in `film/shotlist.json`.
+- Adjust titles, colors, and editorial overlays in `film/build-blender.py`.
+- Change the deterministic instrumental mix or SFX in `film/generate-audio.mjs`.
+- In Blender, add your own logo lockup, replace the generated music, or trim beats directly in the VSE.
+
+Keep the existing 1920×1080 / 30 fps / Standard color-management setup. Render a review before changing the final master. Full technical notes are in `frontend/scripts/video/film/README.md`.
