@@ -13,6 +13,11 @@ const artifactRoot = path.join(repo, "artifacts", "skybao-film");
 const blendPath = path.join(artifactRoot, "skybao-film.blend");
 const audioPath = path.join(artifactRoot, "audio", "skybao-mix.wav");
 const deliverableRoot = path.join(artifactRoot, "deliverables");
+const buildManifestPath = path.join(artifactRoot, "build-manifest.json");
+// Kept beside, rather than inside, the committed film artifact directory. The
+// private .gitignore makes interrupted render work invisible to Git while
+// leaving it available for diagnosis or manual cleanup.
+const stagingRoot = path.join(repo, "artifacts", ".skybao-film-staging");
 const scriptArgs = process.argv.slice(2);
 const shotlistPath = path.join(here, "shotlist.json");
 const captureScript = path.join(
@@ -22,6 +27,7 @@ const captureScript = path.join(
   "video",
   "capture-skybao-assets.mjs"
 );
+const startedAt = process.hrtime.bigint();
 
 function has(flag) {
   return scriptArgs.includes(flag);
@@ -37,10 +43,11 @@ Usage:
   yarn video:film --build-only     Generate audio, validate, and save the .blend
   yarn video:film --samples=30,241 Render selected review frames
   yarn video:film --shots=assistant-research,work-board-drag
-  yarn video:film --check          Validate manifests and inputs without writing
+  yarn video:film --check          Validate manifests, inputs, and Cycles device without writing
 
 Options:
-  --keep-frames                    Retain rendered PNG intermediates
+  --cycles-device=auto|metal|cpu   Cycles render device (default: auto)
+  --keep-frames                    Promote validated PNG intermediates after a successful render
   BLENDER_BIN=/path/to/blender     Override Blender executable
   FFMPEG_BIN=/path/to/ffmpeg       Override FFmpeg executable
   FFPROBE_BIN=/path/to/ffprobe     Override FFprobe executable`);
@@ -53,6 +60,29 @@ if (has("--help") || has("-h")) {
 
 const samplesArg = scriptArgs.find((arg) => arg.startsWith("--samples="));
 const shotsArg = scriptArgs.find((arg) => arg.startsWith("--shots="));
+const cyclesDeviceArg = scriptArgs.find((arg) =>
+  arg.startsWith("--cycles-device=")
+);
+const cyclesDevice = cyclesDeviceArg?.split("=", 2)[1] || "auto";
+if (!new Set(["auto", "metal", "cpu"]).has(cyclesDevice))
+  throw new Error(
+    `--cycles-device must be auto, metal, or cpu; received ${cyclesDevice}`
+  );
+
+function parseSampleFrames(argument) {
+  if (!argument) return null;
+  const values = argument.split("=", 2)[1].split(",");
+  if (values.length === 0 || values.some((value) => !/^\d+$/.test(value)))
+    throw new Error(
+      "--samples must be a comma-separated list of frame indices"
+    );
+  const frames = values.map(Number);
+  if (frames.some((frame) => frame < 1 || frame > 1200))
+    throw new Error("--samples frame indices must be within 1..1200");
+  return [...new Set(frames)].sort((a, b) => a - b);
+}
+
+const sampleFrames = parseSampleFrames(samplesArg);
 const targetedReview = Boolean(samplesArg || shotsArg);
 const modeFlags = ["--preview", "--final", "--build-only", "--check"].filter(
   has
@@ -82,7 +112,8 @@ const unknown = scriptArgs.filter(
       "--keep-frames",
     ].includes(arg) &&
     !arg.startsWith("--samples=") &&
-    !arg.startsWith("--shots=")
+    !arg.startsWith("--shots=") &&
+    !arg.startsWith("--cycles-device=")
 );
 if (unknown.length) throw new Error(`unknown option(s): ${unknown.join(", ")}`);
 
@@ -120,6 +151,7 @@ const ffprobe = ["build-only", "review", "check"].includes(mode)
 
 function run(command, args, label, options = {}) {
   console.log(`\n[${label}]`);
+  const startedAt = process.hrtime.bigint();
   const result = spawnSync(command, args, {
     cwd: repo,
     stdio: options.capture ? ["ignore", "pipe", "pipe"] : "inherit",
@@ -132,13 +164,68 @@ function run(command, args, label, options = {}) {
       : "";
     throw new Error(`${label} failed with exit ${result.status}${details}`);
   }
-  return result;
+  return {
+    ...result,
+    elapsedMs: Number(process.hrtime.bigint() - startedAt) / 1_000_000,
+  };
 }
 
 function sha256(file) {
   const hash = crypto.createHash("sha256");
   hash.update(fs.readFileSync(file));
   return hash.digest("hex");
+}
+
+function createStage(mode) {
+  fs.mkdirSync(stagingRoot, { recursive: true });
+  fs.writeFileSync(path.join(stagingRoot, ".gitignore"), "*\n");
+  return fs.mkdtempSync(path.join(stagingRoot, `${mode}-`));
+}
+
+function exists(file) {
+  return fs.existsSync(file);
+}
+
+function promoteWithRollback(items, stage) {
+  const backupRoot = path.join(stage, "rollback");
+  const moved = [];
+  try {
+    for (const item of items) {
+      if (!item.remove && !exists(item.source))
+        throw new Error(`Cannot promote missing staged output: ${item.source}`);
+      fs.mkdirSync(path.dirname(item.target), { recursive: true });
+      const backup = path.join(
+        backupRoot,
+        `${moved.length}-${path.basename(item.target)}`
+      );
+      if (exists(item.target)) {
+        fs.mkdirSync(backupRoot, { recursive: true });
+        fs.renameSync(item.target, backup);
+      }
+      if (!item.remove) {
+        try {
+          fs.renameSync(item.source, item.target);
+        } catch (error) {
+          if (exists(backup)) fs.renameSync(backup, item.target);
+          throw error;
+        }
+      }
+      moved.push({ ...item, backup: exists(backup) ? backup : null });
+    }
+  } catch (error) {
+    for (const item of moved.reverse()) {
+      if (exists(item.target))
+        fs.rmSync(item.target, { recursive: true, force: true });
+      if (item.backup && exists(item.backup))
+        fs.renameSync(item.backup, item.target);
+    }
+    throw error;
+  }
+  fs.rmSync(backupRoot, { recursive: true, force: true });
+}
+
+function discardStage(stage) {
+  fs.rmSync(stage, { recursive: true, force: true });
 }
 
 function filmAssetIds() {
@@ -150,26 +237,136 @@ function filmAssetIds() {
   ];
 }
 
+function readBuildManifest(manifestPath) {
+  if (!fs.existsSync(manifestPath))
+    throw new Error(`Blender did not write ${manifestPath}`);
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  const render = manifest.render || manifest.cycles || {};
+  return {
+    raw: manifest,
+    engine: render.engine || manifest.blender?.engine || null,
+    profile: render.profile || render.quality || null,
+    deviceRequested: render.deviceRequested || render.requestedDevice || null,
+    deviceResolved: render.deviceResolved || render.resolvedDevice || null,
+    deviceFallback: render.deviceFallback ?? null,
+    computeDeviceType: render.computeDeviceType || null,
+    activeDeviceIds: render.activeDeviceIds || [],
+    metalRT: render.metalRT ?? null,
+    samples: render.samples ?? null,
+    adaptiveThreshold: render.adaptiveThreshold ?? null,
+    resolutionPercentage: render.resolutionPercentage ?? null,
+    seed: render.seed ?? null,
+    animatedSeed: render.animatedSeed ?? null,
+    persistentData: render.persistentData ?? null,
+    denoise: render.denoise || null,
+    bounces: render.bounces || null,
+    devices: render.devices || [],
+    elapsedRenderSeconds: render.elapsedRenderSeconds ?? null,
+  };
+}
+
+function assertCyclesBuildManifest(buildManifest, requestedDevice) {
+  if (buildManifest.engine !== "CYCLES")
+    throw new Error(
+      `Build manifest engine is ${buildManifest.engine || "missing"}, expected CYCLES`
+    );
+  if (!["auto", "metal", "cpu"].includes(buildManifest.deviceRequested))
+    throw new Error(
+      "Build manifest does not record a valid requested Cycles device"
+    );
+  if (!["metal", "cpu"].includes(buildManifest.deviceResolved))
+    throw new Error(
+      "Build manifest does not record a resolved Metal or CPU device"
+    );
+  if (!buildManifest.profile)
+    throw new Error("Build manifest does not record a Cycles render profile");
+  if (!Number.isInteger(buildManifest.samples) || buildManifest.samples < 1)
+    throw new Error(
+      "Build manifest does not record a positive Cycles sample count"
+    );
+  if (!buildManifest.denoise)
+    throw new Error("Build manifest does not record Cycles denoise settings");
+  if (!buildManifest.bounces)
+    throw new Error(
+      "Build manifest does not record Cycles light-path settings"
+    );
+  const portable = buildManifest.raw.scene?.portable_dependencies;
+  if (
+    !portable ||
+    portable.missing !== 0 ||
+    portable.images < 1 ||
+    portable.sounds !== 1
+  )
+    throw new Error(
+      "Build manifest does not prove portable image/audio dependencies"
+    );
+  if (
+    buildManifest.deviceResolved === "metal" &&
+    (buildManifest.computeDeviceType !== "METAL" ||
+      buildManifest.activeDeviceIds.length === 0)
+  )
+    throw new Error(
+      "Build manifest resolved Metal without an active Metal device ID"
+    );
+  if (
+    !["OIDN", "OPENIMAGEDENOISE"].includes(buildManifest.denoise.type) ||
+    buildManifest.denoise.useGpu !== true
+  )
+    throw new Error("Build manifest does not record GPU OIDN denoising");
+  if (
+    requestedDevice !== "auto" &&
+    buildManifest.deviceRequested !== requestedDevice
+  )
+    throw new Error(
+      `Build manifest requested ${buildManifest.deviceRequested}, expected ${requestedDevice}`
+    );
+}
+
 run(
   process.execPath,
   [captureScript, "--check", `--only=${filmAssetIds().join(",")}`],
   "UI capture freshness"
 );
 
-if (mode !== "check") fs.mkdirSync(deliverableRoot, { recursive: true });
-
 if (mode === "check") {
   run(process.execPath, [path.join(here, "validate.mjs")], "source validation");
+  run(
+    blender,
+    [
+      "--background",
+      "--factory-startup",
+      "--python",
+      path.join(here, "build-blender.py"),
+      "--",
+      "--repo",
+      repo,
+      "--device",
+      cyclesDevice,
+      "--probe-device",
+    ],
+    `Cycles ${cyclesDevice} device probe`
+  );
   console.log("\nSkyBao film inputs are valid");
   process.exit(0);
 }
 
+run(process.execPath, [path.join(here, "validate.mjs")], "source validation");
+
+// Do not let an incomplete render replace an approved review/master. Every
+// Blender output, sequence, encode, report, and rollback copy lives here until
+// its complete validation chain has succeeded.
+const stage = createStage(mode);
+const stagedAudioPath = path.join(stage, "audio", "skybao-mix.wav");
+const stagedBlendPath = path.join(stage, "skybao-film.blend");
+const stagedManifestPath = path.join(stage, "build-manifest.json");
+const stagedReviewRoot = path.join(stage, "review");
+const stagedFramesRoot = path.join(stage, "frames");
+
 run(
   process.execPath,
-  [path.join(here, "generate-audio.mjs")],
+  [path.join(here, "generate-audio.mjs"), "--out", stagedAudioPath],
   "deterministic audio"
 );
-run(process.execPath, [path.join(here, "validate.mjs")], "source validation");
 
 const blenderArgs = [
   "--background",
@@ -180,20 +377,28 @@ const blenderArgs = [
   "--repo",
   repo,
   "--out",
-  blendPath,
+  stagedBlendPath,
+  "--manifest-out",
+  stagedManifestPath,
+  "--audio",
+  stagedAudioPath,
+  "--audio-canonical",
+  audioPath,
+  "--device",
+  cyclesDevice,
 ];
 
 let framesDir = null;
 if (["preview", "final"].includes(mode)) {
-  framesDir = path.join(artifactRoot, "frames", mode);
-  fs.rmSync(framesDir, { recursive: true, force: true });
-  fs.mkdirSync(framesDir, { recursive: true });
+  framesDir = stagedFramesRoot;
+  blenderArgs.push("--frames-out", framesDir);
   blenderArgs.push("--quality", mode);
 }
-if (samplesArg) blenderArgs.push("--samples", samplesArg.split("=", 2)[1]);
+if (mode === "review") blenderArgs.push("--frames-out", stagedReviewRoot);
+if (sampleFrames) blenderArgs.push("--samples", sampleFrames.join(","));
 if (shotsArg) blenderArgs.push("--shots", shotsArg.split("=", 2)[1]);
 
-run(
+const blenderRun = run(
   blender,
   blenderArgs,
   mode === "build-only"
@@ -203,15 +408,47 @@ run(
       : `render ${mode} frames`
 );
 
-if (!fs.existsSync(blendPath))
-  throw new Error(`Blender did not create ${blendPath}`);
+if (!fs.existsSync(stagedBlendPath))
+  throw new Error(`Blender did not create ${stagedBlendPath}`);
+const buildManifest = readBuildManifest(stagedManifestPath);
+assertCyclesBuildManifest(buildManifest, cyclesDevice);
 
 if (mode === "build-only") {
+  promoteWithRollback(
+    [
+      { source: stagedBlendPath, target: blendPath },
+      { source: stagedManifestPath, target: buildManifestPath },
+      { source: stagedAudioPath, target: audioPath },
+    ],
+    stage
+  );
+  discardStage(stage);
   console.log(`\nReady: ${blendPath}`);
   process.exit(0);
 }
 if (mode === "review") {
-  console.log(`\nReview frames ready: ${path.join(artifactRoot, "review")}`);
+  if (!exists(stagedReviewRoot))
+    throw new Error(`Blender did not create review output ${stagedReviewRoot}`);
+  const reviewTarget = path.join(artifactRoot, "review");
+  const mergedReviewRoot = path.join(stage, "review-merged");
+  if (exists(reviewTarget))
+    fs.cpSync(reviewTarget, mergedReviewRoot, { recursive: true });
+  else fs.mkdirSync(mergedReviewRoot, { recursive: true });
+  fs.cpSync(stagedReviewRoot, mergedReviewRoot, {
+    recursive: true,
+    force: true,
+  });
+  promoteWithRollback(
+    [
+      { source: stagedBlendPath, target: blendPath },
+      { source: stagedManifestPath, target: buildManifestPath },
+      { source: stagedAudioPath, target: audioPath },
+      { source: mergedReviewRoot, target: reviewTarget },
+    ],
+    stage
+  );
+  discardStage(stage);
+  console.log(`\nReview frames ready: ${reviewTarget}`);
   console.log(`Editable project: ${blendPath}`);
   process.exit(0);
 }
@@ -237,6 +474,15 @@ for (let index = 0; index < frames.length; index += 1) {
 const outputName =
   mode === "final" ? "skybao-40s-master.mp4" : "skybao-40s-preview.mp4";
 const outputPath = path.join(deliverableRoot, outputName);
+const stagedOutputPath = path.join(stage, outputName);
+const versionedManifestName = `build-manifest-${mode}.json`;
+const versionedManifestPath = path.join(deliverableRoot, versionedManifestName);
+const stagedVersionedManifestPath = path.join(stage, versionedManifestName);
+const versionedBlendName = `skybao-film-${mode}.blend`;
+const versionedBlendPath = path.join(artifactRoot, versionedBlendName);
+const stagedVersionedBlendPath = path.join(stage, versionedBlendName);
+const reportPath = path.join(deliverableRoot, `render-report-${mode}.json`);
+const stagedReportPath = path.join(stage, path.basename(reportPath));
 const dimensions = mode === "final" ? "1920x1080" : "960x540";
 const encodeArgs = [
   "-hide_banner",
@@ -248,7 +494,7 @@ const encodeArgs = [
   "-i",
   path.join(framesDir, "frame-%06d.png"),
   "-i",
-  audioPath,
+  stagedAudioPath,
   "-map",
   "0:v:0",
   "-map",
@@ -284,9 +530,9 @@ const encodeArgs = [
   "-movflags",
   "+faststart",
   "-shortest",
-  outputPath,
+  stagedOutputPath,
 ];
-run(ffmpeg, encodeArgs, `encode ${outputName}`);
+const encodeRun = run(ffmpeg, encodeArgs, `encode ${outputName}`);
 
 const probe = run(
   ffprobe,
@@ -297,7 +543,7 @@ const probe = run(
     "format=duration:stream=index,codec_type,codec_name,width,height,r_frame_rate,sample_rate,channels,pix_fmt,color_space,color_transfer,color_primaries",
     "-of",
     "json",
-    outputPath,
+    stagedOutputPath,
   ],
   "verify encoded master",
   { capture: true }
@@ -331,6 +577,25 @@ if (!audio || audio.sample_rate !== "48000" || audio.channels !== 2) {
 if (Math.abs(duration - 40) > 0.05)
   throw new Error(`encoded duration ${duration}s is not 40s`);
 
+const blackDetect = run(
+  ffmpeg,
+  [
+    "-hide_banner",
+    "-i",
+    stagedOutputPath,
+    "-vf",
+    "blackdetect=d=0.1:pix_th=0.01",
+    "-an",
+    "-f",
+    "null",
+    "-",
+  ],
+  "detect black frames",
+  { capture: true }
+);
+if (/black_(?:start|end|duration):/.test(blackDetect.stderr || ""))
+  throw new Error("encoded video contains a detected black segment");
+
 const report = {
   title: "SkyBao · The Acme Workspace Flow",
   mode,
@@ -338,29 +603,101 @@ const report = {
   frames: 1200,
   fps: 30,
   dimensions,
+  validation: {
+    contiguousFrames: true,
+    blackSegments: 0,
+    framesRetained: keepFrames,
+  },
+  render: {
+    engine: buildManifest.engine,
+    cycles: {
+      requestedDevice: cyclesDevice,
+      manifestRequestedDevice: buildManifest.deviceRequested,
+      resolvedDevice: buildManifest.deviceResolved,
+      fallback: buildManifest.deviceFallback,
+      computeDeviceType: buildManifest.computeDeviceType,
+      activeDeviceIds: buildManifest.activeDeviceIds,
+      metalRT: buildManifest.metalRT,
+      profile: buildManifest.profile || mode,
+      samples: buildManifest.samples,
+      adaptiveThreshold: buildManifest.adaptiveThreshold,
+      resolutionPercentage: buildManifest.resolutionPercentage,
+      seed: buildManifest.seed,
+      animatedSeed: buildManifest.animatedSeed,
+      persistentData: buildManifest.persistentData,
+      denoise: buildManifest.denoise,
+      bounces: buildManifest.bounces,
+      devices: buildManifest.devices,
+      elapsedRenderSeconds: buildManifest.elapsedRenderSeconds,
+    },
+    elapsed: {
+      totalMs: Number(process.hrtime.bigint() - startedAt) / 1_000_000,
+      blenderMs: blenderRun.elapsedMs,
+      encodeMs: encodeRun.elapsedMs,
+    },
+  },
   video,
   audio,
   files: {
     video: path.relative(repo, outputPath),
-    blend: path.relative(repo, blendPath),
+    blend: path.relative(repo, versionedBlendPath),
     mix: path.relative(repo, audioPath),
+    buildManifest: path.relative(repo, versionedManifestPath),
   },
   sha256: {
-    video: sha256(outputPath),
-    blend: sha256(blendPath),
-    mix: sha256(audioPath),
+    video: sha256(stagedOutputPath),
+    blend: sha256(stagedBlendPath),
+    mix: sha256(stagedAudioPath),
+    buildManifest: sha256(stagedManifestPath),
+  },
+  provenance: {
+    buildManifest: {
+      path: path.relative(repo, versionedManifestPath),
+      schemaVersion: buildManifest.raw.schemaVersion ?? null,
+      sha256: sha256(stagedManifestPath),
+    },
   },
 };
-const reportPath = path.join(deliverableRoot, `render-report-${mode}.json`);
-fs.writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
+fs.copyFileSync(stagedManifestPath, stagedVersionedManifestPath);
+fs.copyFileSync(stagedBlendPath, stagedVersionedBlendPath);
+fs.writeFileSync(stagedReportPath, `${JSON.stringify(report, null, 2)}\n`);
 
-if (!keepFrames) fs.rmSync(framesDir, { recursive: true, force: true });
+const promotions = [
+  { source: stagedBlendPath, target: blendPath },
+  { source: stagedVersionedBlendPath, target: versionedBlendPath },
+  { source: stagedManifestPath, target: buildManifestPath },
+  { source: stagedVersionedManifestPath, target: versionedManifestPath },
+  { source: stagedOutputPath, target: outputPath },
+  { source: stagedReportPath, target: reportPath },
+  { source: stagedAudioPath, target: audioPath },
+];
+if (keepFrames)
+  promotions.push({
+    source: framesDir,
+    target: path.join(artifactRoot, "frames", mode),
+  });
+else
+  promotions.push({
+    remove: true,
+    target: path.join(artifactRoot, "frames", mode),
+  });
+promoteWithRollback(promotions, stage);
+discardStage(stage);
+
+if (mode === "final") {
+  run(
+    process.execPath,
+    [path.join(here, "handoff.mjs")],
+    "regenerate final handoff assets"
+  );
+}
 
 console.log(`\nSkyBao film ready`);
 console.log(`  video:  ${outputPath}`);
 console.log(`  blend:  ${blendPath}`);
+console.log(`  locked: ${versionedBlendPath}`);
 console.log(`  report: ${reportPath}`);
 console.log(`  sha256: ${report.sha256.video}`);
 console.log(
-  `  frames: ${keepFrames ? framesDir : "removed after verified encode"}`
+  `  frames: ${keepFrames ? path.join(artifactRoot, "frames", mode) : "removed after verified encode"}`
 );

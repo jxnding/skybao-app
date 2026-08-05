@@ -1,6 +1,10 @@
 {
+  "audio": {
+    "path": "artifacts/skybao-film/audio/skybao-mix.wav",
+    "sha256": "ff4c45fa4973e7c71936ec4cdb93e3d4f9283aa5de4aa699e6a7ed22197f2833"
+  },
   "blender": {
-    "engine": "BLENDER_EEVEE",
+    "engine": "CYCLES",
     "objects": 63,
     "version": "5.2.0 LTS"
   },
@@ -8,7 +12,7 @@
     "id": "skybao-glass-atmosphere",
     "path": "frontend/scripts/video/film/environment.json",
     "seed": 830194,
-    "sha256": "b1cdd886ce725a2f7a2421789ce56b56620e626e65fc2648ca61fbe895fce865"
+    "sha256": "4099d2b28e1c2154ebf0aef6694e88614bb9121580abe9b9801d44c946bae6aa"
   },
   "format": {
     "fps": 30,
@@ -23,8 +27,58 @@
     },
     "consumer": {
       "path": "frontend/scripts/video/film/build-blender.py",
-      "sha256": "58c2b13f61223bd7496c71683c3725bec73cf40caa509d51ddb62022c51975b9"
+      "sha256": "66d574d9efa778bd1e6f395fc6f48e259abbdcf12a2c2b6f25d4cdce62b3cb66"
     }
+  },
+  "render": {
+    "activeDeviceIds": [
+      "METAL_Apple M1 Max (GPU - 32 cores)"
+    ],
+    "adaptiveThreshold": 0.009999999776482582,
+    "animatedSeed": false,
+    "bounces": {
+      "causticsReflective": false,
+      "causticsRefractive": false,
+      "diffuse": 2,
+      "glossy": 4,
+      "indirectClamp": 10.0,
+      "max": 8,
+      "transmission": 8,
+      "transparent": 8
+    },
+    "computeDeviceType": "METAL",
+    "denoise": {
+      "inputPasses": "RGB_ALBEDO_NORMAL",
+      "prefilter": "ACCURATE",
+      "quality": "HIGH",
+      "type": "OPENIMAGEDENOISE",
+      "useGpu": true
+    },
+    "deviceFallback": null,
+    "deviceRequested": "metal",
+    "deviceResolved": "metal",
+    "devices": [
+      {
+        "id": "CPU",
+        "name": "Apple M1 Max",
+        "type": "CPU",
+        "use": false
+      },
+      {
+        "id": "METAL_Apple M1 Max (GPU - 32 cores)",
+        "name": "Apple M1 Max (GPU - 32 cores)",
+        "type": "METAL",
+        "use": true
+      }
+    ],
+    "elapsedRenderSeconds": 31560.46459025005,
+    "engine": "CYCLES",
+    "metalRT": "AUTO",
+    "persistentData": true,
+    "profile": "final",
+    "resolutionPercentage": 100,
+    "samples": 128,
+    "seed": 830194
   },
   "scene": {
     "area_flips": 4,
@@ -264,15 +318,15 @@
     "sound": "skybao-mix.wav",
     "ui_planes": 19
   },
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "shotlist": {
     "path": "frontend/scripts/video/film/shotlist.json",
     "sha256": "37ae9dfbfa74d788813b178d06ec180bc75c5b2f4a58a65196500522d5753120"
   },
   "uiCatalog": {
-    "aggregateSha256": "674201be98f543bd19a140ec60e45ad63fa68c3b81f8e0b5c4a5cb7cac76e090",
+    "aggregateSha256": "89f5167b58c94280661c0e7a74a66dde0a3fd71a52c7e677f86b3f99f6f4c7bd",
     "path": "artifacts/skybao-ui/catalog.json",
-    "sha256": "b5b6bd08e9cd385d7f0b98d5c124f02adbd4fe39cb0123e4a3b5d5c88be53a67"
+    "sha256": "508d4f31136bdc742cb44651f61c91b65fc3c911c5f6496400efa0f63a04dadd"
   },
   "usedUiAssets": [
     {
@@ -280,8 +334,8 @@
       "framing": "workspace",
       "id": "admin-privacy-to-users",
       "ownerId": "admin-privacy-to-users",
-      "recipeSha256": "a99d3ae788a40ccdd06b311ebbc30365d6099246aa1a31f48c6145d7ab40f65d",
-      "recipeVersion": "skybao-capture-v2",
+      "recipeSha256": "c53678abef0d564b5e29096939a4cdef9f1a3104117869c7d7dfe097558bda8d",
+      "recipeVersion": "skybao-capture-v3",
       "type": "clip"
     },
     {
@@ -289,8 +343,8 @@
       "framing": "workspace",
       "id": "admin-users-to-models",
       "ownerId": "admin-users-to-models",
-      "recipeSha256": "0a8e7d6574c6947f643288db0348e588d5fffe1221e3f405f046b36789dedae5",
-      "recipeVersion": "skybao-capture-v2",
+      "recipeSha256": "a09a1b8a964681342c3182706603361307070880d0a90ae2ab4d3bb2dd0bcbe6",
+      "recipeVersion": "skybao-capture-v3",
       "type": "clip"
     },
     {
@@ -298,8 +352,8 @@
       "framing": "workspace",
       "id": "area-nav-assistant-knowledge",
       "ownerId": "area-nav-assistant-knowledge",
-      "recipeSha256": "8b3d525f87bd412291b729d8bf238e1836dc8f3ce2b6cecdc95ba94de8f455f3",
-      "recipeVersion": "skybao-capture-v2",
+      "recipeSha256": "a989b8b9362ef0330a742f2f9957672306fb11a354db08f913184f1b00b99370",
+      "recipeVersion": "skybao-capture-v3",
       "type": "clip"
     },
     {
@@ -307,8 +361,8 @@
       "framing": "workspace",
       "id": "area-nav-communications-work",
       "ownerId": "area-nav-communications-work",
-      "recipeSha256": "27c0a8fe397326d3d129998a29d3a28b89dea45e45e7bded074ad78bfdd17df2",
-      "recipeVersion": "skybao-capture-v2",
+      "recipeSha256": "e553a975aeb37053d1a81b15bd2324be59978682a22c4bf0a3b96bb48ff7278f",
+      "recipeVersion": "skybao-capture-v3",
       "type": "clip"
     },
     {
@@ -316,8 +370,8 @@
       "framing": "workspace",
       "id": "area-nav-knowledge-communications",
       "ownerId": "area-nav-knowledge-communications",
-      "recipeSha256": "455f2b363c95fd74cc35f2db96054992c1c703085104bd16b33146e00adadb0a",
-      "recipeVersion": "skybao-capture-v2",
+      "recipeSha256": "0ecb0b54615504da5cd5d2f8edab593ec4f8957c372bde68724d845922b08659",
+      "recipeVersion": "skybao-capture-v3",
       "type": "clip"
     },
     {
@@ -325,8 +379,8 @@
       "framing": "workspace",
       "id": "area-nav-work-admin",
       "ownerId": "area-nav-work-admin",
-      "recipeSha256": "32ae23d39167642b1f3931457c3d0224e3566678be71a5f80c6cfb091cdc16ab",
-      "recipeVersion": "skybao-capture-v2",
+      "recipeSha256": "90daf4b5bd134d29641709cc340b5fe75aeba64c9812ba6fa338b92a2927ce8b",
+      "recipeVersion": "skybao-capture-v3",
       "type": "clip"
     },
     {
@@ -334,17 +388,17 @@
       "framing": "workspace",
       "id": "assistant-answer-typing",
       "ownerId": "assistant-answer-typing",
-      "recipeSha256": "9f847f092a1680cb6570ff1fff3e60cd1c99ceb965f2a1b363a5bc20470a910e",
-      "recipeVersion": "skybao-capture-v2",
+      "recipeSha256": "f3665ff7da0ed3eef15246568d1987fcd61c20523f2db7d984c0093f2b9afe35",
+      "recipeVersion": "skybao-capture-v3",
       "type": "clip"
     },
     {
-      "contentSha256": "9cfa3aa5171bf36fc6073cc80e47abe7b4fd131dc7fb1bb5db61281c9dba0f41",
+      "contentSha256": "7a2a61ba65e9efd6af2e8e6380d501d71797589b4ed72b81c1f46db7a9950aee",
       "framing": "workspace",
       "id": "assistant-draft",
       "ownerId": "assistant-draft",
-      "recipeSha256": "dfea9f206badb0ecd946524b255832bead97bd5323e0989ba060c0ecf0d1edad",
-      "recipeVersion": "skybao-capture-v2",
+      "recipeSha256": "f4790db7e11393cc439ddb9da6b6fbee6c6f4dd1c952fa7a222905c59ac78f3d",
+      "recipeVersion": "skybao-capture-v3",
       "type": "clip"
     },
     {
@@ -352,8 +406,8 @@
       "framing": "workspace",
       "id": "assistant-research",
       "ownerId": "assistant-research",
-      "recipeSha256": "cc1c62c55fa8aa2274190c3899c03e9a870b5742af60b5333154615a37665bb5",
-      "recipeVersion": "skybao-capture-v2",
+      "recipeSha256": "712a90db88b7d33a746d560562fadf4be3b4f835ac0036307d99bbb5d6eab2b1",
+      "recipeVersion": "skybao-capture-v3",
       "type": "clip"
     },
     {
@@ -361,8 +415,8 @@
       "framing": "workspace",
       "id": "communications-draft-review",
       "ownerId": "communications-draft-review",
-      "recipeSha256": "3076cb0e11712f46f9d05724a7d1793f512285878beaa4a559a767852241c707",
-      "recipeVersion": "skybao-capture-v2",
+      "recipeSha256": "ae9240722395bd7544daee6d90ce096a6ff19e506311146804a105d2a0d57172",
+      "recipeVersion": "skybao-capture-v3",
       "type": "clip"
     },
     {
@@ -370,8 +424,8 @@
       "framing": "workspace",
       "id": "communications-filter-select",
       "ownerId": "communications-filter-select",
-      "recipeSha256": "49cdff684c697233b312a115f9476eaf2b3bfb6a04e1424669cd0d9d46d4869f",
-      "recipeVersion": "skybao-capture-v2",
+      "recipeSha256": "586883851c83503dbd6e9f17d39841734768b3bdcbebd13c8563bafd8ff33899",
+      "recipeVersion": "skybao-capture-v3",
       "type": "clip"
     },
     {
@@ -379,8 +433,8 @@
       "framing": "workspace",
       "id": "communications-source-preview",
       "ownerId": "communications-source-preview",
-      "recipeSha256": "c92732da443e240e05a61b560b9926baa3af7cd4fa8b16ac72968eb763dff7b2",
-      "recipeVersion": "skybao-capture-v2",
+      "recipeSha256": "4fb297afa857c689781387918bedac9a37e71658170a2962a2d73ace962093f1",
+      "recipeVersion": "skybao-capture-v3",
       "type": "clip"
     },
     {
@@ -388,17 +442,17 @@
       "framing": "workspace",
       "id": "knowledge-data-analysis",
       "ownerId": "knowledge-data-analysis",
-      "recipeSha256": "e95d6bc8b2f87a16ac770c32230d72e8e78d71c67118cbbb66de829e4f4db584",
-      "recipeVersion": "skybao-capture-v2",
+      "recipeSha256": "f0ce3d2d9f188a0e8f09772497b518ed42450fcb80d9da26290d70a3564376d3",
+      "recipeVersion": "skybao-capture-v3",
       "type": "clip"
     },
     {
-      "contentSha256": "f36a218998ef2e33343c8589774b837fc49d026ebefbcf64a3137e38e4cd5064",
+      "contentSha256": "3504398e13aebc2fd55ed0da6fe742a39ebff684eb2e449c13b8bdbf1051bf1c",
       "framing": "workspace",
       "id": "knowledge-file-search",
       "ownerId": "knowledge-file-search",
-      "recipeSha256": "53bdeb9afe0e6e3fca6057e8d92af59ab786f2f5e37a124b1a2ac6105df91ad5",
-      "recipeVersion": "skybao-capture-v2",
+      "recipeSha256": "5280ec45eb619bdb87a246e0a386d8373872f4536f0bdb509478f3fb5ee66fdd",
+      "recipeVersion": "skybao-capture-v3",
       "type": "clip"
     },
     {
@@ -406,8 +460,8 @@
       "framing": "workspace",
       "id": "knowledge-source-preview",
       "ownerId": "knowledge-source-preview",
-      "recipeSha256": "b3992602c613418630dbbf730dba3126f2556dd4c170800a2f4a9d8455204f9b",
-      "recipeVersion": "skybao-capture-v2",
+      "recipeSha256": "1cdf07ecb4cfbe4c4839176da60f1ed0715e0d7c2e174b65aa04d13c6511f0c0",
+      "recipeVersion": "skybao-capture-v3",
       "type": "clip"
     },
     {
@@ -415,26 +469,26 @@
       "framing": "workspace",
       "id": "work-agent-run-detail",
       "ownerId": "work-agent-run-detail",
-      "recipeSha256": "04d0b1d643d1618ea9fb3ebcb90e41ec2c83496bd3b66df0a1348f57c6e2f08e",
-      "recipeVersion": "skybao-capture-v2",
+      "recipeSha256": "83313d1b182eb3f49ad56a943bd829af28ca96341bcb6bb86d7f4ee770621b3c",
+      "recipeVersion": "skybao-capture-v3",
       "type": "clip"
     },
     {
-      "contentSha256": "4ae13202b936be0555b67bd5a9745d4b0097ab3902209135d3f24453ebd85646",
+      "contentSha256": "33ea29a82427dafc252edc2f2f7679f982c9618d77b3c8b93c7c8baa7d0ffab3",
       "framing": "workspace",
       "id": "work-board-drag",
       "ownerId": "work-board-drag",
-      "recipeSha256": "3182a04168d1e338d98c612e3d6039027ec77f37a888e794a2e623826661db55",
-      "recipeVersion": "skybao-capture-v2",
+      "recipeSha256": "e99cede9d5de14bc1244249795f7bbd9a78fcd9c7c7eb5e4f10c724fd1fd49f7",
+      "recipeVersion": "skybao-capture-v3",
       "type": "clip"
     },
     {
-      "contentSha256": "a1020c5028049f065ea6a235210178b38e25c69913f3dff85a37079b62c4f17b",
+      "contentSha256": "94db99f4a2349d9ddc4e1b2ae2ab85b759971cf480ac27b63fe6396b28f12aa0",
       "framing": "workspace",
       "id": "work-task-approval",
       "ownerId": "work-task-approval",
-      "recipeSha256": "44a906d64ba7cc04567efe846890684d82c8de2a3d7f99bdbf1c67511375527c",
-      "recipeVersion": "skybao-capture-v2",
+      "recipeSha256": "3caaf0d13a4f137b1d4652bf4dd2317085d380aee6daa533f9221085779e4e12",
+      "recipeVersion": "skybao-capture-v3",
       "type": "clip"
     },
     {
@@ -442,8 +496,8 @@
       "framing": "workspace",
       "id": "admin-models",
       "ownerId": "admin-models",
-      "recipeSha256": "dc414d130637ffe1068171238065616514d4ec5718c1dbc2a75df2326cb15509",
-      "recipeVersion": "skybao-capture-v2",
+      "recipeSha256": "a0048a7d3851c6052f4e38c2e2c12222d929493476f8acd7dcd277f393a52ffd",
+      "recipeVersion": "skybao-capture-v3",
       "type": "still"
     }
   ]

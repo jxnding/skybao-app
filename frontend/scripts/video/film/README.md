@@ -37,6 +37,42 @@ The environment recipe intentionally contains no alternate accent colors. It
 is data, not a one-off render tweak: changing a visual value here and
 regenerating is the supported revision path.
 
+## Cycles render profiles
+
+The Blender recipe renders in **Cycles**, not Eevee. Device selection is
+explicit and recorded in both `build-manifest.json` and each delivery report:
+
+```bash
+# The normal choice on Apple Silicon. It probes Metal first and falls back to CPU.
+yarn video:film --cycles-device=auto
+
+# Useful when validating the GPU path or diagnosing a Metal issue.
+yarn video:film --check --cycles-device=metal
+
+# Portable but much slower fallback.
+yarn video:film --cycles-device=cpu
+```
+
+`auto` is the default. `--check` is read-only: after validating the recipes and
+captures, it asks Blender to probe the requested Cycles device without building
+the `.blend` or rendering media. A requested `metal` run fails clearly when no
+Metal Cycles device is available; `auto` resolves to Metal when possible and
+otherwise CPU.
+
+Cycles uses GPU OIDN with RGB/albedo/normal guidance, accurate prefiltering,
+and high quality. The first Metal render after launch has a shader/device
+warm-up cost; run a targeted sample or preview before timing a final delivery.
+The 50% review profile uses 32 adaptive samples and is intended for iteration;
+the 1080p final uses 128 adaptive samples. On the 32-core M1 Max used for the
+checked-in delivery, the complete 1,200-frame preview took about 42 minutes and
+the complete final took about 8 hours 46 minutes, including Metal warm-up,
+scene build, validation, and encode. Treat those as planning estimates rather
+than guarantees; scene changes and thermal load affect them, and CPU fallback
+can take several times as long. The generated render report records the
+resolved device, profile, samples, denoise settings, Blender/encode/total
+elapsed milliseconds, and build-manifest path so the exact observed timing
+remains attached to each deliverable.
+
 ## Regenerate after a UI change
 
 From the repository root:
@@ -57,7 +93,30 @@ yarn video:film
 
 # 4. Produce the 1080p delivery master only after the review is approved.
 yarn video:film --final
+
+# Rebuild only the poster, contact sheets, boundary review, and checksums.
+yarn video:film:handoff
 ```
+
+Each render is assembled under an ignored staging directory and promoted only
+after frame-contiguity, media, duration, color, and audio checks pass. The final
+command removes its numbered PNG intermediates only after the master is safely
+encoded; add `--keep-frames` when an editor explicitly needs them. Canonical
+outputs are written to `artifacts/skybao-film/`, with MP4s, versioned build
+manifests, render reports, and the poster under `deliverables/`.
+Preview and final reports reference their immutable
+`skybao-film-preview.blend` and `skybao-film-final.blend` projects; the shorter
+`skybao-film.blend` path remains the most recently generated editable scene.
+`video:film:handoff` derives its selections from `shotlist.json`, validates each
+generated image/video, and promotes the handoff set atomically. A successful
+final render invokes it automatically; the standalone command is useful when
+only editor-facing derivatives need to be refreshed.
+
+When changing `environment.json`, use the same sequence: `--check` to verify
+the Cycles contract/device, `--samples=<frame indices>` for a fast visual
+checkpoint, then `--build-only`, preview, and finally the approved final. The
+`--samples` values are global film frame indices, not seconds or clip-relative
+frames.
 
 Every film command first performs a read-only freshness check of the exact 19
 capture owners referenced by the shotlist. The generated `build-manifest.json`
@@ -65,6 +124,12 @@ locks each used owner's recipe and content SHA-256 alongside the shotlist,
 environment, cloud texture, builder, and UI catalog hashes. If the React UI or
 capture recipe changes, the film refuses to render until those owners are
 recaptured.
+
+Capture recipe v4 binds freshness to the deterministic frontend source tree,
+toolchain identity, and explicit recipe version. The Vite `dist` hash remains
+in `catalog.json` for auditing but is intentionally non-binding because this
+application's optimized chunk graph can differ byte-for-byte across equivalent
+builds. Rebuilding unchanged UI therefore does not invalidate approved PNGs.
 
 The capture manifest defines the real interaction and cursor timeline for each
 clip. Navigation bridges are normal capture assets too: open the actual primary

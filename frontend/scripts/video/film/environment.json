@@ -23,21 +23,24 @@
     "uiMaskCornerRadiusM": 0.043,
     "layers": {
       "backing": {
-        "roughness": 0.21,
-        "transmission": 0.8,
+        "roughness": 0.17,
+        "transmission": 0.9,
         "ior": 1.45,
-        "baseColor": "#1B2B3F"
+        "baseColor": "#1B2B3F",
+        "coatWeight": 0.18,
+        "frostStrength": 0.06,
+        "frostDistance": 0.012
       },
       "ui": {
         "mode": "crisp-emissive",
         "offsetM": 0.0004
       },
       "coverRim": {
-        "roughness": 0.035,
-        "transmission": 0.97,
+        "roughness": 0.025,
+        "transmission": 1.0,
         "ior": 1.45,
-        "coatWeight": 0.25,
-        "opacity": 0.055,
+        "coatWeight": 0.3,
+        "opacity": 0.06,
         "bevelM": 0.001
       }
     }
@@ -111,6 +114,45 @@
     "maxBreathM": 0.018,
     "lockXY": true,
     "rackFocusAtAreaFlips": true
+  },
+  "render": {
+    "engine": "CYCLES",
+    "seed": {
+      "value": 830194,
+      "persistent": true,
+      "animated": false
+    },
+    "device": {
+      "default": "auto",
+      "supported": ["auto", "metal", "cpu"],
+      "metalRT": "AUTO"
+    },
+    "preview": {
+      "samples": 32,
+      "adaptiveThreshold": 0.03,
+      "resolutionPercentage": 50
+    },
+    "final": {
+      "samples": 128,
+      "adaptiveThreshold": 0.01,
+      "resolutionPercentage": 100
+    },
+    "denoise": {
+      "type": "OIDN",
+      "useGpu": true,
+      "inputPasses": "RGB_ALBEDO_NORMAL",
+      "prefilter": "ACCURATE",
+      "quality": "HIGH"
+    },
+    "bounces": {
+      "max": 8,
+      "transmission": 8,
+      "transparent": 8,
+      "glossy": 4,
+      "diffuse": 2,
+      "caustics": false,
+      "indirectClamp": 10
+    }
   },
   "lighting": {
     "world": "#010207",

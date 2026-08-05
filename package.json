@@ -40,6 +40,7 @@
     "video:assets": "yarn --cwd frontend/scripts/video install --frozen-lockfile && node frontend/scripts/video/capture-skybao-assets.mjs",
     "video:assets:check": "yarn --cwd frontend/scripts/video install --frozen-lockfile && node frontend/scripts/video/capture-skybao-assets.mjs --check",
     "video:film": "node frontend/scripts/video/film/render.mjs",
+    "video:film:handoff": "node frontend/scripts/video/film/handoff.mjs",
     "generate:cloudformation": "node cloud-deployments/aws/cloudformation/generate.mjs",
     "generate::gcp_deployment": "node cloud-deployments/gcp/deployment/generate.mjs",
     "translations:verify": "cd frontend/src/locales && node verifyTranslations.mjs",

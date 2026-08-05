@@ -1,14 +1,16 @@
 #!/usr/bin/env node
 
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createServer } from "node:http";
 import {
   access,
+  cp,
   copyFile,
   mkdir,
   readFile,
   readdir,
+  rename,
   rm,
   stat,
   writeFile,
@@ -34,7 +36,7 @@ const defaultSmokeOutput = path.join(
 );
 const outputSentinel = ".skybao-video-assets";
 const catalogSchemaVersion = 2;
-const recipeVersion = "skybao-capture-v2";
+const recipeVersion = "skybao-capture-v4";
 
 function parseArguments(argv) {
   const options = {
@@ -287,6 +289,48 @@ async function ensureUpdateOutputDirectory(output) {
   }
 }
 
+async function createOutputStage(finalOutput, preserveExisting) {
+  const parent = path.dirname(finalOutput);
+  const base = path.basename(finalOutput);
+  await mkdir(parent, { recursive: true });
+  const stage = path.join(
+    parent,
+    `.${base}-staging-${process.pid}-${Date.now()}`
+  );
+  if (preserveExisting) {
+    const hasExisting = await stat(finalOutput)
+      .then(() => true)
+      .catch((error) =>
+        error.code === "ENOENT" ? false : Promise.reject(error)
+      );
+    if (hasExisting) await cp(finalOutput, stage, { recursive: true });
+    else await mkdir(stage, { recursive: true });
+  } else await mkdir(stage, { recursive: true });
+  return stage;
+}
+
+async function promoteOutputStage(stage, finalOutput) {
+  const parent = path.dirname(finalOutput);
+  const base = path.basename(finalOutput);
+  const backup = path.join(
+    parent,
+    `.${base}-backup-${process.pid}-${Date.now()}`
+  );
+  const hasExisting = await stat(finalOutput)
+    .then(() => true)
+    .catch((error) =>
+      error.code === "ENOENT" ? false : Promise.reject(error)
+    );
+  if (hasExisting) await rename(finalOutput, backup);
+  try {
+    await rename(stage, finalOutput);
+  } catch (error) {
+    if (hasExisting) await rename(backup, finalOutput);
+    throw error;
+  }
+  if (hasExisting) await rm(backup, { recursive: true, force: true });
+}
+
 function canonicalize(value) {
   if (Array.isArray(value)) return value.map(canonicalize);
   if (value && typeof value === "object") {
@@ -329,14 +373,6 @@ async function hashDirectory(directory) {
   return hash.digest("hex");
 }
 
-function gitValue(args) {
-  const result = spawnSync("git", args, {
-    cwd: repositoryDirectory,
-    encoding: "utf8",
-  });
-  return result.status === 0 ? result.stdout.trim() : null;
-}
-
 async function captureFingerprint() {
   const toolPackage = JSON.parse(
     await readFile(path.join(scriptDirectory, "package.json"), "utf8")
@@ -345,7 +381,13 @@ async function captureFingerprint() {
     path.join(scriptDirectory, "capture-skybao-assets.mjs"),
     path.join(scriptDirectory, "skybao-assets.mjs"),
     path.join(scriptDirectory, "cursor.svg"),
+    path.join(scriptDirectory, "yarn.lock"),
+    path.join(frontendDirectory, "index.html"),
     path.join(frontendDirectory, "package.json"),
+    path.join(frontendDirectory, "postcss.config.js"),
+    path.join(frontendDirectory, "tailwind.config.js"),
+    path.join(frontendDirectory, "vite.config.js"),
+    path.join(frontendDirectory, "yarn.lock"),
   ];
   const sourceHash = createHash("sha256");
   for (const file of sourceFiles.sort()) {
@@ -354,21 +396,14 @@ async function captureFingerprint() {
     sourceHash.update("\0");
   }
   sourceHash.update(await hashDirectory(path.join(frontendDirectory, "src")));
+  sourceHash.update(
+    await hashDirectory(path.join(frontendDirectory, "public"))
+  );
 
   const dist = path.join(frontendDirectory, "dist");
   const buildSha256 = await stat(dist)
     .then(() => hashDirectory(dist))
     .catch((error) => (error.code === "ENOENT" ? null : Promise.reject(error)));
-  const dirty = gitValue([
-    "status",
-    "--porcelain=v1",
-    "--untracked-files=no",
-    "--",
-    "frontend/src",
-    "frontend/package.json",
-    "frontend/vite.config.js",
-    "frontend/scripts/video",
-  ]);
   return {
     generator: {
       path: "frontend/scripts/video/capture-skybao-assets.mjs",
@@ -379,11 +414,9 @@ async function captureFingerprint() {
       fontConfig: process.env.FONTCONFIG_FILE || null,
     },
     source: {
-      gitHead: gitValue(["rev-parse", "HEAD"]),
-      // The front-end source hash is the authoritative invalidation input;
-      // a repository-wide dirty hash would include generated media itself.
+      // Recipe freshness follows the actual browser/capture inputs. Commit IDs
+      // and unrelated film-renderer edits must not invalidate unchanged PNGs.
       frontendSourceSha256: sourceHash.digest("hex"),
-      dirtySourceSha256: dirty ? sha256Buffer(dirty) : null,
       buildSha256,
     },
   };
@@ -396,7 +429,12 @@ function recipeHash(asset, fingerprint) {
       asset,
       settings: VIDEO_SETTINGS,
       generator: fingerprint.generator,
-      source: fingerprint.source,
+      // Vite's optimized chunk graph is not byte-deterministic in this app.
+      // Keep its build hash as audit metadata, but bind capture freshness to
+      // the deterministic source tree and explicit recipe version instead.
+      source: {
+        frontendSourceSha256: fingerprint.source.frontendSourceSha256,
+      },
     })
   );
 }
@@ -625,6 +663,28 @@ async function executeFrameActions(page, asset, frame, runtime, cursor) {
       if (frame === action.endFrame) {
         await page.mouse.up();
         cursor.push(cursorEntry(frame, point, "up"));
+        const targetSelector = selectorFor(action.target);
+        const destinationSelector = selectorFor(action.destination);
+        await page.waitForFunction(
+          (target, destination) => {
+            const targetElement = document.querySelector(target);
+            const destinationElement = document.querySelector(destination);
+            return Boolean(
+              targetElement &&
+                destinationElement?.contains(targetElement) &&
+                !document.querySelector(".sb-drag-overlay")
+            );
+          },
+          { timeout: 10_000 },
+          targetSelector,
+          destinationSelector
+        );
+        await page.evaluate(
+          () =>
+            new Promise((resolve) =>
+              requestAnimationFrame(() => requestAnimationFrame(resolve))
+            )
+        );
         state.complete = true;
       }
       runtime.set(index, state);
@@ -1101,15 +1161,21 @@ async function finalizeCatalogEntries(
         : entry.id?.replace(/-(start|end)$/, ""));
     const asset = assetsById.get(entryOwnerId);
     const next = { ...entry };
+    const wasRecaptured = recapturedIds.has(entryOwnerId);
     const isRetainedLegacy =
-      !recapturedIds.has(entryOwnerId) &&
+      !wasRecaptured &&
       (entry.legacy || !entry.recipeVersion || !entry.recipeSha256);
-    if (asset && !isRetainedLegacy) {
+    if (asset && wasRecaptured) {
       next.ownerId = asset.id;
       next.recipeVersion = recipeVersion;
       next.recipeSha256 = recipeHash(asset, fingerprint);
       next.contentSha256 = await entryContentSha256(output, next);
       delete next.legacy;
+    } else if (asset && !isRetainedLegacy) {
+      // A targeted retake must not bless untouched owners with the new recipe.
+      // Preserve their previous provenance so a later --check correctly calls
+      // them stale when any browser/capture input changed.
+      next.ownerId = asset.id;
     } else {
       // Legacy retained entries are intentionally preserved during a targeted
       // retake, but cannot claim freshness until a full/update recapture owns
@@ -1131,7 +1197,9 @@ function aggregateSha256(entries, fingerprint) {
       recipeVersion,
       settings: VIDEO_SETTINGS,
       generator: fingerprint.generator,
-      source: fingerprint.source,
+      source: {
+        frontendSourceSha256: fingerprint.source.frontendSourceSha256,
+      },
       assets: entries.map((entry) => ({
         id: entry.id,
         ownerId: entry.ownerId || null,
@@ -1229,6 +1297,9 @@ async function main() {
     return;
   }
 
+  const finalOutput = options.output;
+  options.output = await createOutputStage(finalOutput, options.update);
+
   const knownAssets = new Set(ALL_ASSETS.map((asset) => asset.id));
   const assetsById = new Map(ALL_ASSETS.map((asset) => [asset.id, asset]));
   let retainedEntries = [];
@@ -1277,6 +1348,7 @@ async function main() {
     captureAssets.stills.length > 0 || captureAssets.clips.length > 0;
   const preview = hasCaptureWork ? await startPreview(options) : null;
   let browser;
+  let completedEntries = 0;
   try {
     if (hasCaptureWork)
       browser = await puppeteer.launch({
@@ -1370,18 +1442,34 @@ async function main() {
     await validateOutput(options.output, finalEntries);
     await writeChecksums(options.output);
     await verifyChecksums(options.output);
+    completedEntries = finalEntries.length;
     process.stdout.write(
       `\nValidated ${finalEntries.length} catalog entries.\n`
     );
-    process.stdout.write(`Artifact: ${options.output}\n`);
   } finally {
     if (browser) await browser.close();
     if (preview?.server)
       await new Promise((resolve) => preview.server.close(resolve));
   }
+  await promoteOutputStage(options.output, finalOutput);
+  process.stdout.write(`Artifact: ${finalOutput}\n`);
+  process.stdout.write(
+    `promotion: PASS (${completedEntries} catalog entries swapped atomically)\n`
+  );
 }
 
-main().catch((error) => {
-  process.stderr.write(`${error.stack || error.message}\n`);
-  process.exitCode = 1;
-});
+if (
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+)
+  main().catch((error) => {
+    process.stderr.write(`${error.stack || error.message}\n`);
+    process.exitCode = 1;
+  });
+
+export {
+  createOutputStage,
+  finalizeCatalogEntries,
+  promoteOutputStage,
+  recipeHash,
+};

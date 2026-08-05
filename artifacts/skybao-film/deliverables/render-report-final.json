@@ -5,6 +5,69 @@
   "frames": 1200,
   "fps": 30,
   "dimensions": "1920x1080",
+  "validation": {
+    "contiguousFrames": true,
+    "blackSegments": 0,
+    "framesRetained": false
+  },
+  "render": {
+    "engine": "CYCLES",
+    "cycles": {
+      "requestedDevice": "metal",
+      "manifestRequestedDevice": "metal",
+      "resolvedDevice": "metal",
+      "fallback": null,
+      "computeDeviceType": "METAL",
+      "activeDeviceIds": [
+        "METAL_Apple M1 Max (GPU - 32 cores)"
+      ],
+      "metalRT": "AUTO",
+      "profile": "final",
+      "samples": 128,
+      "adaptiveThreshold": 0.009999999776482582,
+      "resolutionPercentage": 100,
+      "seed": 830194,
+      "animatedSeed": false,
+      "persistentData": true,
+      "denoise": {
+        "inputPasses": "RGB_ALBEDO_NORMAL",
+        "prefilter": "ACCURATE",
+        "quality": "HIGH",
+        "type": "OPENIMAGEDENOISE",
+        "useGpu": true
+      },
+      "bounces": {
+        "causticsReflective": false,
+        "causticsRefractive": false,
+        "diffuse": 2,
+        "glossy": 4,
+        "indirectClamp": 10,
+        "max": 8,
+        "transmission": 8,
+        "transparent": 8
+      },
+      "devices": [
+        {
+          "id": "CPU",
+          "name": "Apple M1 Max",
+          "type": "CPU",
+          "use": false
+        },
+        {
+          "id": "METAL_Apple M1 Max (GPU - 32 cores)",
+          "name": "Apple M1 Max (GPU - 32 cores)",
+          "type": "METAL",
+          "use": true
+        }
+      ],
+      "elapsedRenderSeconds": 31560.46459025005
+    },
+    "elapsed": {
+      "totalMs": 31583326.637542,
+      "blenderMs": 31561634.347417,
+      "encodeMs": 13426.437708
+    }
+  },
   "video": {
     "index": 0,
     "codec_name": "h264",
@@ -27,12 +90,34 @@
   },
   "files": {
     "video": "artifacts/skybao-film/deliverables/skybao-40s-master.mp4",
-    "blend": "artifacts/skybao-film/skybao-film.blend",
-    "mix": "artifacts/skybao-film/audio/skybao-mix.wav"
+    "blend": "artifacts/skybao-film/skybao-film-final.blend",
+    "mix": "artifacts/skybao-film/audio/skybao-mix.wav",
+    "buildManifest": "artifacts/skybao-film/deliverables/build-manifest-final.json"
   },
   "sha256": {
-    "video": "3f49dd25fef7758ef06954c2d42c6764527c8f77be85398e086ce84389ba5c46",
-    "blend": "61058acdb92566f30038bfb8a70139d4cc4e1776fbbbb17e625ff0f5a2e57e67",
-    "mix": "032c0e64a847267bdd764ec8904f02caf601d72f389ad95402386526f88f37bc"
+    "video": "4db89190da817e5506a60d53edc044f1c9774c0ff2b046e16143a7ffaf1718bd",
+    "blend": "aaebdeefae9385e3b6893af2e7a3165a54c4178945cd0cba7d92c64a7a0cbe63",
+    "mix": "ff4c45fa4973e7c71936ec4cdb93e3d4f9283aa5de4aa699e6a7ed22197f2833",
+    "buildManifest": "f6fcc21317fbf00b7f2d26f92c6ccee95be55a27e715f8052b6fddcd75d48101"
+  },
+  "provenance": {
+    "buildManifest": {
+      "path": "artifacts/skybao-film/deliverables/build-manifest-final.json",
+      "schemaVersion": 2,
+      "sha256": "f6fcc21317fbf00b7f2d26f92c6ccee95be55a27e715f8052b6fddcd75d48101"
+    },
+    "renderedUiCatalog": {
+      "path": "artifacts/skybao-film/provenance/skybao-ui-catalog-rendered-v3.json",
+      "recipeVersion": "skybao-capture-v3",
+      "sha256": "508d4f31136bdc742cb44651f61c91b65fc3c911c5f6496400efa0f63a04dadd",
+      "aggregateSha256": "89f5167b58c94280661c0e7a74a66dde0a3fd71a52c7e677f86b3f99f6f4c7bd"
+    },
+    "currentCaptureCatalog": {
+      "path": "artifacts/skybao-ui/catalog.json",
+      "recipeVersion": "skybao-capture-v4",
+      "sha256": "74c7964d5916ffb603080d21d1089fb2462b1149ec805b9b9714a39f9d5ef513",
+      "aggregateSha256": "c288346c2a55d92ef5ca4397ed16e0453c06fb32907fc5774c700685ff03adc7",
+      "role": "source for subsequent regeneration"
+    }
   }
 }

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the SkyBao film as a physical 3D edit in Blender 5.x (Eevee).
+"""Build the SkyBao film as a physical 3D edit in Blender 5.x (Cycles).
 
 The film is a single floating 16:9 glass slab inside a dark, procedural
 server-room void. Each shot is a real workspace-framed UI capture mapped onto
@@ -18,6 +18,8 @@ Usage (from the orchestrator):
       --width 1920 --height 1080 \
       --quality preview   # build + render every PNG frame (50%)
       --quality final     # build + render every PNG frame (100%)
+      --device auto       # internal device selector (auto|metal|cpu)
+      --probe-device        # print selected Cycles device; does not touch assets
       --samples 30,150,300   # build + render review frames (50%)
       --shots assistant-research,work-board-drag  # render start/mid/end
       --build-only        # compile/check only, never touches Blender
@@ -34,6 +36,7 @@ import math
 import os
 import random
 import sys
+import time
 import traceback
 
 try:
@@ -68,6 +71,7 @@ BREATH_AMP = 0.018
 BREATH_PERIOD_S = 12.0
 FPS = 30
 ENVIRONMENT = {}
+RENDER_RUNTIME = {}
 
 
 def nested(data, keys, default):
@@ -127,7 +131,10 @@ def apply_environment_config(config, shotlist):
 def parse_argv(argv):
     """Parse args that appear after a leading '--' (Blender convention)."""
     args = dict(repo=None, out="skybao-film.blend", width=1920, height=1080,
-                quality=None, samples=None, shots=None, build_only=False)
+                quality=None, samples=None, shots=None, device="auto",
+                profile=None,
+                frames_out=None, manifest_out=None, audio=None,
+                audio_canonical=None, device_probe=False, build_only=False)
     toks = list(argv)
     if toks and toks[0] == "--":
         toks = toks[1:]
@@ -138,7 +145,8 @@ def parse_argv(argv):
         if i + 1 < len(toks) and not toks[i + 1].startswith("--"):
             val = toks[i + 1]
         if key in ("repo", "out", "width", "height", "quality", "samples",
-                   "shots"):
+                   "shots", "device", "cycles-device", "profile", "frames-out",
+                   "manifest-out", "audio", "audio-canonical"):
             if val is None or val == "":
                 raise FilmError("missing value for --{0}".format(key))
             if key == "repo":
@@ -157,9 +165,24 @@ def parse_argv(argv):
             elif key == "shots":
                 args["shots"] = [item.strip() for item in val.split(",")
                                   if item.strip()]
+            elif key in ("device", "cycles-device"):
+                args["device"] = val.lower()
+            elif key == "profile":
+                args["profile"] = val.lower()
+            elif key == "frames-out":
+                args["frames_out"] = os.path.abspath(val)
+            elif key == "manifest-out":
+                args["manifest_out"] = os.path.abspath(val)
+            elif key == "audio":
+                args["audio"] = os.path.abspath(val)
+            elif key == "audio-canonical":
+                args["audio_canonical"] = os.path.abspath(val)
             else:
                 args["quality"] = val.lower()
             i += 2
+        elif key in ("device-probe", "probe-device", "probe-devices"):
+            args["device_probe"] = True
+            i += 1
         elif key in ("build-only", "compile", "check"):
             args["build_only"] = True
             i += 1
@@ -168,6 +191,12 @@ def parse_argv(argv):
     if args["quality"] not in (None, "preview", "final"):
         raise FilmError(
             "--quality must be preview or final, got {0!r}".format(args["quality"]))
+    if args["profile"] not in (None, "preview", "final"):
+        raise FilmError(
+            "--profile must be preview or final, got {0!r}".format(
+                args["profile"]))
+    if args["device"] not in ("auto", "metal", "cpu"):
+        raise FilmError("--cycles-device must be auto, metal, or cpu")
     return args
 
 
@@ -178,6 +207,8 @@ def resolve_paths(args):
     film_dir = os.path.dirname(os.path.abspath(__file__))
     repo = args["repo"] or os.path.abspath(
         os.path.join(film_dir, "..", "..", "..", ".."))
+    canonical_audio = (args.get("audio_canonical") or os.path.join(
+        repo, "artifacts", "skybao-film", "audio", "skybao-mix.wav"))
     return dict(
         film_dir=film_dir,
         repo=repo,
@@ -186,11 +217,13 @@ def resolve_paths(args):
         ui=os.path.join(repo, "artifacts", "skybao-ui"),
         catalog=os.path.join(repo, "artifacts", "skybao-ui", "catalog.json"),
         film=os.path.join(repo, "artifacts", "skybao-film"),
-        audio=os.path.join(repo, "artifacts", "skybao-film", "audio",
-                            "skybao-mix.wav"),
+        audio=(args.get("audio") or canonical_audio),
+        audio_canonical=canonical_audio,
         blendout=args["out"],
-        build_manifest=os.path.join(repo, "artifacts", "skybao-film",
-                                    "build-manifest.json"),
+        frames_out=args.get("frames_out"),
+        build_manifest=(args.get("manifest_out") or
+                        os.path.join(repo, "artifacts", "skybao-film",
+                                     "build-manifest.json")),
     )
 
 
@@ -251,7 +284,309 @@ class WindowContext:
 # ---------------------------------------------------------------------------
 # Scene setup
 # ---------------------------------------------------------------------------
-def configure_scene(scene, width, height, total, fps):
+def _set_if_present(target, name, value):
+    """Set a Blender-version-dependent property and report whether it exists."""
+    if not hasattr(target, name):
+        return False
+    try:
+        setattr(target, name, value)
+        return True
+    except Exception:
+        return False
+
+
+def _setting_matches(actual, expected):
+    if isinstance(expected, float):
+        try:
+            return abs(float(actual) - expected) <= 1e-6
+        except (TypeError, ValueError):
+            return False
+    return actual == expected
+
+
+def _set_required(target, name, value, label=None):
+    """Set and read back a required Cycles setting; never silently degrade."""
+    title = label or name
+    if not hasattr(target, name):
+        raise FilmError("required Cycles setting is unavailable: {0}".format(title))
+    try:
+        setattr(target, name, value)
+        actual = getattr(target, name)
+    except Exception as exc:
+        raise FilmError("cannot set required Cycles setting {0}: {1}".format(
+            title, exc))
+    if not _setting_matches(actual, value):
+        raise FilmError("required Cycles setting {0} read back as {1!r}, expected {2!r}".format(
+            title, actual, value))
+    return actual
+
+
+def _cycles_preferences():
+    """Return Cycles preferences when the add-on is present in this Blender."""
+    prefs = bpy.context.preferences
+    addon = prefs.addons.get("cycles")
+    return addon.preferences if addon else None
+
+
+def _cycle_devices(preferences):
+    """Refresh and normalize the device list without assuming a Blender minor."""
+    if preferences is None:
+        return []
+    for method in ("refresh_devices", "get_devices"):
+        callback = getattr(preferences, method, None)
+        if callback:
+            try:
+                callback()
+            except Exception:
+                pass
+    result = []
+    for device in list(getattr(preferences, "devices", [])):
+        result.append({
+            "id": str(getattr(device, "id", "")),
+            "name": str(getattr(device, "name", "unknown")),
+            "type": str(getattr(device, "type", "unknown")),
+            "use": bool(getattr(device, "use", False)),
+        })
+    return result
+
+
+def configure_cycles_device(scene, requested):
+    """Resolve auto|metal|cpu, preferring Metal and retaining a CPU escape hatch."""
+    cli_requested = str(requested or "auto").lower()
+    if cli_requested not in ("auto", "metal", "cpu"):
+        raise FilmError("--cycles-device must be auto, metal, or cpu")
+
+    render_cfg = ENVIRONMENT.get("render", {})
+    requested = (cli_requested if cli_requested != "auto" else
+                 str(nested(render_cfg, ("device", "default"), "auto")).lower())
+    # CLI auto is deliberately the only policy that may move to CPU. A
+    # caller that asked for Metal needs a deterministic failure, not a silent
+    # quality/performance change.
+    can_fallback = cli_requested == "auto"
+    preferences = _cycles_preferences()
+    details = {
+        "requested": requested,
+        "resolved": "cpu",
+        "fallback": None,
+        "metalRT": None,
+        "computeDeviceType": "CPU",
+        "activeDeviceIds": [],
+        "devices": [],
+    }
+
+    def use_cpu(reason=None):
+        if preferences is not None:
+            for device in getattr(preferences, "devices", []):
+                if hasattr(device, "use"):
+                    try:
+                        device.use = str(getattr(device, "type", "")) == "CPU"
+                    except Exception:
+                        pass
+            details["devices"] = _cycle_devices(preferences)
+            details["activeDeviceIds"] = [
+                device["id"] for device in details["devices"]
+                if device["type"] == "CPU" and device["use"]
+            ]
+        _set_required(scene.cycles, "device", "CPU", "cycles.device")
+        details["resolved"] = "cpu"
+        details["fallback"] = reason
+        return details
+
+    def unavailable(reason):
+        if not can_fallback:
+            raise FilmError("Metal was explicitly requested but is unavailable: {0}".format(
+                reason))
+        return use_cpu(reason)
+
+    if requested == "cpu":
+        details["devices"] = _cycle_devices(preferences)
+        return use_cpu()
+    if preferences is None:
+        return unavailable("Cycles preferences unavailable")
+
+    # Blender exposes Metal devices only after compute_device_type is chosen.
+    try:
+        preferences.compute_device_type = "METAL"
+    except Exception as exc:
+        return unavailable("Metal selection unavailable: {0}".format(exc))
+    details["devices"] = _cycle_devices(preferences)
+    metal = [device for device in getattr(preferences, "devices", [])
+             if str(getattr(device, "type", "")) == "METAL"]
+    if not metal:
+        return unavailable("Cycles reported no Metal device")
+    for device in getattr(preferences, "devices", []):
+        if hasattr(device, "use"):
+            try:
+                device.use = device in metal
+            except Exception:
+                pass
+    details["devices"] = _cycle_devices(preferences)
+    details["activeDeviceIds"] = [
+        device["id"] for device in details["devices"]
+        if device["type"] == "METAL" and device["use"]
+    ]
+    if not details["activeDeviceIds"]:
+        return unavailable("Cycles has no active Metal device IDs")
+    details["computeDeviceType"] = "METAL"
+    metal_rt = str(nested(render_cfg, ("device", "metalRT"), "AUTO"))
+    metal_rt_actual = None
+    for property_name in ("metalrt", "use_metalrt"):
+        if hasattr(preferences, property_name):
+            metal_rt_actual = _set_required(
+                preferences, property_name, metal_rt,
+                "Cycles preferences.{0}".format(property_name))
+            break
+    if metal_rt_actual != "AUTO":
+        return unavailable("MetalRT did not read back as AUTO")
+    details["metalRT"] = metal_rt_actual
+    try:
+        _set_required(scene.cycles, "device", "GPU", "cycles.device")
+        details["resolved"] = "metal"
+    except Exception as exc:
+        return unavailable("Cycles GPU selection failed: {0}".format(exc))
+    return details
+
+
+def probe_cycles_device(scene, requested):
+    """Resolve one device/profile and return a JSON-safe, no-write probe."""
+    _set_required(scene.render, "engine", "CYCLES", "render.engine")
+    device = configure_cycles_device(scene, requested)
+    apply_cycles_profile(scene, "preview")
+    return {
+        "blender": bpy.app.version_string,
+        "engine": scene.render.engine,
+        "cyclesAddon": _cycles_preferences() is not None,
+        "requestedDevice": requested,
+        "resolvedDevice": device["resolved"],
+        "fallback": device["fallback"],
+        "computeDeviceType": device["computeDeviceType"],
+        "metalRT": device["metalRT"],
+        "activeDeviceIds": device["activeDeviceIds"],
+        "metalAvailable": any(
+            item["type"] == "METAL" for item in device["devices"]),
+        "devices": device["devices"],
+        "profile": RENDER_RUNTIME.get("profile"),
+        "samples": RENDER_RUNTIME.get("samples"),
+        "adaptiveThreshold": RENDER_RUNTIME.get("adaptiveThreshold"),
+        "resolutionPercentage": RENDER_RUNTIME.get("resolutionPercentage"),
+        "seed": RENDER_RUNTIME.get("seed"),
+        "persistentData": RENDER_RUNTIME.get("persistentData"),
+        "bounces": RENDER_RUNTIME.get("bounces"),
+        "denoise": RENDER_RUNTIME.get("denoise"),
+    }
+
+
+def apply_cycles_profile(scene, profile):
+    """Apply deterministic quality, bounce, and OIDN settings for one render mode."""
+    render_cfg = ENVIRONMENT.get("render", {})
+    profile_name = "final" if profile == "final" else "preview"
+    profile_cfg = render_cfg.get(profile_name, {})
+    seed_cfg = render_cfg.get("seed", ENVIRONMENT.get("seed", 0))
+    if isinstance(seed_cfg, dict):
+        seed_value = int(seed_cfg.get("value", ENVIRONMENT.get("seed", 0)))
+        persistent_data = bool(seed_cfg.get("persistent", True))
+        animated_seed = bool(seed_cfg.get("animated", False))
+    else:
+        seed_value = int(seed_cfg)
+        persistent_data = bool(render_cfg.get("persistentData", True))
+        animated_seed = bool(render_cfg.get("animatedSeed", False))
+    cycles = scene.cycles
+    samples = int(profile_cfg.get("samples", 128 if profile_name == "final" else 32))
+    threshold = float(profile_cfg.get(
+        "adaptiveThreshold", 0.01 if profile_name == "final" else 0.03))
+    _set_required(cycles, "samples", samples, "cycles.samples")
+    _set_required(cycles, "preview_samples", samples, "cycles.preview_samples")
+    _set_required(cycles, "use_adaptive_sampling", True,
+                  "cycles.use_adaptive_sampling")
+    _set_required(cycles, "adaptive_threshold", threshold,
+                  "cycles.adaptive_threshold")
+    _set_required(cycles, "seed", seed_value, "cycles.seed")
+    _set_required(cycles, "use_animated_seed", animated_seed,
+                  "cycles.use_animated_seed")
+    _set_required(scene.render, "use_persistent_data", persistent_data,
+                  "render.use_persistent_data")
+
+    bounces = render_cfg.get("bounces", {})
+    for prop, key, default in (
+            ("max_bounces", "max", 8),
+            ("transmission_bounces", "transmission", 8),
+            ("transparent_max_bounces", "transparent", 8),
+            ("glossy_bounces", "glossy", 4),
+            ("diffuse_bounces", "diffuse", 2),
+            ("sample_clamp_indirect", "indirectClamp", 10.0)):
+        _set_required(cycles, prop, bounces.get(key, default),
+                      "cycles.{0}".format(prop))
+    caustics = bool(bounces.get("caustics", False))
+    _set_required(cycles, "caustics_reflective", caustics,
+                  "cycles.caustics_reflective")
+    _set_required(cycles, "caustics_refractive", caustics,
+                  "cycles.caustics_refractive")
+
+    denoise = render_cfg.get("denoise", {})
+    denoiser = "OPENIMAGEDENOISE" if str(denoise.get("type", "OIDN")).upper() == "OIDN" else str(denoise.get("type"))
+    use_gpu = bool(denoise.get("useGpu", True))
+    input_passes = str(denoise.get("inputPasses", "RGB_ALBEDO_NORMAL"))
+    prefilter = str(denoise.get("prefilter", "ACCURATE"))
+    quality = str(denoise.get("quality", "HIGH"))
+    _set_required(cycles, "use_denoising", True, "cycles.use_denoising")
+    _set_required(cycles, "use_preview_denoising", True,
+                  "cycles.use_preview_denoising")
+    _set_required(cycles, "denoiser", denoiser, "cycles.denoiser")
+    _set_required(cycles, "preview_denoiser", denoiser,
+                  "cycles.preview_denoiser")
+    _set_required(cycles, "denoising_use_gpu", use_gpu,
+                  "cycles.denoising_use_gpu")
+    _set_required(cycles, "preview_denoising_use_gpu", use_gpu,
+                  "cycles.preview_denoising_use_gpu")
+    _set_required(cycles, "denoising_input_passes", input_passes,
+                  "cycles.denoising_input_passes")
+    _set_required(cycles, "denoising_prefilter", prefilter,
+                  "cycles.denoising_prefilter")
+    _set_required(cycles, "preview_denoising_prefilter", prefilter,
+                  "cycles.preview_denoising_prefilter")
+    _set_required(cycles, "denoising_quality", quality,
+                  "cycles.denoising_quality")
+    _set_required(cycles, "preview_denoising_quality", quality,
+                  "cycles.preview_denoising_quality")
+
+    RENDER_RUNTIME["profile"] = profile_name
+    _set_required(scene.render, "resolution_percentage", int(profile_cfg.get(
+        "resolutionPercentage", 100 if profile_name == "final" else 50)),
+                  "render.resolution_percentage")
+    RENDER_RUNTIME["seed"] = int(cycles.seed)
+    RENDER_RUNTIME["animatedSeed"] = bool(cycles.use_animated_seed)
+    RENDER_RUNTIME["persistentData"] = bool(scene.render.use_persistent_data)
+    RENDER_RUNTIME["samples"] = int(cycles.samples)
+    RENDER_RUNTIME["adaptiveThreshold"] = float(cycles.adaptive_threshold)
+    RENDER_RUNTIME["resolutionPercentage"] = int(scene.render.resolution_percentage)
+    RENDER_RUNTIME["bounces"] = {
+        "max": int(getattr(cycles, "max_bounces", bounces.get("max", 8))),
+        "transmission": int(getattr(
+            cycles, "transmission_bounces", bounces.get("transmission", 8))),
+        "transparent": int(getattr(
+            cycles, "transparent_max_bounces", bounces.get("transparent", 8))),
+        "glossy": int(getattr(
+            cycles, "glossy_bounces", bounces.get("glossy", 4))),
+        "diffuse": int(getattr(
+            cycles, "diffuse_bounces", bounces.get("diffuse", 2))),
+        "causticsReflective": bool(getattr(
+            cycles, "caustics_reflective", caustics)),
+        "causticsRefractive": bool(getattr(
+            cycles, "caustics_refractive", caustics)),
+        "indirectClamp": float(getattr(
+            cycles, "sample_clamp_indirect", bounces.get("indirectClamp", 10))),
+    }
+    RENDER_RUNTIME["denoise"] = {
+        "type": str(cycles.denoiser),
+        "useGpu": bool(cycles.denoising_use_gpu),
+        "inputPasses": str(cycles.denoising_input_passes),
+        "prefilter": str(cycles.denoising_prefilter),
+        "quality": str(cycles.denoising_quality),
+    }
+
+
+def configure_scene(scene, width, height, total, fps,
+                    device_requested="auto", profile="preview"):
     scene.render.resolution_x = width
     scene.render.resolution_y = height
     scene.render.fps = fps
@@ -259,7 +594,7 @@ def configure_scene(scene, width, height, total, fps):
     scene.frame_start = 1
     scene.frame_end = total
     scene.frame_current = 1
-    scene.render.engine = "BLENDER_EEVEE"
+    scene.render.engine = "CYCLES"
     scene.render.use_motion_blur = True
     scene.render.motion_blur_shutter = 0.12
     scene.render.motion_blur_position = "CENTER"
@@ -267,18 +602,15 @@ def configure_scene(scene, width, height, total, fps):
     scene.render.image_settings.color_mode = "RGBA"
     scene.render.image_settings.compression = 15
 
-    eevee = scene.eevee
-    for name, value in (("taa_render_samples", 48),
-                        ("volumetric_samples", 20),
-                        ("volumetric_tile_size", 8),
-                        ("motion_blur_steps", 8),
-                        ("motion_blur_max", 24),
-                        ("use_volumetric_shadows", True)):
-        if hasattr(eevee, name):
-            try:
-                setattr(eevee, name, value)
-            except Exception:
-                pass
+    device = configure_cycles_device(scene, device_requested)
+    RENDER_RUNTIME["deviceRequested"] = device_requested
+    RENDER_RUNTIME["deviceResolved"] = device["resolved"]
+    RENDER_RUNTIME["deviceFallback"] = device["fallback"]
+    RENDER_RUNTIME["devices"] = device["devices"]
+    RENDER_RUNTIME["metalRT"] = device["metalRT"]
+    RENDER_RUNTIME["computeDeviceType"] = device["computeDeviceType"]
+    RENDER_RUNTIME["activeDeviceIds"] = device["activeDeviceIds"]
+    apply_cycles_profile(scene, profile)
 
     vset = scene.view_settings
     try:
@@ -301,12 +633,13 @@ def configure_scene(scene, width, height, total, fps):
                 pass
 
 
-def ensure_scene(name, cfg):
+def ensure_scene(name, cfg, device_requested="auto", profile="preview"):
     scenes = bpy.data.scenes
     if name in scenes:
         scenes.remove(scenes[name], do_unlink=True)
     sc = scenes.new(name)
-    configure_scene(sc, cfg["width"], cfg["height"], cfg["total"], cfg["fps"])
+    configure_scene(sc, cfg["width"], cfg["height"], cfg["total"], cfg["fps"],
+                    device_requested, profile)
     return sc
 
 
@@ -1280,6 +1613,64 @@ def build_sound(scene, paths, manifest):
         raise FilmError("cannot add sound strip {0}: {1}".format(wav, exc))
 
 
+def _delivery_relative_path(absolute_path, paths):
+    """Return a Blender path relative to the promoted blend directory."""
+    relative = os.path.relpath(
+        os.path.abspath(absolute_path), paths["film"])
+    return "//" + relative.replace(os.sep, "/")
+
+
+def relink_assets_for_delivery(strip, paths):
+    """Make staged blend dependencies portable after atomic promotion.
+
+    Blender normally remaps file paths relative to the temporary staging blend
+    on save. The blend is later moved to ``artifacts/skybao-film``, so those
+    paths become one directory too deep. Resolve the loaded sources while they
+    are still absolute, then write paths relative to the promoted directory.
+    """
+    for image in bpy.data.images:
+        if image.source != "FILE" or not image.filepath:
+            continue
+        absolute = bpy.path.abspath(image.filepath)
+        if not os.path.isabs(absolute):
+            absolute = os.path.abspath(absolute)
+        image.filepath = _delivery_relative_path(absolute, paths)
+    if strip is not None and getattr(strip, "sound", None):
+        strip.sound.filepath = _delivery_relative_path(
+            paths["audio_canonical"], paths)
+
+
+def validate_delivery_dependencies(strip, paths):
+    """Validate relative paths against the blend's promoted destination."""
+    missing = []
+    image_count = 0
+    for image in bpy.data.images:
+        if image.source != "FILE" or not image.filepath:
+            continue
+        image_count += 1
+        if not image.filepath.startswith("//"):
+            missing.append("{0}: non-relative {1}".format(
+                image.name, image.filepath))
+            continue
+        resolved = os.path.normpath(os.path.join(
+            paths["film"], image.filepath[2:]))
+        if not os.path.isfile(resolved):
+            missing.append("{0}: missing {1}".format(image.name, resolved))
+    sound_count = 0
+    if strip is not None and getattr(strip, "sound", None):
+        sound_count = 1
+        expected = _delivery_relative_path(paths["audio_canonical"], paths)
+        if strip.sound.filepath != expected:
+            missing.append("sound: expected {0}, got {1}".format(
+                expected, strip.sound.filepath))
+        if not os.path.isfile(paths["audio"]):
+            missing.append("sound source: missing {0}".format(paths["audio"]))
+    if missing:
+        raise FilmError("non-portable delivery dependencies:\n  - {0}".format(
+            "\n  - ".join(missing)))
+    return {"images": image_count, "sounds": sound_count, "missing": 0}
+
+
 # ---------------------------------------------------------------------------
 # Manifest / save / render
 # ---------------------------------------------------------------------------
@@ -1288,7 +1679,10 @@ def write_manifest(cfg, paths, manifest):
     print("SkyBao film · Blender 3D build manifest")
     print("  format  : {0}x{1} @ {2}fps, frames 1..{3}".format(
         cfg["width"], cfg["height"], cfg["fps"], cfg["total"]))
-    print("  engine  : Eevee (motion blur, DOF, parallax cloud cards)")
+    print("  engine  : Cycles ({0}, {1} samples, adaptive {2})".format(
+        RENDER_RUNTIME.get("deviceResolved", "cpu"),
+        RENDER_RUNTIME.get("samples", "?"),
+        RENDER_RUNTIME.get("adaptiveThreshold", "?")))
     print("  slab    : {0}m x {1}m x {2}m glass, bevelled".format(
         SLAB_W, SLAB_H, SLAB_T))
     print("  shots   : {0}".format(len(manifest["shots"])))
@@ -1351,7 +1745,7 @@ def write_build_manifest(sc, cfg, paths, catalog, manifest):
             "contentSha256": content_sha,
         }
     payload = {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "shotlist": {
             "path": os.path.relpath(paths["shotlist"], paths["repo"]),
             "sha256": sha256_file(paths["shotlist"]),
@@ -1367,6 +1761,10 @@ def write_build_manifest(sc, cfg, paths, catalog, manifest):
             "sha256": sha256_file(paths["catalog"]),
             "aggregateSha256": catalog.get("aggregateSha256"),
         },
+        "audio": ({
+            "path": os.path.relpath(paths["audio_canonical"], paths["repo"]),
+            "sha256": sha256_file(paths["audio"]),
+        } if os.path.isfile(paths["audio"]) else None),
         "inputAssets": input_assets,
         "usedUiAssets": [used_ui_assets[key]
                          for key in sorted(used_ui_assets)],
@@ -1374,6 +1772,28 @@ def write_build_manifest(sc, cfg, paths, catalog, manifest):
             "version": bpy.app.version_string,
             "engine": sc.render.engine,
             "objects": len(sc.collection.objects),
+        },
+        "render": {
+            "engine": sc.render.engine,
+            "deviceRequested": RENDER_RUNTIME.get("deviceRequested"),
+            "deviceResolved": RENDER_RUNTIME.get("deviceResolved"),
+            "deviceFallback": RENDER_RUNTIME.get("deviceFallback"),
+            "metalRT": RENDER_RUNTIME.get("metalRT"),
+            "computeDeviceType": RENDER_RUNTIME.get("computeDeviceType"),
+            "activeDeviceIds": RENDER_RUNTIME.get("activeDeviceIds", []),
+            "profile": RENDER_RUNTIME.get("profile"),
+            "samples": RENDER_RUNTIME.get("samples"),
+            "adaptiveThreshold": RENDER_RUNTIME.get("adaptiveThreshold"),
+            "resolutionPercentage": RENDER_RUNTIME.get(
+                "resolutionPercentage"),
+            "seed": RENDER_RUNTIME.get("seed"),
+            "animatedSeed": RENDER_RUNTIME.get("animatedSeed"),
+            "persistentData": RENDER_RUNTIME.get("persistentData"),
+            "denoise": RENDER_RUNTIME.get("denoise"),
+            "bounces": RENDER_RUNTIME.get("bounces"),
+            "devices": RENDER_RUNTIME.get("devices", []),
+            "elapsedRenderSeconds": RENDER_RUNTIME.get(
+                "elapsedRenderSeconds", 0.0),
         },
         "format": {
             "width": cfg["width"], "height": cfg["height"],
@@ -1392,13 +1812,14 @@ def save_blend(sc, paths):
     out = paths["blendout"]
     os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
     with WindowContext(sc):
-        bpy.ops.wm.save_as_mainfile(filepath=out)
+        bpy.ops.wm.save_as_mainfile(filepath=out, relative_remap=False)
     return out
 
 
 def _prepare_render(scene, quality, out_dir):
     scene_render = scene.render
-    scene_render.resolution_percentage = 50 if quality in ("preview", "sample") else 100
+    profile = "final" if quality == "final" else "preview"
+    apply_cycles_profile(scene, profile)
     scene_render.image_settings.file_format = "PNG"
     scene_render.image_settings.color_mode = "RGBA"
     scene_render.image_settings.compression = 15
@@ -1406,7 +1827,8 @@ def _prepare_render(scene, quality, out_dir):
 
 def render_frames(sc, cfg, quality, paths):
     """Render every film frame into frames/<quality>/ (delivery pipeline)."""
-    out_dir = os.path.join(paths["film"], "frames", quality)
+    out_dir = paths.get("frames_out") or os.path.join(
+        paths["film"], "frames", quality)
     os.makedirs(out_dir, exist_ok=True)
     _prepare_render(sc, quality, out_dir)
     scene_render = sc.render
@@ -1425,7 +1847,7 @@ def render_frames(sc, cfg, quality, paths):
 
 def render_samples(sc, cfg, frames, paths):
     """Render selected half-resolution review frames without a full export."""
-    out_dir = os.path.join(paths["film"], "review")
+    out_dir = paths.get("frames_out") or os.path.join(paths["film"], "review")
     os.makedirs(out_dir, exist_ok=True)
     _prepare_render(sc, "sample", out_dir)
     scene_render = sc.render
@@ -1498,7 +1920,9 @@ def build(args):
         raise FilmError("shotlist does not end at frame {0}".format(expected))
 
     catalog_index = build_catalog_index(catalog)
-    sc = ensure_scene("skybao-film", cfg)
+    profile = (args.get("profile") or
+               ("final" if args.get("quality") == "final" else "preview"))
+    sc = ensure_scene("skybao-film", cfg, args.get("device", "auto"), profile)
 
     # --- materials ---
     materials = {
@@ -1561,28 +1985,52 @@ def build(args):
     build_ui_planes(sc, slab, shotlist, catalog_index, paths, manifest)
     build_cursor_tracks(sc, slab, paths, materials, manifest)
     build_flips(slab, shotlist, cfg["total"])
-    build_sound(sc, paths, manifest)
+    sound_strip = build_sound(sc, paths, manifest)
 
     write_manifest(cfg, paths, manifest)
-    saved = save_blend(sc, paths)
-    built_manifest = write_build_manifest(sc, cfg, paths, catalog, manifest)
-    print("  saved blend: {0}".format(saved))
-    print("  build manifest: {0}".format(built_manifest))
-    print("  objects: {0}".format(len(sc.collection.objects)))
-    print("=" * 64)
-
+    render_started = time.perf_counter()
+    rendered = False
     if args["quality"]:
         render_frames(sc, cfg, args["quality"], paths)
+        rendered = True
     sample_frames = set(args["samples"] or [])
     if args["shots"]:
         sample_frames.update(sample_frames_for_shots(shotlist, args["shots"]))
     if sample_frames:
         render_samples(sc, cfg, sorted(sample_frames), paths)
+        rendered = True
+    RENDER_RUNTIME["elapsedRenderSeconds"] = (
+        time.perf_counter() - render_started if rendered else 0.0)
+    relink_assets_for_delivery(sound_strip, paths)
+    manifest["portable_dependencies"] = validate_delivery_dependencies(
+        sound_strip, paths)
+    saved = save_blend(sc, paths)
+    validate_delivery_dependencies(sound_strip, paths)
+    built_manifest = write_build_manifest(sc, cfg, paths, catalog, manifest)
+    print("  saved blend: {0}".format(saved))
+    print("  build manifest: {0}".format(built_manifest))
+    print("  objects: {0}".format(len(sc.collection.objects)))
+    print("=" * 64)
     return saved
 
 
 def main(argv):
     args = parse_argv(argv)
+    if args["device_probe"]:
+        if not _HAS_BPY:
+            print("error: bpy not importable — --probe-device must run inside Blender")
+            return 2
+        try:
+            paths = resolve_paths(args)
+            shotlist = load_json(paths["shotlist"])
+            environment = load_json(paths["environment"])
+            apply_environment_config(environment, shotlist)
+            print(json.dumps(probe_cycles_device(
+                bpy.context.scene, args["device"]), indent=2, sort_keys=True))
+            return 0
+        except FilmError as exc:
+            print("error: {0}".format(exc))
+            return 1
     if args["build_only"]:
         print("build-only: python syntax OK, no Blender touched")
         return 0
