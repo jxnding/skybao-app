@@ -10,17 +10,34 @@ From the repository root:
 yarn video:assets
 ```
 
-The capture tool requires Node 22.12 or newer; this requirement is isolated from the Node 18-compatible application and CI dependencies. The command installs its pinned tooling package, builds the frontend, serves the production bundle through a private local preview, captures at 1920×1080 and 30 fps, validates the result, and writes it to `artifacts/skybao-ui/`. The current generated library is checked into Git for a self-contained video handoff, so rerunning the capture will produce normal tracked media changes.
+The capture tool requires Node 22.12 or newer; this requirement is isolated from the Node 18-compatible application and CI dependencies. A normal full invocation installs its pinned tooling package, builds the frontend, serves the production bundle through a private local preview, captures at 1920×1080 and 30 fps, validates the result, and replaces `artifacts/skybao-ui/`. The current generated library is checked into Git for a self-contained video handoff, so rerunning the capture will produce normal tracked media changes.
 
 Useful targeted runs:
 
 ```bash
 yarn video:assets --only=assistant-answer-typing,work-board-drag
+yarn video:assets:check --only=assistant-answer-typing,work-board-drag
+yarn video:assets --update
+yarn video:assets:check
 yarn video:assets --stills-only
 yarn video:assets --clips-only --smoke
 yarn video:assets --out=/absolute/path/to/skybao-ui
 yarn video:assets --skip-build --base-url=http://127.0.0.1:4173
 ```
+
+`yarn video:assets` is deliberately a **fresh** complete build. `--only` is a
+non-destructive retake and therefore implies `--update`: it removes only files
+owned by the requested asset IDs, captures them again, and preserves the rest
+of the catalog. A bare `--update` computes capture recipe and content hashes,
+then captures only stale assets. Use `--fresh` to explicitly replace a whole
+artifact directory, including when combined with `--only` for an intentionally
+small standalone library.
+
+`yarn video:assets:check` is read-only. It verifies every catalog output,
+RGBA/timeline constraints, `checksums.sha256`, catalog aggregate, and the
+current recipe fingerprint for the selected assets. It does not build the app
+or start a browser. If it reports a stale capture after UI work, use a targeted
+`--only` retake or a bare `--update`.
 
 `--smoke` advances every interaction through its complete timeline but saves only the start, middle, and end frames. It is for fast selector and alpha validation, not editing. Unless `--out` is supplied, smoke runs write to `artifacts/skybao-ui-smoke/` so they cannot replace the complete library in `artifacts/skybao-ui/`.
 
@@ -41,7 +58,16 @@ artifacts/skybao-ui/
     └── timeline.json
 ```
 
-All imagery is dark-mode, silent, sRGB RGBA PNG at 1920×1080. The transparent pixels use straight alpha. Motion footage is workspace-only; baseline stills are provided with both the full product shell and the isolated rounded workspace.
+All imagery is dark-mode, silent, sRGB RGBA PNG at 1920×1080. The transparent pixels use straight alpha. Motion footage defaults to workspace framing (and can opt into a manifest-declared framing for a navigation bridge); baseline stills are provided with both the full product shell and the isolated rounded workspace.
+
+`catalog.json` is schema version 2. Its entries are sorted and record the
+recipe version/hash, owner asset ID, and content hash; the catalog records the
+capture tool/Node/Puppeteer/platform metadata plus local Git, frontend source,
+and built-bundle fingerprints where available. `generatedAt` is informational
+only and excluded from the stable aggregate hash. The cache never treats a
+matching filename alone as fresh: the recipe and every owned output must still
+match. `checksums.sha256` covers all generated files except itself and the
+sentinel, and is verified by both `--check` and every completed capture.
 
 The browser cursor is never baked into the UI. Each `timeline.json` contains pixel coordinates (`x`, `y`), normalized coordinates (`nx`, `ny`), and `move`, `down`, `up`, or `click` events. Place `cursor/cursor.svg` on a separate editor layer and keyframe it from those events.
 
@@ -74,6 +100,11 @@ The repository now also contains a reviewed Blender VSE edit, deterministic musi
 ```bash
 yarn video:film
 yarn video:film --final
+yarn video:film --check
+yarn video:film --samples=30,241,481,721,961,1180
 ```
+
+The film commands refuse to run when any shot-owned capture is stale and write
+per-owner recipe/content hashes into the Blender build manifest.
 
 See [`film/README.md`](film/README.md) for the storyboard, output paths, editable files, and Blender handoff details.

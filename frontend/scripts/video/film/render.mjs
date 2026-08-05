@@ -14,6 +14,14 @@ const blendPath = path.join(artifactRoot, "skybao-film.blend");
 const audioPath = path.join(artifactRoot, "audio", "skybao-mix.wav");
 const deliverableRoot = path.join(artifactRoot, "deliverables");
 const scriptArgs = process.argv.slice(2);
+const shotlistPath = path.join(here, "shotlist.json");
+const captureScript = path.join(
+  repo,
+  "frontend",
+  "scripts",
+  "video",
+  "capture-skybao-assets.mjs"
+);
 
 function has(flag) {
   return scriptArgs.includes(flag);
@@ -27,6 +35,9 @@ Usage:
   yarn video:film --preview        Same as the default
   yarn video:film --final          Build the 1920x1080 H.264 master
   yarn video:film --build-only     Generate audio, validate, and save the .blend
+  yarn video:film --samples=30,241 Render selected review frames
+  yarn video:film --shots=assistant-research,work-board-drag
+  yarn video:film --check          Validate manifests and inputs without writing
 
 Options:
   --keep-frames                    Retain rendered PNG intermediates
@@ -40,19 +51,38 @@ if (has("--help") || has("-h")) {
   process.exit(0);
 }
 
-const modeFlags = ["--preview", "--final", "--build-only"].filter(has);
+const samplesArg = scriptArgs.find((arg) => arg.startsWith("--samples="));
+const shotsArg = scriptArgs.find((arg) => arg.startsWith("--shots="));
+const targetedReview = Boolean(samplesArg || shotsArg);
+const modeFlags = ["--preview", "--final", "--build-only", "--check"].filter(
+  has
+);
 if (modeFlags.length > 1) {
   throw new Error(`choose one render mode, received: ${modeFlags.join(", ")}`);
 }
-const mode = has("--final")
-  ? "final"
-  : has("--build-only")
-    ? "build-only"
-    : "preview";
+if (targetedReview && modeFlags.length)
+  throw new Error("--samples/--shots cannot be combined with a render mode");
+const mode = has("--check")
+  ? "check"
+  : targetedReview
+    ? "review"
+    : has("--final")
+      ? "final"
+      : has("--build-only")
+        ? "build-only"
+        : "preview";
 const keepFrames = has("--keep-frames");
 const unknown = scriptArgs.filter(
   (arg) =>
-    !["--preview", "--final", "--build-only", "--keep-frames"].includes(arg)
+    ![
+      "--preview",
+      "--final",
+      "--build-only",
+      "--check",
+      "--keep-frames",
+    ].includes(arg) &&
+    !arg.startsWith("--samples=") &&
+    !arg.startsWith("--shots=")
 );
 if (unknown.length) throw new Error(`unknown option(s): ${unknown.join(", ")}`);
 
@@ -75,20 +105,18 @@ const blender = commandFrom(
   ["/Applications/Blender.app/Contents/MacOS/Blender", "blender"],
   "BLENDER_BIN"
 );
-const ffmpeg =
-  mode === "build-only"
-    ? null
-    : commandFrom(
-        ["/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg", "ffmpeg"],
-        "FFMPEG_BIN"
-      );
-const ffprobe =
-  mode === "build-only"
-    ? null
-    : commandFrom(
-        ["/opt/homebrew/bin/ffprobe", "/usr/local/bin/ffprobe", "ffprobe"],
-        "FFPROBE_BIN"
-      );
+const ffmpeg = ["build-only", "review", "check"].includes(mode)
+  ? null
+  : commandFrom(
+      ["/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg", "ffmpeg"],
+      "FFMPEG_BIN"
+    );
+const ffprobe = ["build-only", "review", "check"].includes(mode)
+  ? null
+  : commandFrom(
+      ["/opt/homebrew/bin/ffprobe", "/usr/local/bin/ffprobe", "ffprobe"],
+      "FFPROBE_BIN"
+    );
 
 function run(command, args, label, options = {}) {
   console.log(`\n[${label}]`);
@@ -113,7 +141,28 @@ function sha256(file) {
   return hash.digest("hex");
 }
 
-fs.mkdirSync(deliverableRoot, { recursive: true });
+function filmAssetIds() {
+  const shotlist = JSON.parse(fs.readFileSync(shotlistPath, "utf8"));
+  return [
+    ...new Set(
+      (shotlist.shots || []).map((shot) => shot.source?.id).filter(Boolean)
+    ),
+  ];
+}
+
+run(
+  process.execPath,
+  [captureScript, "--check", `--only=${filmAssetIds().join(",")}`],
+  "UI capture freshness"
+);
+
+if (mode !== "check") fs.mkdirSync(deliverableRoot, { recursive: true });
+
+if (mode === "check") {
+  run(process.execPath, [path.join(here, "validate.mjs")], "source validation");
+  console.log("\nSkyBao film inputs are valid");
+  process.exit(0);
+}
 
 run(
   process.execPath,
@@ -135,17 +184,23 @@ const blenderArgs = [
 ];
 
 let framesDir = null;
-if (mode !== "build-only") {
+if (["preview", "final"].includes(mode)) {
   framesDir = path.join(artifactRoot, "frames", mode);
   fs.rmSync(framesDir, { recursive: true, force: true });
   fs.mkdirSync(framesDir, { recursive: true });
   blenderArgs.push("--quality", mode);
 }
+if (samplesArg) blenderArgs.push("--samples", samplesArg.split("=", 2)[1]);
+if (shotsArg) blenderArgs.push("--shots", shotsArg.split("=", 2)[1]);
 
 run(
   blender,
   blenderArgs,
-  mode === "build-only" ? "build Blender project" : `render ${mode} frames`
+  mode === "build-only"
+    ? "build Blender project"
+    : mode === "review"
+      ? "build Blender project and review frames"
+      : `render ${mode} frames`
 );
 
 if (!fs.existsSync(blendPath))
@@ -153,6 +208,11 @@ if (!fs.existsSync(blendPath))
 
 if (mode === "build-only") {
   console.log(`\nReady: ${blendPath}`);
+  process.exit(0);
+}
+if (mode === "review") {
+  console.log(`\nReview frames ready: ${path.join(artifactRoot, "review")}`);
+  console.log(`Editable project: ${blendPath}`);
   process.exit(0);
 }
 

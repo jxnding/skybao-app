@@ -1,3 +1,5 @@
+import { CAPTURE_NAVIGATION_TIMING as navTiming } from "../../src/pages/NativeArea/captureNavigationTiming.js";
+
 export const VIDEO_SETTINGS = Object.freeze({
   width: 1920,
   height: 1080,
@@ -96,7 +98,8 @@ const clip = (
   route,
   durationSeconds,
   actions = [],
-  state = id
+  state = id,
+  options = {}
 ) => ({
   id,
   area,
@@ -105,7 +108,8 @@ const clip = (
   state,
   type: "clip",
   durationSeconds,
-  frameCount: durationSeconds * VIDEO_SETTINGS.fps,
+  frameCount: options.frameCount ?? durationSeconds * VIDEO_SETTINGS.fps,
+  framing: options.framing ?? "workspace",
   actions,
 });
 
@@ -320,6 +324,118 @@ export const MOTION_ASSETS = Object.freeze([
     "/work?view=Agent+runs",
     3,
     [{ frame: 30, type: "click", target: "work-agent-run-open-0" }]
+  ),
+  clip(
+    "area-nav-assistant-knowledge",
+    "assistant",
+    "Navigation · Assistant to Knowledge",
+    "/?demo=acme",
+    (navTiming.finalFrame + 1) / VIDEO_SETTINGS.fps,
+    [
+      {
+        type: "move",
+        startFrame: navTiming.cursorMoveStartFrame,
+        endFrame: navTiming.cursorMoveEndFrame,
+        from: { nx: 0.5, ny: 0.5 },
+        target: "capture-nav-area-knowledge",
+      },
+      {
+        frame: navTiming.clickFrame,
+        type: "click",
+        target: "capture-nav-area-knowledge",
+      },
+    ],
+    "area-nav-assistant-knowledge",
+    { framing: "workspace", frameCount: navTiming.finalFrame + 1 }
+  ),
+  clip(
+    "area-nav-knowledge-communications",
+    "knowledge",
+    "Navigation · Knowledge to Communications",
+    "/knowledge?view=Files",
+    (navTiming.finalFrame + 1) / VIDEO_SETTINGS.fps,
+    [
+      {
+        type: "move",
+        startFrame: navTiming.cursorMoveStartFrame,
+        endFrame: navTiming.cursorMoveEndFrame,
+        from: { nx: 0.5, ny: 0.5 },
+        target: "capture-nav-area-communications",
+      },
+      {
+        frame: navTiming.clickFrame,
+        type: "click",
+        target: "capture-nav-area-communications",
+      },
+    ],
+    "area-nav-knowledge-communications",
+    { framing: "workspace", frameCount: navTiming.finalFrame + 1 }
+  ),
+  clip(
+    "area-nav-communications-work",
+    "communications",
+    "Navigation · Communications to Work",
+    "/communications?view=Inbox",
+    (navTiming.finalFrame + 1) / VIDEO_SETTINGS.fps,
+    [
+      {
+        type: "move",
+        startFrame: navTiming.cursorMoveStartFrame,
+        endFrame: navTiming.cursorMoveEndFrame,
+        from: { nx: 0.5, ny: 0.5 },
+        target: "capture-nav-area-work",
+      },
+      {
+        frame: navTiming.clickFrame,
+        type: "click",
+        target: "capture-nav-area-work",
+      },
+    ],
+    "area-nav-communications-work",
+    { framing: "workspace", frameCount: navTiming.finalFrame + 1 }
+  ),
+  clip(
+    "area-nav-work-admin",
+    "work",
+    "Navigation · Work to Admin",
+    "/work?view=Board&created=1&focus=acme",
+    (navTiming.finalFrame + 1) / VIDEO_SETTINGS.fps,
+    [
+      {
+        type: "move",
+        startFrame: navTiming.cursorMoveStartFrame,
+        endFrame: navTiming.cursorMoveEndFrame,
+        from: { nx: 0.5, ny: 0.5 },
+        target: "capture-nav-area-admin",
+      },
+      {
+        frame: navTiming.clickFrame,
+        type: "click",
+        target: "capture-nav-area-admin",
+      },
+    ],
+    "area-nav-work-admin",
+    { framing: "workspace", frameCount: navTiming.finalFrame + 1 }
+  ),
+  clip(
+    "admin-privacy-to-users",
+    "admin",
+    "Admin · privacy to users",
+    "/admin?view=Privacy",
+    3,
+    [{ frame: 30, type: "click", target: "native-tab-users" }],
+    "admin-privacy-to-users",
+    { framing: "workspace", frameCount: 90 }
+  ),
+  clip(
+    "admin-users-to-models",
+    "admin",
+    "Admin · users to models",
+    "/admin?view=Users",
+    3,
+    [{ frame: 30, type: "click", target: "native-tab-models" }],
+    "admin-users-to-models",
+    { framing: "workspace", frameCount: 90 }
   ),
   clip(
     "global-ask-popover",

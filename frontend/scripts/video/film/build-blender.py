@@ -1,60 +1,124 @@
 #!/usr/bin/env python3
-"""Build the SkyBao film edit in Blender 5.x using ONLY the VSE data API.
+"""Build the SkyBao film as a physical 3D edit in Blender 5.x (Eevee).
 
-The parent orchestrator runs Blender outside this sandbox. This module is
-also safe to syntax-check as a bare `python3 build-blender.py --build-only`.
+The film is a single floating 16:9 glass slab inside a dark, procedural
+server-room void. Each shot is a real workspace-framed UI capture mapped onto
+an image plane resting slightly above the slab's front or back surface. Every
+major-area transition rotates the slab exactly 180 degrees around its vertical
+axis so the incoming UI is revealed on the reverse face. Actions inside an area
+stay on one face and use one restrained dissolve. The camera remains centered;
+rounded glass, cloud cards, a cyan perimeter glint, UI motion, and the four
+meaningful navigation flips carry the movement. Everything is procedural and
+deterministic: no downloaded assets, no editorial text overlays.
 
-Usage:
+Usage (from the orchestrator):
   blender --background --python build-blender.py -- \
       --repo /abs/path/to/anything-llm \
       --out /abs/path/to/artifacts/skybao-film/skybao-film.blend \
       --width 1920 --height 1080 \
-      --quality preview   # build + render PNG frames (resolution 50%)
-      --quality final     # build + render PNG frames (resolution 100%)
+      --quality preview   # build + render every PNG frame (50%)
+      --quality final     # build + render every PNG frame (100%)
+      --samples 30,150,300   # build + render review frames (50%)
+      --shots assistant-research,work-board-drag  # render start/mid/end
       --build-only        # compile/check only, never touches Blender
 
-Verified data API only (no bpy.ops.sequencer anywhere):
-  editor.strips.new_image(name, filepath, channel, frame_start, fit_method='ORIGINAL')
-  strip.elements.append(filename)          # remaining numbered frames
-  editor.strips.new_effect(name, type, channel, frame_start, length=..., ...)
-  editor.strips.new_sound(name, filepath, channel, frame_start, stream=0)
-
-Editorial style: dark cloud backdrop + navy/cyan colour layers, per-shot
-camera push/pan keyframes (deterministic eased interpolation), short alpha
-crossfades, opening/section/final titles, cyan bars/dots/pills, flow-line
-motion, focus/vignette overlays and right-to-left / top-to-bottom editorial
-accents. Film window is frames 1..1200 read from shotlist.json.
+The film window (frames 1..1200) and the front/back face per shot are read
+from shotlist.json. Render frames are written with the same names the
+orchestrator expects (frame-000001.png ...), so the delivery pipeline is
+unchanged.
 """
 
+import hashlib
 import json
-import binascii
+import math
 import os
-import struct
+import random
 import sys
 import traceback
-import zlib
 
 try:
     import bpy  # type: ignore
+    from mathutils import Vector
     _HAS_BPY = True
 except Exception:  # pragma: no cover - plain python has no bpy
     bpy = None
+    Vector = None
     _HAS_BPY = False
-
-
-BRAND_FONT = None
 
 
 class FilmError(RuntimeError):
     pass
 
 
-def require_attr(obj, name, where):
-    if not hasattr(obj, name):
-        raise FilmError(
-            "missing API attribute {0} on {1} in {2}".format(name, obj, where)
-        )
-    return getattr(obj, name)
+# ---------------------------------------------------------------------------
+# Scene constants
+# ---------------------------------------------------------------------------
+SLAB_W = 3.3
+SLAB_H = 1.85625          # 16:9
+SLAB_T = 0.005            # ~0.5 cm glass
+SLAB_HALF_T = SLAB_T / 2.0
+SLAB_RADIUS = 0.065
+UI_RADIUS = 0.053
+UI_OFFSET = 0.00055       # crisp UI rests just proud of frosted backing
+CAM_Z = 5.88
+FOCAL_MM = 50.0
+ROT_FRAMES = 20           # frames for a full 180-degree area flip
+DISSOLVE_FRAMES = 6
+BREATH_AMP = 0.018
+BREATH_PERIOD_S = 12.0
+FPS = 30
+ENVIRONMENT = {}
+
+
+def nested(data, keys, default):
+    """Read a nested config value while retaining safe build fallbacks."""
+    current = data
+    for key in keys:
+        if not isinstance(current, dict) or key not in current:
+            return default
+        current = current[key]
+    return current
+
+
+def rgb(value, default=(0.0, 0.0, 0.0)):
+    """Accept either #RRGGBB or an RGB array from JSON scene config."""
+    if isinstance(value, str) and value.startswith("#") and len(value) == 7:
+        return tuple(int(value[i:i + 2], 16) / 255.0 for i in (1, 3, 5))
+    if isinstance(value, (list, tuple)) and len(value) >= 3:
+        return (float(value[0]), float(value[1]), float(value[2]))
+    return tuple(default)
+
+
+def apply_environment_config(config, shotlist):
+    """Load scene constants from the versioned environment manifest."""
+    global ENVIRONMENT, SLAB_W, SLAB_H, SLAB_T, SLAB_HALF_T
+    global SLAB_RADIUS, UI_RADIUS, UI_OFFSET, CAM_Z, FOCAL_MM
+    global ROT_FRAMES, DISSOLVE_FRAMES, BREATH_AMP, BREATH_PERIOD_S, FPS
+
+    ENVIRONMENT = config
+    glass = config.get("glass", {})
+    camera = config.get("camera", {})
+    SLAB_W = float(glass.get("widthM", glass.get("width", SLAB_W)))
+    SLAB_H = float(glass.get("heightM", glass.get("height", SLAB_H)))
+    SLAB_T = float(glass.get("thicknessM", glass.get("thickness", SLAB_T)))
+    SLAB_HALF_T = SLAB_T / 2.0
+    SLAB_RADIUS = float(glass.get(
+        "cornerRadiusM", glass.get("cornerRadius", SLAB_RADIUS)))
+    UI_RADIUS = float(glass.get(
+        "uiMaskCornerRadiusM", glass.get("uiCornerRadius",
+                                         SLAB_RADIUS * 0.82)))
+    UI_OFFSET = float(nested(
+        glass, ("layers", "ui", "offsetM"), glass.get("uiOffset", UI_OFFSET)))
+    CAM_Z = float(camera.get("distanceM", camera.get("distance", CAM_Z)))
+    FOCAL_MM = float(camera.get("lensMM", camera.get("focalLengthMm", FOCAL_MM)))
+    BREATH_AMP = float(camera.get(
+        "maxBreathM", camera.get("breathAmplitude", BREATH_AMP)))
+    BREATH_PERIOD_S = float(camera.get("breathPeriodSeconds", BREATH_PERIOD_S))
+    ROT_FRAMES = int(shotlist.get("direction", {}).get(
+        "rotationFrames", ROT_FRAMES))
+    DISSOLVE_FRAMES = int(shotlist.get("direction", {}).get(
+        "sameFaceDissolveFrames", DISSOLVE_FRAMES))
+    FPS = int(shotlist.get("format", {}).get("fps", FPS))
 
 
 # ---------------------------------------------------------------------------
@@ -63,7 +127,7 @@ def require_attr(obj, name, where):
 def parse_argv(argv):
     """Parse args that appear after a leading '--' (Blender convention)."""
     args = dict(repo=None, out="skybao-film.blend", width=1920, height=1080,
-                quality=None, samples=None, build_only=False)
+                quality=None, samples=None, shots=None, build_only=False)
     toks = list(argv)
     if toks and toks[0] == "--":
         toks = toks[1:]
@@ -73,7 +137,8 @@ def parse_argv(argv):
         val = None
         if i + 1 < len(toks) and not toks[i + 1].startswith("--"):
             val = toks[i + 1]
-        if key in ("repo", "out", "width", "height", "quality", "samples"):
+        if key in ("repo", "out", "width", "height", "quality", "samples",
+                   "shots"):
             if val is None or val == "":
                 raise FilmError("missing value for --{0}".format(key))
             if key == "repo":
@@ -89,6 +154,9 @@ def parse_argv(argv):
                     args["samples"] = [int(frame) for frame in val.split(",")]
                 except ValueError:
                     raise FilmError("--samples must be comma-separated frame numbers")
+            elif key == "shots":
+                args["shots"] = [item.strip() for item in val.split(",")
+                                  if item.strip()]
             else:
                 args["quality"] = val.lower()
             i += 2
@@ -114,17 +182,15 @@ def resolve_paths(args):
         film_dir=film_dir,
         repo=repo,
         shotlist=os.path.join(film_dir, "shotlist.json"),
+        environment=os.path.join(film_dir, "environment.json"),
         ui=os.path.join(repo, "artifacts", "skybao-ui"),
         catalog=os.path.join(repo, "artifacts", "skybao-ui", "catalog.json"),
         film=os.path.join(repo, "artifacts", "skybao-film"),
-        clouds=os.path.join(repo, "frontend", "public", "clouds-dark.webp"),
-        font=os.path.join(repo, "frontend", "public", "fonts",
-                          "PlusJakartaSans.ttf"),
-        cursor=os.path.join(repo, "artifacts", "skybao-film", "cursor",
-                            "cursor.png"),
         audio=os.path.join(repo, "artifacts", "skybao-film", "audio",
                             "skybao-mix.wav"),
         blendout=args["out"],
+        build_manifest=os.path.join(repo, "artifacts", "skybao-film",
+                                    "build-manifest.json"),
     )
 
 
@@ -144,80 +210,6 @@ def frame_name(n):
     return "frame-{0:06d}.png".format(int(n))
 
 
-def _png_chunk(kind, payload):
-    body = kind + payload
-    return (struct.pack(">I", len(payload)) + body +
-            struct.pack(">I", binascii.crc32(body) & 0xffffffff))
-
-
-def _inside_polygon(x, y, points):
-    inside = False
-    j = len(points) - 1
-    for i, (xi, yi) in enumerate(points):
-        xj, yj = points[j]
-        if ((yi > y) != (yj > y)):
-            crossing = (xj - xi) * (y - yi) / (yj - yi) + xi
-            if x < crossing:
-                inside = not inside
-        j = i
-    return inside
-
-
-def _segment_distance(px, py, ax, ay, bx, by):
-    dx, dy = bx - ax, by - ay
-    length_sq = dx * dx + dy * dy
-    if length_sq == 0:
-        return ((px - ax) ** 2 + (py - ay) ** 2) ** 0.5
-    t = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / length_sq))
-    qx, qy = ax + t * dx, ay + t * dy
-    return ((px - qx) ** 2 + (py - qy) ** 2) ** 0.5
-
-
-def ensure_cursor_png(path):
-    """Rasterize the tracked cursor SVG shape without external dependencies."""
-    width, height, supersample = 48, 56, 4
-    points = [(6.0, 4.5), (6.0, 41.75), (16.2, 32.35),
-              (23.3, 49.5), (31.95, 45.85), (24.9, 28.95),
-              (40.0, 28.95)]
-    rows = []
-    for py in range(height):
-        row = bytearray([0])
-        for px in range(width):
-            accum = [0.0, 0.0, 0.0, 0.0]
-            for sy in range(supersample):
-                for sx in range(supersample):
-                    x = px + (sx + 0.5) / supersample
-                    y = py + (sy + 0.5) / supersample
-                    distances = [
-                        _segment_distance(x, y, *points[i],
-                                          *points[(i + 1) % len(points)])
-                        for i in range(len(points))
-                    ]
-                    inside = _inside_polygon(x, y, points)
-                    stroke = min(distances) <= 1.5
-                    if stroke:
-                        rgba = (15, 23, 42, 255)
-                    elif inside:
-                        rgba = (248, 250, 252, 255)
-                    else:
-                        rgba = (0, 0, 0, 0)
-                    for channel in range(4):
-                        accum[channel] += rgba[channel]
-            samples = supersample * supersample
-            row.extend(int(round(value / samples)) for value in accum)
-        rows.append(bytes(row))
-    raw = b"".join(rows)
-    png = (b"\x89PNG\r\n\x1a\n" +
-           _png_chunk(b"IHDR", struct.pack(">IIBBBBB", width, height,
-                                             8, 6, 0, 0, 0)) +
-           _png_chunk(b"IDAT", zlib.compress(raw, 9)) +
-           _png_chunk(b"IEND", b""))
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "wb") as fh:
-        fh.write(png)
-    return path
-
-
 def build_catalog_index(catalog):
     """catalog -> {(type, id, framing) -> entry}, workspace preferred."""
     index = {}
@@ -230,7 +222,7 @@ def build_catalog_index(catalog):
 
 
 # ---------------------------------------------------------------------------
-# Blender context helper (only save + render operators need this)
+# Blender context helper (only operators need this)
 # ---------------------------------------------------------------------------
 class WindowContext:
     def __init__(self, scene):
@@ -241,13 +233,9 @@ class WindowContext:
         wm = bpy.data.window_managers[0]
         win = wm.windows[0]
         scr = win.screen
-        area = None
-        for a in scr.areas:
-            if a.type in ("SEQUENCE_EDITOR", "VIEW_3D", "RENDER", "FILE"):
-                area = a
-                break
-        if area is None:
-            area = scr.areas[0]
+        area = next((a for a in scr.areas
+                     if a.type in ("SEQUENCE_EDITOR", "VIEW_3D", "RENDER",
+                                   "FILE")), scr.areas[0])
         region = next((r for r in area.regions if r.type == "WINDOW"), None)
         ctx = dict(window=win, screen=scr, area=area, region=region,
                    scene=self.scene, view_layer=self.scene.view_layers[0])
@@ -271,9 +259,41 @@ def configure_scene(scene, width, height, total, fps):
     scene.frame_start = 1
     scene.frame_end = total
     scene.frame_current = 1
+    scene.render.engine = "BLENDER_EEVEE"
+    scene.render.use_motion_blur = True
+    scene.render.motion_blur_shutter = 0.12
+    scene.render.motion_blur_position = "CENTER"
+    scene.render.image_settings.file_format = "PNG"
+    scene.render.image_settings.color_mode = "RGBA"
+    scene.render.image_settings.compression = 15
+
+    eevee = scene.eevee
+    for name, value in (("taa_render_samples", 48),
+                        ("volumetric_samples", 20),
+                        ("volumetric_tile_size", 8),
+                        ("motion_blur_steps", 8),
+                        ("motion_blur_max", 24),
+                        ("use_volumetric_shadows", True)):
+        if hasattr(eevee, name):
+            try:
+                setattr(eevee, name, value)
+            except Exception:
+                pass
+
     vset = scene.view_settings
-    for prop, value in (("view_transform", "Standard"), ("exposure", 0.0),
-                        ("gamma", 1.0)):
+    try:
+        prop = vset.bl_rna.properties["view_transform"]
+        transforms = [item.identifier for item in prop.enum_items]
+    except Exception:
+        transforms = []
+    for candidate in ("AgX", "Filmic", "Standard"):
+        if candidate in transforms:
+            try:
+                vset.view_transform = candidate
+            except Exception:
+                pass
+            break
+    for prop, value in (("exposure", 0.0), ("gamma", 1.0)):
         if hasattr(vset, prop):
             try:
                 setattr(vset, prop, value)
@@ -287,615 +307,973 @@ def ensure_scene(name, cfg):
         scenes.remove(scenes[name], do_unlink=True)
     sc = scenes.new(name)
     configure_scene(sc, cfg["width"], cfg["height"], cfg["total"], cfg["fps"])
-    sc.sequence_editor_create()
     return sc
 
 
 # ---------------------------------------------------------------------------
-# Generic strip helpers (pure data API)
+# Material helpers
 # ---------------------------------------------------------------------------
-def set_range(strip, start, end):
-    """Set an inclusive editorial frame range on Blender's end-exclusive strip."""
-    require_attr(strip, "frame_final_end", "set_range")
-    strip.frame_start = start
-    strip.frame_final_end = end + 1
+def new_material(name):
+    mat = bpy.data.materials.new(name)
+    mat.use_nodes = True
+    for node in list(mat.node_tree.nodes):
+        mat.node_tree.nodes.remove(node)
+    return mat
 
 
-def set_image_compositing(strip):
-    for prop, val in (("blend_type", "ALPHA_OVER"), ("blend_alpha", 1.0),
-                      ("color_multiply", 1.0)):
-        if hasattr(strip, prop):
+def add_node(mat, bl_type, name=None):
+    node = mat.node_tree.nodes.new(bl_type)
+    if name:
+        node.name = name
+    return node
+
+
+def set_input(node, name, value):
+    for inp in node.inputs:
+        if inp.name == name:
             try:
-                setattr(strip, prop, val)
+                inp.default_value = value
+                return True
             except Exception:
-                pass
+                return False
+    return False
 
 
-def key_linear(target, path, keyframes, where):
-    """Insert deterministic keyframes on a strip or nested transform object.
+def link(mat, from_socket, to_socket):
+    mat.node_tree.links.new(from_socket, to_socket)
 
-    Blender 5.2 stores animation curves in layered scene actions, so there is
-    no stable ``action.fcurves`` collection to rewrite here. The default
-    Bezier interpolation provides the requested smooth ease-in/out motion.
-    """
-    for frame, value in keyframes:
-        require_attr(target, "keyframe_insert", "key_linear:" + path)
+
+def ui_material(name, image):
+    """Crisp emission + alpha UI with an animatable dissolve control."""
+    mat = new_material(name)
+    nt = mat.node_tree
+    tex = add_node(mat, "ShaderNodeTexImage", "Tex")
+    tex.image = image
+    tex.extension = "CLIP"
+    em = add_node(mat, "ShaderNodeEmission", "Emit")
+    set_input(em, "Strength", float(nested(
+        ENVIRONMENT, ("glass", "uiEmission"), 1.12)))
+    opacity = add_node(mat, "ShaderNodeValue", "Opacity")
+    opacity.outputs[0].default_value = 1.0
+    alpha = add_node(mat, "ShaderNodeMath", "Alpha")
+    alpha.operation = "MULTIPLY"
+    mix = add_node(mat, "ShaderNodeMixShader", "Mix")
+    trans = add_node(mat, "ShaderNodeBsdfTransparent", "Transparent")
+    out = add_node(mat, "ShaderNodeOutputMaterial", "Out")
+    link(mat, tex.outputs["Color"], em.inputs["Color"])
+    link(mat, tex.outputs["Alpha"], alpha.inputs[0])
+    link(mat, opacity.outputs[0], alpha.inputs[1])
+    link(mat, alpha.outputs[0], mix.inputs["Factor"])
+    link(mat, trans.outputs["BSDF"], mix.inputs[1])
+    link(mat, em.outputs["Emission"], mix.inputs[2])
+    link(mat, mix.outputs["Shader"], out.inputs["Surface"])
+    mat.blend_method = "BLEND"
+    mat.show_transparent_back = True
+    return mat
+
+
+def glass_material(name):
+    """Frosted backing; noise distorts only the world behind, never the UI."""
+    mat = new_material(name)
+    glass_cfg = ENVIRONMENT.get("glass", {})
+    cfg = nested(glass_cfg, ("layers", "backing"), glass_cfg)
+    bsdf = add_node(mat, "ShaderNodeBsdfPrincipled", "Glass")
+    out = add_node(mat, "ShaderNodeOutputMaterial", "Out")
+    base = rgb(cfg.get("baseColor"), (0.08, 0.14, 0.22))
+    set_input(bsdf, "Base Color", (base[0], base[1], base[2], 1.0))
+    set_input(bsdf, "Roughness", float(cfg.get("roughness", 0.22)))
+    set_input(bsdf, "IOR", float(cfg.get("ior", 1.45)))
+    set_input(bsdf, "Transmission Weight", float(cfg.get("transmission", 0.78)))
+    set_input(bsdf, "Coat Weight", float(cfg.get("coatWeight", 0.14)))
+    set_input(bsdf, "Coat Roughness", float(cfg.get("coatRoughness", 0.16)))
+
+    coords = add_node(mat, "ShaderNodeTexCoord", "Coordinates")
+    noise = add_node(mat, "ShaderNodeTexNoise", "Frost")
+    set_input(noise, "Scale", float(cfg.get("frostScale", 7.5)))
+    set_input(noise, "Detail", float(cfg.get("frostDetail", 2.0)))
+    set_input(noise, "Roughness", 0.58)
+    bump = add_node(mat, "ShaderNodeBump", "FrostBump")
+    set_input(bump, "Strength", float(cfg.get("frostStrength", 0.11)))
+    set_input(bump, "Distance", float(cfg.get("frostDistance", 0.025)))
+    link(mat, coords.outputs["Generated"], noise.inputs["Vector"])
+    link(mat, noise.outputs["Fac"], bump.inputs["Height"])
+    link(mat, bump.outputs["Normal"], bsdf.inputs["Normal"])
+    link(mat, bsdf.outputs["BSDF"], out.inputs["Surface"])
+    if hasattr(mat, "surface_render_method"):
         try:
-            setattr(target, path, value)
-            target.keyframe_insert(data_path=path, frame=frame)
-        except (AttributeError, TypeError, ValueError) as exc:
-            raise FilmError("cannot keyframe {0} on {1}: {2}".format(
-                path, where, exc))
+            mat.surface_render_method = "DITHERED"
+        except Exception:
+            pass
+    return mat
 
 
-def media_channel_rotate(index):
-    """Media strips rotate over channels 10..12 so adjacent shots never fight
-    and the outgoing strip always has a channel to crossfade into."""
-    return 10 + (index % 3)
+def clear_cover_material(name):
+    """Nearly transparent front shell: specular glass without frosting UI pixels."""
+    mat = new_material(name)
+    cfg = nested(ENVIRONMENT, ("glass", "layers", "coverRim"), {})
+    transparent = add_node(mat, "ShaderNodeBsdfTransparent", "Transparent")
+    bsdf = add_node(mat, "ShaderNodeBsdfPrincipled", "ClearCover")
+    set_input(bsdf, "Base Color", (0.75, 0.9, 1.0, 1.0))
+    set_input(bsdf, "Roughness", float(cfg.get("roughness", 0.035)))
+    set_input(bsdf, "IOR", float(cfg.get("ior", 1.45)))
+    set_input(bsdf, "Transmission Weight", float(cfg.get("transmission", 0.97)))
+    set_input(bsdf, "Coat Weight", float(cfg.get("coatWeight", 0.25)))
+    mix = add_node(mat, "ShaderNodeMixShader", "CoverMix")
+    mix.inputs[0].default_value = float(cfg.get("opacity", 0.055))
+    out = add_node(mat, "ShaderNodeOutputMaterial", "Out")
+    link(mat, transparent.outputs["BSDF"], mix.inputs[1])
+    link(mat, bsdf.outputs["BSDF"], mix.inputs[2])
+    link(mat, mix.outputs["Shader"], out.inputs["Surface"])
+    mat.blend_method = "BLEND"
+    mat.show_transparent_back = True
+    return mat
+
+
+def edge_accent_material(name, color, strength):
+    """Restrained cyan/brand-blue perimeter emission."""
+    mat = new_material(name)
+    em = add_node(mat, "ShaderNodeEmission", "Emit")
+    set_input(em, "Color", (color[0], color[1], color[2], 1.0))
+    set_input(em, "Strength", strength)
+    out = add_node(mat, "ShaderNodeOutputMaterial", "Out")
+    link(mat, em.outputs["Emission"], out.inputs["Surface"])
+    return mat
+
+
+def cursor_material(name, color):
+    return edge_accent_material(name, color, 1.0)
+
+
+def cloud_card_material(name, config, image=None):
+    """Deterministic dark 2.5D atmosphere with texture/procedural alpha."""
+    mat = new_material(name)
+    coords = add_node(mat, "ShaderNodeTexCoord", "Coordinates")
+    mapping = add_node(mat, "ShaderNodeMapping", "Mapping")
+    source_socket = None
+    if image is not None:
+        texture = add_node(mat, "ShaderNodeTexImage", "CloudTexture")
+        texture.image = image
+        texture.extension = "REPEAT"
+        bw = add_node(mat, "ShaderNodeRGBToBW", "CloudLuminance")
+        uv_scale = config.get("uvScale", [1.0, 1.0, 1.0])
+        uv_offset = config.get("uvOffset", [0.0, 0.0, 0.0])
+        set_input(mapping, "Scale", (float(uv_scale[0]), float(uv_scale[1]),
+                                     float(uv_scale[2] if len(uv_scale) > 2 else 1.0)))
+        set_input(mapping, "Location", (float(uv_offset[0]), float(uv_offset[1]),
+                                        float(uv_offset[2] if len(uv_offset) > 2 else 0.0)))
+        link(mat, mapping.outputs["Vector"], texture.inputs["Vector"])
+        link(mat, texture.outputs["Color"], bw.inputs["Color"])
+        source_socket = bw.outputs["Val"]
+    else:
+        noise = add_node(mat, "ShaderNodeTexNoise", "CloudNoise")
+        set_input(noise, "Scale", float(config.get("noiseScale", 2.2)))
+        set_input(noise, "Detail", float(config.get("detail", 3.0)))
+        set_input(noise, "Roughness", float(config.get("noiseRoughness", 0.62)))
+        link(mat, mapping.outputs["Vector"], noise.inputs["Vector"])
+        source_socket = noise.outputs["Fac"]
+    ramp = add_node(mat, "ShaderNodeValToRGB", "CloudShape")
+    ramp.color_ramp.elements[0].position = float(config.get("low", 0.38))
+    ramp.color_ramp.elements[0].color = (0.0, 0.0, 0.0, 1.0)
+    ramp.color_ramp.elements[1].position = float(config.get("high", 0.68))
+    ramp.color_ramp.elements[1].color = (1.0, 1.0, 1.0, 1.0)
+    opacity = add_node(mat, "ShaderNodeMath", "Opacity")
+    opacity.operation = "MULTIPLY"
+    opacity.inputs[1].default_value = float(config.get("opacity", 0.08))
+    transparent = add_node(mat, "ShaderNodeBsdfTransparent", "Transparent")
+    emission = add_node(mat, "ShaderNodeEmission", "CloudGlow")
+    tint = config.get("tint", [0.06, 0.16, 0.25])
+    set_input(emission, "Color", (tint[0], tint[1], tint[2], 1.0))
+    set_input(emission, "Strength", float(config.get("emission", 0.55)))
+    mix = add_node(mat, "ShaderNodeMixShader", "CloudMix")
+    out = add_node(mat, "ShaderNodeOutputMaterial", "Out")
+    link(mat, coords.outputs["UV" if image is not None else "Generated"],
+         mapping.inputs["Vector"])
+    link(mat, source_socket, ramp.inputs["Fac"])
+    link(mat, ramp.outputs["Color"], opacity.inputs[0])
+    link(mat, opacity.outputs[0], mix.inputs["Factor"])
+    link(mat, transparent.outputs["BSDF"], mix.inputs[1])
+    link(mat, emission.outputs["Emission"], mix.inputs[2])
+    link(mat, mix.outputs["Shader"], out.inputs["Surface"])
+    mat.blend_method = "BLEND"
+    mat.show_transparent_back = True
+    return mat
+
+
+def brushed_metal_material(name, base=(0.038, 0.043, 0.055),
+                           roughness=0.42, noise_strength=0.25):
+    """Dark brushed metal: metallic base with noise-driven roughness."""
+    mat = new_material(name)
+    bsdf = add_node(mat, "ShaderNodeBsdfPrincipled", "Metal")
+    out = add_node(mat, "ShaderNodeOutputMaterial", "Out")
+    set_input(bsdf, "Base Color", (base[0], base[1], base[2], 1.0))
+    set_input(bsdf, "Metallic", 1.0)
+    noise = add_node(mat, "ShaderNodeTexNoise", "Brush")
+    set_input(noise, "Scale", 18.0)
+    fma = add_node(mat, "ShaderNodeMath", "BrushMix")
+    fma.operation = "MULTIPLY_ADD"
+    fma.inputs[1].default_value = noise_strength
+    fma.inputs[2].default_value = roughness
+    link(mat, noise.outputs["Fac"], fma.inputs[0])
+    link(mat, fma.outputs[0], bsdf.inputs["Roughness"])
+    link(mat, bsdf.outputs["BSDF"], out.inputs["Surface"])
+    return mat
+
+
+def led_material(name, color, strength=12.0):
+    mat = new_material(name)
+    em = add_node(mat, "ShaderNodeEmission", "Emit")
+    set_input(em, "Color", (color[0], color[1], color[2], 1.0))
+    set_input(em, "Strength", strength)
+    out = add_node(mat, "ShaderNodeOutputMaterial", "Out")
+    link(mat, em.outputs["Emission"], out.inputs["Surface"])
+    return mat
+
+
+def fog_material(name, density=0.012, tint=(0.30, 0.36, 0.45)):
+    mat = new_material(name)
+    vol = add_node(mat, "ShaderNodeVolumePrincipled", "Fog")
+    out = add_node(mat, "ShaderNodeOutputMaterial", "Out")
+    set_input(vol, "Color", (tint[0], tint[1], tint[2], 1.0))
+    set_input(vol, "Density", density)
+    set_input(vol, "Anisotropy", 0.0)
+    link(mat, vol.outputs["Volume"], out.inputs["Volume"])
+    return mat
 
 
 # ---------------------------------------------------------------------------
-# Colour / geometry helpers
+# Mesh helpers
 # ---------------------------------------------------------------------------
-def color_rect(editor, name, channel, start, end, color, alpha=1.0):
-    """Full-frame COLOR effect strip; shape it via transform afterwards."""
-    s = editor.strips.new_effect(name, "COLOR", channel, start,
-                                 length=max(1, end - start + 1))
-    try:
-        s.color = tuple(float(c) for c in color[:3])
-    except Exception:
-        pass
-    try:
-        s.blend_type = "ALPHA_OVER"
-    except Exception:
-        pass
-    try:
-        s.blend_alpha = alpha
-    except Exception:
-        pass
-    set_range(s, start, end)
-    return s
+def newell(verts, face):
+    n = [0.0, 0.0, 0.0]
+    pts = [verts[i] for i in face]
+    k = len(pts)
+    for i in range(k):
+        a, b = pts[i], pts[(i + 1) % k]
+        n[0] += (a[1] - b[1]) * (a[2] + b[2])
+        n[1] += (a[2] - b[2]) * (a[0] + b[0])
+        n[2] += (a[0] - b[0]) * (a[1] + b[1])
+    return n
 
 
-def place_rect(strip, cx, cy, w, h, width, height):
-    """Set size (w x h px) and centre (cx, cy px) via transform scale/offset."""
-    tr = require_attr(strip, "transform", "place_rect")
-    tr.scale_x = max(0.001, w / float(width))
-    tr.scale_y = max(0.001, h / float(height))
-    tr.offset_x = cx - width / 2.0
-    tr.offset_y = cy - height / 2.0
-
-
-# ---------------------------------------------------------------------------
-# Build: background
-# ---------------------------------------------------------------------------
-def build_background(editor, cfg, paths):
-    """Dark branded cloud backdrop + navy/cyan colour layers (channels 1-4)."""
-    total = cfg["total"]
-    w, h = cfg["width"], cfg["height"]
-
-    require_file(paths["clouds"])
-    bg = editor.strips.new_image("BG.clouds", paths["clouds"], 1, 1,
-                                 fit_method="ORIGINAL")
-    set_image_compositing(bg)
-    set_range(bg, 1, total)
-    try:
-        bg.fit_method = "FILL"  # 1920x1200 source covers the 1920x1080 frame
-    except Exception:
-        pass
-
-    # Deep navy brand wash over the clouds.
-    navy = color_rect(editor, "BG.navy-wash", 2, 1, total,
-                      (0.015, 0.025, 0.055), alpha=0.5)
-
-    # Soft cyan top glow band for brand identity.
-    glow = color_rect(editor, "BG.cyan-glow", 3, 1, total,
-                      (0.02, 0.22, 0.30), alpha=0.20)
-    place_rect(glow, w / 2.0, h - 150.0, w, 300.0, w, h)
-
-    # Fine navy separator toward the bottom adds depth behind the UI.
-    base = color_rect(editor, "BG.navy-base", 4, 1, total,
-                      (0.01, 0.02, 0.045), alpha=0.35)
-    place_rect(base, w / 2.0, h * 0.08, w, h * 0.18, w, h)
-
-    return [bg, navy, glow, base]
-
-
-# ---------------------------------------------------------------------------
-# Build: shots (media + camera + alpha crossfades)
-# ---------------------------------------------------------------------------
-def build_media(editor, cfg, shotlist, catalog_index, paths, manifest):
-    """Import each shot's still/clip trim with camera + crossfade keyframes."""
-    w, h = cfg["width"], cfg["height"]
-    shots = shotlist["shots"]
-    n_shots = len(shots)
-    strips = []
-
-    for i, shot in enumerate(shots):
-        frames = shot["frames"]
-        start = frames["start"]
-        end = frames["end"]
-        src = shot["source"]
-        transition = shot.get("transition", {})
-        duration = int(transition.get("duration", 10))
-        d_in = duration if i > 0 or transition.get("in") == "fade-from-black" else 0
-        d_out = 0 if i == n_shots - 1 else duration
-        fade_out = (int(transition.get("outDuration", duration))
-                    if str(transition.get("out", "")).startswith("fade-")
-                    else 0)
-
-        # Keep the incoming source aligned to its authored first frame. The
-        # outgoing strip extends over the following shot and holds its final
-        # image while both alphas cross, avoiding skipped interaction frames.
-        strip_start = start
-        strip_end = min(cfg["total"], end + d_out)
-        channel = media_channel_rotate(i)
-
-        if src["type"] == "still":
-            a = catalog_index.get(
-                (src["type"], src["id"], src.get("framing")),
-                catalog_index.get((src["type"], src["id"], None)))
-            if not a:
-                raise FilmError("shot {0}: still {1} ({2}) not in catalog".format(
-                    shot["number"], src["id"], src.get("framing")))
-            path = os.path.join(paths["ui"], a["file"])
-            require_file(path)
-            strip = editor.strips.new_image(
-                "S{0:02d}.{1}".format(shot["number"], src["id"]),
-                path, channel, strip_start, fit_method="ORIGINAL")
-        elif src["type"] == "clip":
-            a = catalog_index.get(
-                (src["type"], src["id"], src.get("framing")),
-                catalog_index.get((src["type"], src["id"], None)))
-            if not a:
-                raise FilmError("shot {0}: clip {1} ({2}) not in catalog".format(
-                    shot["number"], src["id"], src.get("framing")))
-            directory = os.path.join(paths["ui"], a["directory"])
-            trim_start = int(src.get("startFrame", 1))
-            trim_end = int(src.get("endFrame", 1))
-            first_path = os.path.join(directory, frame_name(trim_start))
-            require_file(first_path)
-            strip = editor.strips.new_image(
-                "S{0:02d}.{1}".format(shot["number"], src["id"]),
-                first_path, channel, strip_start, fit_method="ORIGINAL")
-            elements = strip.elements
-            for n in range(trim_start + 1, trim_end + 1):
-                require_file(os.path.join(directory, frame_name(n)))
-                elements.append(frame_name(n))
+def outward_faces(verts, faces):
+    cx = sum(v[0] for v in verts) / len(verts)
+    cy = sum(v[1] for v in verts) / len(verts)
+    cz = sum(v[2] for v in verts) / len(verts)
+    center = (cx, cy, cz)
+    result = []
+    for face in faces:
+        n = newell(verts, face)
+        centroid = tuple(
+            sum(verts[i][k] for i in face) / len(face) for k in range(3))
+        if (n[0] * (centroid[0] - center[0]) +
+                n[1] * (centroid[1] - center[1]) +
+                n[2] * (centroid[2] - center[2])) < 0:
+            result.append(tuple(reversed(face)))
         else:
-            raise FilmError("shot {0}: unknown source type {1!r}".format(
-                shot["number"], src["type"]))
-
-        set_image_compositing(strip)
-        set_range(strip, strip_start, strip_end)
-
-        # Straight alpha interpretation of the source image datablock.
-        img = getattr(bpy, "data", None) and bpy.data.images.get(first_path
-            if src["type"] == "clip" else path)
-        if img is not None and hasattr(img, "alpha_mode"):
-            try:
-                img.alpha_mode = "STRAIGHT"
-            except Exception:
-                pass
-
-        # --- alpha crossfade keyframes (deterministic, linear) ---
-        alpha_keys = []
-        if d_in > 0:
-            alpha_keys.append((strip_start, 0.0))
-            alpha_keys.append((min(end, strip_start + d_in), 1.0))
-        else:
-            alpha_keys.append((start, 1.0))
-        if end < strip_end:
-            alpha_keys.append((end, 1.0))
-            alpha_keys.append((strip_end, 0.0))
-        elif fade_out > 0:
-            alpha_keys.append((max(start, end - fade_out), 1.0))
-            alpha_keys.append((end, 0.0))
-        else:
-            alpha_keys.append((end, 1.0))
-        key_linear(strip, "blend_alpha", alpha_keys,
-                   "shot {0} alpha".format(shot["number"]))
-
-        # --- camera push / pan from shotlist values ---
-        cam = shot.get("camera", {})
-        cs = cam.get("start", {"scale": 1.0, "x": 0, "y": 0})
-        ce = cam.get("end", {"scale": 1.0, "x": 0, "y": 0})
-        s_scale = float(cs.get("scale", 1.0))
-        e_scale = float(ce.get("scale", 1.0))
-
-        def clamp_off(v, scale, dim):
-            if scale <= 1.0:
-                return 0.0
-            slack = (scale - 1.0) * dim * 0.5 * 0.96
-            px = v / 100.0 * (dim / 2.0)
-            return max(-slack, min(slack, px))
-
-        sx_off = clamp_off(float(cs.get("x", 0)), s_scale, w)
-        sy_off = clamp_off(float(cs.get("y", 0)), s_scale, h)
-        ex_off = clamp_off(float(ce.get("x", 0)), e_scale, w)
-        ey_off = clamp_off(float(ce.get("y", 0)), e_scale, h)
-
-        tr = require_attr(strip, "transform", "camera")
-        for axis, (a, b) in (("x", (s_scale, e_scale)),
-                             ("y", (s_scale, e_scale))):
-            key_linear(tr, "scale_{0}".format(axis),
-                       [(start, a), (end, b)], "shot {0} scale".format(shot["number"]))
-        key_linear(tr, "offset_x",
-                   [(start, sx_off), (end, ex_off)],
-                   "shot {0} pan x".format(shot["number"]))
-        key_linear(tr, "offset_y",
-                   [(start, sy_off), (end, ey_off)],
-                   "shot {0} pan y".format(shot["number"]))
-
-        manifest["shots"].append({
-            "number": shot["number"],
-            "title": shot["title"],
-            "frames": [strip_start, strip_end],
-            "channel": channel,
-            "source": "{0}:{1}".format(src["type"], src["id"]),
-            "trim": [src.get("startFrame", None), src.get("endFrame", None)],
-        })
-        strips.append(strip)
-
-    return strips
+            result.append(tuple(face))
+    return result
 
 
-def build_cursors(editor, cfg, shotlist, catalog_index, paths, manifest):
-    """Place an editorial cursor from each source clip's real timeline.
+def make_box_mesh(name, w, d, h):
+    """Box centred on the origin with outward-facing normals."""
+    x, y, z = w / 2.0, d / 2.0, h / 2.0
+    verts = [
+        (-x, -y, -z), (x, -y, -z), (x, y, -z), (-x, y, -z),
+        (-x, -y, z), (x, -y, z), (x, y, z), (-x, y, z),
+    ]
+    faces = [
+        (0, 1, 2, 3),  # bottom
+        (4, 7, 6, 5),  # top
+        (0, 4, 5, 1),  # front (-y)
+        (2, 6, 7, 3),  # back (+y)
+        (1, 5, 6, 2),  # right (+x)
+        (3, 7, 4, 0),  # left (-x)
+    ]
+    mesh = bpy.data.meshes.new(name)
+    mesh.from_pydata(verts, [], outward_faces(verts, faces))
+    mesh.update()
+    return mesh
 
-    The capture library deliberately keeps pointers out of UI pixels. Here the
-    original frame-numbered coordinates are mapped through the same camera
-    move as the source strip, making clicks and the Kanban drag legible while
-    leaving the reusable capture assets clean.
-    """
-    cursor_path = ensure_cursor_png(paths["cursor"])
-    w, h = cfg["width"], cfg["height"]
-    built = []
 
-    def clamp_off(value, scale, dim):
-        if scale <= 1.0:
-            return 0.0
-        slack = (scale - 1.0) * dim * 0.5 * 0.96
-        pixels = value / 100.0 * (dim / 2.0)
-        return max(-slack, min(slack, pixels))
+def rounded_rect_points(w, h, radius, segments=10):
+    """Clockwise rounded-rectangle outline in local X/Z coordinates."""
+    r = max(0.0, min(float(radius), min(w, h) / 2.0 - 1e-6))
+    corners = [
+        (w / 2.0 - r, -h / 2.0 + r, -90.0, 0.0),
+        (w / 2.0 - r, h / 2.0 - r, 0.0, 90.0),
+        (-w / 2.0 + r, h / 2.0 - r, 90.0, 180.0),
+        (-w / 2.0 + r, -h / 2.0 + r, 180.0, 270.0),
+    ]
+    points = []
+    for cx, cz, a0, a1 in corners:
+        for step in range(segments + 1):
+            angle = math.radians(a0 + (a1 - a0) * step / float(segments))
+            points.append((cx + r * math.cos(angle),
+                           cz + r * math.sin(angle)))
+    return points
 
-    for index, shot in enumerate(shotlist["shots"]):
-        src = shot["source"]
-        if src.get("type") != "clip":
-            continue
-        asset = catalog_index.get(
-            ("clip", src["id"], src.get("framing")),
-            catalog_index.get(("clip", src["id"], None)))
-        if not asset or not asset.get("timeline"):
-            continue
-        timeline = load_json(os.path.join(paths["ui"], asset["timeline"]))
-        raw_events = timeline.get("cursor", [])
-        trim_start = int(src.get("startFrame", 1))
-        trim_end = int(src.get("endFrame", 1))
 
-        # Collapse duplicate down+move records at one source frame while
-        # retaining whether that frame should receive a tactile scale pulse.
-        by_frame = {}
-        for event in raw_events:
-            source_frame = int(event.get("frame", 0)) + 1
-            if source_frame < trim_start or source_frame > trim_end:
-                continue
-            record = by_frame.setdefault(source_frame, {
-                "x": float(event["x"]), "y": float(event["y"]),
-                "pulse": False,
-            })
-            record["x"] = float(event["x"])
-            record["y"] = float(event["y"])
-            if event.get("event") in ("down", "click"):
-                record["pulse"] = True
-        if not by_frame:
-            continue
+def make_rounded_panel_mesh(name, w, d, h, radius, segments=10):
+    """Closed 5 mm rounded slab with matching front/back silhouettes."""
+    outline = rounded_rect_points(w, h, radius, segments)
+    verts = [(x, -d / 2.0, z) for x, z in outline]
+    verts += [(x, d / 2.0, z) for x, z in outline]
+    count = len(outline)
+    faces = [tuple(range(count)), tuple(range(count, count * 2))]
+    for i in range(count):
+        j = (i + 1) % count
+        faces.append((i, j, count + j, count + i))
+    mesh = bpy.data.meshes.new(name)
+    mesh.from_pydata(verts, [], outward_faces(verts, faces))
+    mesh.update()
+    return mesh
 
-        authored = []
-        shot_start = int(shot["frames"]["start"])
-        shot_end = int(shot["frames"]["end"])
-        cam = shot.get("camera", {})
-        cs = cam.get("start", {"scale": 1.0, "x": 0, "y": 0})
-        ce = cam.get("end", {"scale": 1.0, "x": 0, "y": 0})
-        duration = max(1, shot_end - shot_start)
 
-        for source_frame in sorted(by_frame):
-            record = by_frame[source_frame]
-            editorial_frame = shot_start + source_frame - trim_start
-            t = max(0.0, min(1.0,
-                             (editorial_frame - shot_start) / float(duration)))
-            eased = t * t * (3.0 - 2.0 * t)
-            scale = (float(cs.get("scale", 1.0)) * (1.0 - eased) +
-                     float(ce.get("scale", 1.0)) * eased)
-            pan_x = clamp_off(
-                float(cs.get("x", 0)) * (1.0 - eased) +
-                float(ce.get("x", 0)) * eased, scale, w)
-            pan_y = clamp_off(
-                float(cs.get("y", 0)) * (1.0 - eased) +
-                float(ce.get("y", 0)) * eased, scale, h)
+def make_rounded_plane_mesh(name, w, h, radius, segments=10):
+    """Rounded XZ image plane whose UVs geometrically clip capture corners."""
+    outline = rounded_rect_points(w, h, radius, segments)
+    verts = [(x, 0.0, z) for x, z in outline]
+    faces = [tuple(range(len(verts)))]
+    mesh = bpy.data.meshes.new(name)
+    mesh.from_pydata(verts, [], faces)
+    uv = mesh.uv_layers.new(name="UVMap")
+    for poly in mesh.polygons:
+        for loop_index in poly.loop_indices:
+            vertex_index = mesh.loops[loop_index].vertex_index
+            vertex = verts[vertex_index]
+            uv.data[loop_index].uv = (
+                vertex[0] / w + 0.5, vertex[2] / h + 0.5)
+    mesh.update()
+    return mesh
 
-            # Capture coordinates are top-left based. Blender offsets use a
-            # centre origin with positive Y upward. The final constants place
-            # the pointer's SVG hotspot, not its image centre, on the target.
-            pointer_x = (record["x"] - w / 2.0) * scale + pan_x
-            pointer_y = (h / 2.0 - record["y"]) * scale + pan_y
-            authored.append({
-                "frame": editorial_frame,
-                "x": pointer_x + 18.0,
-                "y": pointer_y - 23.5,
-                "pulse": record["pulse"],
-            })
 
-        first, last = authored[0], authored[-1]
-        cursor_start = max(shot_start, first["frame"] - 6)
-        cursor_end = min(shot_end, last["frame"] + 7)
-        strip = editor.strips.new_image(
-            "C{0:02d}.{1}".format(shot["number"], src["id"]),
-            cursor_path, 46 + (index % 2), cursor_start,
-            fit_method="ORIGINAL")
-        set_image_compositing(strip)
-        set_range(strip, cursor_start, cursor_end)
-        image = bpy.data.images.get(os.path.basename(cursor_path))
-        if image is not None and hasattr(image, "alpha_mode"):
-            image.alpha_mode = "STRAIGHT"
+def make_cursor_mesh(name, scale=0.06):
+    """A simple pointer silhouette in XZ, anchored at its top-left tip."""
+    pts = [(0.0, 0.0), (0.0, -1.0), (0.27, -0.73), (0.47, -1.12),
+           (0.64, -1.03), (0.43, -0.64), (0.82, -0.62)]
+    verts = [(x * scale, 0.0, z * scale) for x, z in pts]
+    mesh = bpy.data.meshes.new(name)
+    mesh.from_pydata(verts, [], [tuple(range(len(verts)))])
+    mesh.update()
+    return mesh
 
-        position_keys = ([{"frame": cursor_start, "x": first["x"],
-                           "y": first["y"], "pulse": False}] + authored +
-                         [{"frame": cursor_end, "x": last["x"],
-                           "y": last["y"], "pulse": False}])
-        key_linear(strip.transform, "offset_x",
-                   [(item["frame"], item["x"]) for item in position_keys],
-                   "cursor x")
-        key_linear(strip.transform, "offset_y",
-                   [(item["frame"], item["y"]) for item in position_keys],
-                   "cursor y")
-        key_linear(strip, "blend_alpha",
-                   [(cursor_start, 0.0),
-                    (min(cursor_start + 3, cursor_end), 1.0),
-                    (max(cursor_start + 3, cursor_end - 3), 1.0),
-                    (cursor_end, 0.0)], "cursor alpha")
 
-        pulse_keys = [(cursor_start, 1.0)]
-        for item in authored:
-            if item["pulse"]:
-                pulse_keys.extend([
-                    (max(cursor_start, item["frame"] - 1), 1.0),
-                    (item["frame"], 0.82),
-                    (min(cursor_end, item["frame"] + 3), 1.0),
-                ])
-        pulse_keys.append((cursor_end, 1.0))
-        pulse_keys.sort(key=lambda pair: pair[0])
-        key_linear(strip.transform, "scale_x", pulse_keys, "cursor click x")
-        key_linear(strip.transform, "scale_y", pulse_keys, "cursor click y")
-        built.append(strip)
-
-    manifest["cursors"] = len(built)
-    return built
+def add_mesh_object(scene, mesh, name, material, parent=None):
+    obj = bpy.data.objects.new(name, mesh)
+    scene.collection.objects.link(obj)
+    if material:
+        obj.data.materials.append(material)
+    if parent is not None:
+        obj.parent = parent
+    return obj
 
 
 # ---------------------------------------------------------------------------
-# Build: titles, section labels, editorial overlays
+# Environment: world, lights, procedural server geometry, fog
 # ---------------------------------------------------------------------------
-PALETTE = {
-    "cyan": (0.10, 0.78, 0.95),
-    "teal": (0.0, 0.72, 0.65),
-    "soft-blue": (0.45, 0.70, 0.95),
-    "blue": (0.20, 0.50, 0.90),
-    "ice": (0.70, 0.90, 1.00),
-    "slate": (0.55, 0.62, 0.70),
-    "amber": (1.00, 0.72, 0.25),
-    "gold": (1.00, 0.80, 0.30),
-    "violet": (0.55, 0.45, 0.95),
-}
+def build_world(scene):
+    world = scene.world
+    if world is None:
+        world = bpy.data.worlds.new("SkyBaoWorld")
+        scene.world = world
+    world.use_nodes = True
+    for node in list(world.node_tree.nodes):
+        world.node_tree.nodes.remove(node)
+    bg = world.node_tree.nodes.new("ShaderNodeBackground")
+    out = world.node_tree.nodes.new("ShaderNodeOutputWorld")
+    world_cfg = ENVIRONMENT.get("world", {})
+    color = rgb(world_cfg.get(
+        "color", ENVIRONMENT.get("lighting", {}).get("world")),
+        (0.004, 0.008, 0.015))
+    bg.inputs["Color"].default_value = (
+        color[0], color[1], color[2], 1.0)
+    bg.inputs["Strength"].default_value = float(
+        world_cfg.get("strength", 0.85))
+    world.node_tree.links.new(bg.outputs["Background"], out.inputs["Surface"])
 
 
-def tone_color(tone):
-    return PALETTE.get(tone, PALETTE["cyan"])
+def add_light(scene, name, kind, location, target, energy, color, size=None):
+    data = bpy.data.lights.new(name, kind)
+    data.energy = energy
+    data.color = (color[0], color[1], color[2])
+    if kind == "AREA" and size is not None:
+        data.size = size
+    obj = bpy.data.objects.new(name, data)
+    scene.collection.objects.link(obj)
+    obj.location = Vector(location)
+    direction = Vector(target) - Vector(location)
+    obj.rotation_euler = direction.to_track_quat("-Z", "Y").to_euler()
+    return obj
 
 
-def add_text(editor, name, channel, start, end, text, color, font_size,
-             cx, cy, align_x="CENTER", align_y="CENTER", alpha=1.0):
-    s = editor.strips.new_effect(name, "TEXT", channel, start,
-                                 length=max(1, end - start + 1))
-    try:
-        s.text = text
-    except Exception:
-        pass
-    try:
-        s.color = tuple(float(c) for c in color[:3]) + (1.0,)
-    except Exception:
-        pass
-    try:
-        s.font_size = font_size
-    except Exception:
-        pass
-    if BRAND_FONT is not None and hasattr(s, "font"):
+def build_lights(scene):
+    """Low-key neutral/cyan/brand-blue rig; no red, magenta, or green."""
+    lights = ENVIRONMENT.get("lights", [])
+    if not lights:
+        palette = ENVIRONMENT.get("lighting", {})
+        lights = [
+            {"name": "Key.light", "location": [0.0, 1.8, 3.3],
+             "energy": 105.0, "color": rgb(
+                 palette.get("key"), (0.82, 0.90, 1.0)), "size": 1.6},
+            {"name": "Rim.cyan", "location": [3.6, 0.2, 1.5],
+             "energy": 46.0, "color": rgb(
+                 palette.get("rim"), (0.0, 0.72, 1.0)), "size": 1.0},
+            {"name": "Rim.blue", "location": [-3.6, 0.2, 0.3],
+             "energy": 34.0, "color": [0.08, 0.35, 1.0], "size": 1.0},
+            {"name": "Fill.camera", "location": [0.0, -4.2, 1.2],
+             "energy": 12.0, "color": rgb(
+                 palette.get("fill"), (0.72, 0.82, 0.96)), "size": 1.8},
+        ]
+    for item in lights:
+        add_light(scene, item["name"], item.get("kind", "AREA"),
+                  item["location"], item.get("target", [0.0, 0.0, 0.0]),
+                  energy=float(item["energy"]), color=item["color"],
+                  size=float(item.get("size", 1.0)))
+
+
+def build_server_room(scene, materials):
+    """Dark brushed-metal floor and flanking server racks with blue LEDs."""
+    floor = add_mesh_object(
+        scene, make_box_mesh("floor.mesh", 40.0, 40.0, 0.12),
+        "Env.floor", materials["metal"])
+    floor.location.z = -1.35
+
+    rack_mat = materials["metal"]
+    led_cyan = materials["led_cyan"]
+    led_blue = materials["led_blue"]
+
+    def rack(x, z, led_color, led_side):
+        body = add_mesh_object(
+            scene, make_box_mesh("rack.{0}.mesh".format(x), 0.5, 0.62, 2.7),
+            "Env.rack.{0}".format(x), rack_mat)
+        body.location = (x, z, 0.0)
+        for k in (-0.9, 0.0, 0.9):
+            slit = add_mesh_object(
+                scene, make_box_mesh("slit.mesh", 0.06, 0.02, 0.62),
+                "Env.slit.{0}.{1}".format(x, k), led_color, parent=body)
+            slit.location = (led_side * 0.28, 0.0, k)
+            slit.scale.x = led_side
+        return body
+
+    rack(-3.7, -1.4, led_cyan, 1)
+    rack(3.7, -1.4, led_blue, -1)
+    rack(-1.7, -3.2, led_cyan, 1)
+    rack(1.7, -3.2, led_blue, -1)
+
+    # Two thin horizontal server rails behind the slab for depth.
+    # Camera is on negative Y, so positive Y keeps these rails behind the UI.
+    for y in (1.0, 2.0):
+        rail = add_mesh_object(
+            scene, make_box_mesh("rail.mesh", 7.2, 0.03, 0.03),
+            "Env.rail.{0}".format(y), rack_mat)
+        rail.location = (0.0, y, -0.55)
+
+    # Depth now comes from deterministic cloud cards. A uniform fog box hid
+    # the refraction and made the set look flat, so it is intentionally gone.
+
+
+def build_cloud_cards(scene, total, paths):
+    """Three inexpensive textured atmosphere layers with slow parallax."""
+    cards = ENVIRONMENT.get("cloudCards", [])
+    objects = []
+    for index, config in enumerate(cards):
+        card_cfg = dict(config)
+        card_cfg.setdefault("noiseScale", 1.7 + index * 0.55)
+        card_cfg.setdefault("detail", 3.2)
+        card_cfg.setdefault("tint", [0.055 + index * 0.012,
+                                     0.14 + index * 0.018,
+                                     0.24 + index * 0.025])
+        image = None
+        source = config.get("source")
+        if source:
+            image = _load_image(os.path.join(paths["repo"], source))
+        material = cloud_card_material(
+            "Mat.cloud.{0}".format(config.get("id", index)), card_cfg, image)
+        width = float(config.get("width", 9.5 + index * 2.0))
+        height = float(config.get("height", 5.2 + index * 1.0))
+        plane = add_mesh_object(
+            scene,
+            make_rounded_plane_mesh(
+                "cloud.{0}.mesh".format(index), width, height,
+                float(config.get("cornerRadius", 0.8)), 16),
+            "Env.cloud.{0}".format(config.get("id", index)), material)
+        phase = float(config.get("phase", 0.0))
+        start = config.get("start", [
+            (phase - 0.5) * 0.55,
+            float(config.get("depthM", 1.5 + index)),
+            (0.5 - phase) * 0.18,
+        ])
+        drift = config.get("drift", [
+            float(config.get("driftWidthRatio", 0.03)) * SLAB_W,
+            0.0,
+            float(config.get("driftHeightRatio", 0.01)) * SLAB_H,
+        ])
+        period = max(1.0, float(config.get("periodSeconds", 18.0)))
+        sample_frames = set(range(1, total + 1, max(1, FPS // 2)))
+        sample_frames.add(total)
+        for frame in sorted(sample_frames):
+            angle = 2.0 * math.pi * (
+                (frame - 1) / float(FPS) / period + phase)
+            amount = math.sin(angle)
+            plane.location = (
+                float(start[0]) + float(drift[0]) * amount,
+                float(start[1]) + float(drift[1]) * amount,
+                float(start[2]) + float(drift[2]) * amount,
+            )
+            plane.keyframe_insert(data_path="location", frame=frame)
+        objects.append(plane)
+    return objects
+
+
+# ---------------------------------------------------------------------------
+# The glass slab + UI image planes
+# ---------------------------------------------------------------------------
+def rounded_rect_perimeter_point(progress, w, h, radius):
+    """Point on the rounded perimeter, parameterized by approximate arc length."""
+    points = rounded_rect_points(w, h, radius, 24)
+    lengths = []
+    total = 0.0
+    for index, point in enumerate(points):
+        nxt = points[(index + 1) % len(points)]
+        length = math.hypot(nxt[0] - point[0], nxt[1] - point[1])
+        lengths.append(length)
+        total += length
+    target = (progress % 1.0) * total
+    walked = 0.0
+    for index, length in enumerate(lengths):
+        if walked + length >= target:
+            amount = 0.0 if length <= 1e-9 else (target - walked) / length
+            a = points[index]
+            b = points[(index + 1) % len(points)]
+            return (a[0] + (b[0] - a[0]) * amount,
+                    a[1] + (b[1] - a[1]) * amount)
+        walked += length
+    return points[0]
+
+
+def add_perimeter_curve(scene, slab, material):
+    points = rounded_rect_points(SLAB_W, SLAB_H, SLAB_RADIUS, 16)
+    curve_data = bpy.data.curves.new("glass.perimeter.curve", "CURVE")
+    curve_data.dimensions = "3D"
+    curve_data.resolution_u = 2
+    curve_data.bevel_depth = float(nested(
+        ENVIRONMENT, ("edge", "curveBevelM"), nested(
+            ENVIRONMENT, ("edge", "bevelDepth"), 0.0009)))
+    curve_data.bevel_resolution = 3
+    spline = curve_data.splines.new("POLY")
+    spline.points.add(len(points) - 1)
+    for point, (x, z) in zip(spline.points, points):
+        point.co = (x, 0.0, z, 1.0)
+    spline.use_cyclic_u = True
+    obj = bpy.data.objects.new("Glass.perimeter", curve_data)
+    scene.collection.objects.link(obj)
+    curve_data.materials.append(material)
+    obj.parent = slab
+    return obj
+
+
+def add_feathered_glint(scene, slab, material, length, bevel):
+    """Short tapered curve that reads as a specular edge sweep, not an LED dot."""
+    curve_data = bpy.data.curves.new("glass.glint.curve", "CURVE")
+    curve_data.dimensions = "3D"
+    curve_data.resolution_u = 2
+    curve_data.bevel_depth = bevel
+    curve_data.bevel_resolution = 3
+    spline = curve_data.splines.new("NURBS")
+    taper = (0.04, 0.2, 0.55, 0.86, 1.0, 0.86, 0.55, 0.2, 0.04)
+    spline.points.add(len(taper) - 1)
+    for index, (point, radius) in enumerate(zip(spline.points, taper)):
+        position = (index / float(len(taper) - 1) - 0.5) * length
+        point.co = (position, 0.0, 0.0, 1.0)
+        point.radius = radius
+    spline.order_u = min(4, len(taper))
+    spline.use_endpoint_u = True
+    obj = bpy.data.objects.new("Glass.traveling-glint", curve_data)
+    scene.collection.objects.link(obj)
+    curve_data.materials.append(material)
+    obj.parent = slab
+    return obj
+
+
+def build_slab(scene, materials, total):
+    """Rounded layered glass with a quiet cyan perimeter and traveling glint."""
+    slab = add_mesh_object(
+        scene, make_rounded_panel_mesh(
+            "slab.glass.mesh", SLAB_W, SLAB_T, SLAB_H, SLAB_RADIUS, 14),
+        "Glass.slab", materials["glass"])
+    bevel = slab.modifiers.new("Bevel", "BEVEL")
+    bevel.width = float(nested(
+        ENVIRONMENT, ("glass", "layers", "coverRim", "bevelM"), nested(
+            ENVIRONMENT, ("glass", "edgeBevel"), 0.0010)))
+    bevel.segments = 4
+    bevel.limit_method = "NONE"
+    bevel.use_clamp_overlap = True
+
+    add_perimeter_curve(scene, slab, materials["edge_cyan"])
+
+    # A tapered, low-emission segment makes one slow perimeter lap. Its soft
+    # ends and tiny bevel keep it from reading as a floating LED dot or bar.
+    glint = add_feathered_glint(
+        scene, slab, materials["edge_glint"],
+        float(nested(ENVIRONMENT, ("edge", "glintLengthM"), 0.075)),
+        float(nested(ENVIRONMENT, ("edge", "glintBevelM"), 0.00055)))
+    circuit_seconds = float(nested(
+        ENVIRONMENT, ("edge", "highlightCircuitSeconds"), 14.0))
+    circuits = float(nested(
+        ENVIRONMENT, ("edge", "circuitsOverFilm"),
+        (total / float(FPS)) / max(1.0, circuit_seconds)))
+    for frame in range(1, total + 1, 10):
+        progress = circuits * (frame - 1) / max(1.0, total - 1.0)
+        x, z = rounded_rect_perimeter_point(
+            progress, SLAB_W, SLAB_H, SLAB_RADIUS)
+        glint.location = (x, 0.0, z)
+        glint.keyframe_insert(data_path="location", frame=frame)
+        before = rounded_rect_perimeter_point(
+            progress - 0.0005, SLAB_W, SLAB_H, SLAB_RADIUS)
+        after = rounded_rect_perimeter_point(
+            progress + 0.0005, SLAB_W, SLAB_H, SLAB_RADIUS)
+        tangent = math.atan2(after[1] - before[1], after[0] - before[0])
+        glint.rotation_euler.y = -tangent
+        glint.keyframe_insert(data_path="rotation_euler", frame=frame)
+        breath_amount = float(nested(
+            ENVIRONMENT, ("edge", "highlightBreath"), 0.08))
+        breath = 1.0 + breath_amount * math.sin(
+            2.0 * math.pi * frame / (FPS * 5.0))
+        glint.scale = (breath, breath, breath)
+        glint.keyframe_insert(data_path="scale", frame=frame)
+
+    slab.rotation_euler.x = math.radians(float(nested(
+        ENVIRONMENT, ("glass", "tiltDegrees"), 3.0)))
+    return slab
+
+
+def build_clear_covers(scene, slab, material):
+    """Add crisp, unfrosted front/back shells above the UI layer."""
+    offset = SLAB_HALF_T + UI_OFFSET + 0.00035
+    covers = []
+    for face, sign in (("front", -1.0), ("back", 1.0)):
+        cover = add_mesh_object(
+            scene,
+            make_rounded_plane_mesh(
+                "glass.cover.{0}.mesh".format(face),
+                SLAB_W, SLAB_H, SLAB_RADIUS, 14),
+            "Glass.cover.{0}".format(face), material, parent=slab)
+        cover.location.y = sign * offset
+        covers.append(cover)
+    return covers
+
+
+def _load_image(path):
+    require_file(path)
+    img = bpy.data.images.load(path, check_existing=True)
+    if hasattr(img, "alpha_mode"):
         try:
-            s.font = BRAND_FONT
+            img.alpha_mode = "STRAIGHT"
         except Exception:
             pass
     try:
-        s.alignment_x = align_x
-        s.anchor_x = align_x
-        s.anchor_y = align_y
+        img.reload()
     except Exception:
         pass
-    try:
-        s.location = (cx / 1920.0, cy / 1080.0)
-    except Exception:
-        pass
-    try:
-        s.blend_type = "ALPHA_OVER"
-        s.blend_alpha = alpha
-        s.use_shadow = True
-        if hasattr(s, "shadow_color"):
-            s.shadow_color = (0.0, 0.0, 0.0, 0.72)
-    except Exception:
-        pass
-    set_range(s, start, end)
-    return s
+    return img
 
 
-def add_bar(editor, name, channel, start, end, color, cx, cy, w, h, alpha=1.0):
-    s = color_rect(editor, name, channel, start, end, color, alpha)
-    place_rect(s, cx, cy, w, h, 1920.0, 1080.0)
-    return s
-
-
-def animate_text_fade(strip, fade, frames, where):
-    if fade <= 0:
+def _set_opacity(material, frame, value):
+    node = material.node_tree.nodes.get("Opacity")
+    if node is None:
         return
-    key_linear(strip, "blend_alpha",
-               [(frames[0], 0.0), (frames[0] + fade, 1.0),
-                (frames[1] - fade, 1.0), (frames[1], 0.0)], where)
+    node.outputs[0].default_value = float(value)
+    node.outputs[0].keyframe_insert(data_path="default_value", frame=frame)
 
 
-def build_titles_and_overlays(editor, cfg, shotlist, manifest):
-    """Opening/section/final titles + cyan accent bars, pills, flow lines,
-    right-to-left panel emphasis, top-to-bottom popover and focus overlays."""
-    total = cfg["total"]
-    w, h = cfg["width"], cfg["height"]
-    cyan = PALETTE["cyan"]
-    white = (0.98, 0.99, 1.0)
-    soft = PALETTE["soft-blue"]
-    gold = PALETTE["gold"]
-    slate = PALETTE["slate"]
+def build_ui_planes(scene, slab, shotlist, catalog_index, paths, manifest):
+    """Layer rounded UI planes; dissolve within areas and overlap at flips."""
+    shots = shotlist["shots"]
+    planes = []
+    for index, shot in enumerate(shots):
+        src = shot["source"]
+        entry = catalog_index.get(
+            (src["type"], src["id"], src.get("framing")),
+            catalog_index.get((src["type"], src["id"], None)))
+        if not entry:
+            raise FilmError("shot {0}: {1} {2} ({3}) not in catalog".format(
+                shot["number"], src["type"], src["id"], src.get("framing")))
 
-    # ---------- opening title (over shot 1) ----------
-    t_open = add_text(editor, "T.title-open", 50, 12, 60, "SkyBao",
-                      white, 150, w / 2.0, h * 0.60)
-    s_sub = add_text(editor, "T.title-sub", 51, 18, 66,
-                     "Work in flow. Stay in control.", soft, 46,
-                     w / 2.0, h * 0.42)
-    animate_text_fade(t_open, 10, (12, 60), "opening title")
-    animate_text_fade(s_sub, 10, (18, 66), "opening subtitle")
-    rule = add_bar(editor, "A.title-rule", 40, 12, 60, cyan,
-                   w / 2.0, h * 0.50, 260, 4, 1.0)
-    key_linear(rule.transform, "offset_x",
-               [(12, w * 0.10), (22, 0.0), (50, 0.0)], "title rule")
+        shot_start = int(shot["frames"]["start"])
+        shot_end = int(shot["frames"]["end"])
+        face = shot.get("face", "front")
+        is_back = face == "back"
+        previous = shots[index - 1] if index > 0 else None
+        following = shots[index + 1] if index + 1 < len(shots) else None
+        flip_in = previous is not None and previous.get("face") != face
+        flip_out = following is not None and following.get("face") != face
+        dissolve_in = bool(shot.get("transitionIn", {}).get("type") ==
+                           "same-face-dissolve")
+        dissolve_out = bool(following and following.get(
+            "transitionIn", {}).get("type") == "same-face-dissolve")
 
-    # ---------- section micro-labels ----------
-    sections = [
-        ("KNOWLEDGE, GROUNDED", "Ask · trace · cite", 376, 435, "teal"),
-        ("ONE INBOX, ONE THREAD", "Filter · open · analyse", 586, 655, "blue"),
-        ("WORK TURNS INTO DOING", "Board · approve · act", 856, 935, "gold"),
-    ]
-    for i, (head, sub, s_start, s_end, tone) in enumerate(sections):
-        col = tone_color(tone)
-        label = add_text(editor, "T.sect-{0}".format(i), 50, s_start, s_end,
-                         head, col, 40, 320, h * 0.14, align_x="LEFT",
-                         align_y="CENTER")
-        sublab = add_text(editor, "T.sect-sub-{0}".format(i), 51,
-                          s_start + 6, s_end, sub, slate, 30, 320, h * 0.10,
-                          align_x="LEFT", align_y="CENTER")
-        animate_text_fade(label, 8, (s_start, s_end), "section label")
-        animate_text_fade(sublab, 8, (s_start + 6, s_end), "section sub")
+        render_start = shot_start - (ROT_FRAMES // 2 if flip_in else 0)
+        render_end = shot_end + (ROT_FRAMES // 2 if flip_out else
+                                 DISSOLVE_FRAMES if dissolve_out else 0)
+        render_start = max(1, render_start)
+        render_end = min(int(shotlist["format"]["frames"]), render_end)
 
-        # Right-to-left panel emphasis behind the label.
-        panel = color_rect(editor, "A.panel-{0}".format(i), 40, s_start, s_end,
-                           (0.02, 0.04, 0.09), alpha=0.55)
-        place_rect(panel, 320, h * 0.14, 480, 96, w, h)
-        key_linear(panel, "blend_alpha",
-                   [(s_start, 0.0), (s_start + 8, 0.6), (s_end, 0.6)],
-                   "panel fade")
-        panel_x = panel.transform.offset_x
-        key_linear(panel.transform, "offset_x",
-                   [(s_start, w * 0.5), (s_start + 12, panel_x),
-                    (s_end - 8, panel_x)],
-                   "panel slide")
-
-        # Cyan tick on the left edge of the panel.
-        tick = add_bar(editor, "A.tick-{0}".format(i), 41, s_start + 8, s_end,
-                       col, 8, h * 0.14, 6, 64, 1.0)
-        key_linear(tick, "blend_alpha",
-                   [(s_start + 8, 0.0), (s_start + 16, 1.0)], "tick")
-
-        # Top-to-bottom popover emphasis: a small dot drops in above label.
-        dot = add_bar(editor, "A.dot-{0}".format(i), 42, s_start, s_end,
-                      col, 320, h * 0.14, 10, 10, 1.0)
-        dot_y = dot.transform.offset_y
-        key_linear(dot.transform, "offset_y",
-                   [(s_start, dot_y + h * 0.18), (s_start + 14, dot_y)],
-                   "dot drop")
-        key_linear(dot, "blend_alpha",
-                   [(s_start, 0.0), (s_start + 8, 1.0)], "dot fade")
-
-    # ---------- flow-line motion on data-heavy shots ----------
-    flow_windows = [
-        (136, 240, "teal", "LTR"),
-        (511, 585, "violet", "RTL"),
-        (856, 975, "slate", "LTR"),
-    ]
-    for idx, (fs, fe, tone, direction) in enumerate(flow_windows):
-        col = tone_color(tone)
-        line = color_rect(editor, "A.flow-{0}".format(idx), 43, fs, fe,
-                          col, alpha=0.55)
-        place_rect(line, w / 2.0, h * 0.20, 26, 4, w, h)
-        fstart = fs + 6
-        fend = fe - 6
-        if direction == "LTR":
-            key_linear(line.transform, "offset_x",
-                       [(fstart, -w * 0.55), (fend, w * 0.55)], "flow x")
+        clip_info = None
+        if src["type"] == "clip":
+            first = os.path.join(paths["ui"], entry["directory"],
+                                 frame_name(int(src["startFrame"])))
+            image = _load_image(first)
+            clip_info = {
+                "directory": os.path.join(paths["ui"], entry["directory"]),
+                "trim_start": int(src["startFrame"]),
+                "trim_end": int(src["endFrame"]),
+                "shot_start": shot_start,
+                "shot_end": shot_end,
+                "render_start": render_start,
+                "render_end": render_end,
+                "timeline": (os.path.join(paths["ui"], entry["timeline"])
+                             if entry.get("timeline") else None),
+                "shot": shot,
+                "face": face,
+            }
         else:
-            key_linear(line.transform, "offset_x",
-                       [(fstart, w * 0.55), (fend, -w * 0.55)], "flow x")
-        key_linear(line, "blend_alpha",
-                   [(fstart, 0.0), (fstart + 8, 0.6),
-                    (fend - 8, 0.6), (fend, 0.0)], "flow fade")
+            image = _load_image(os.path.join(paths["ui"], entry["file"]))
 
-    # ---------- focus / vignette overlays (channels 90+) ----------
-    grade = color_rect(editor, "G.grade", 90, 1, total,
-                       (0.005, 0.012, 0.03), alpha=0.10)
-    # Letterbox bars: cinematic focus frame, pulse at section changes.
-    topbar = color_rect(editor, "G.topbar", 91, 1, total, (0.0, 0.0, 0.0),
-                        alpha=0.22)
-    place_rect(topbar, w / 2.0, h - 27.0, w, 54, w, h)
-    botbar = color_rect(editor, "G.botbar", 92, 1, total, (0.0, 0.0, 0.0),
-                        alpha=0.22)
-    place_rect(botbar, w / 2.0, 27.0, w, 54, w, h)
-    # Edge dims complete a soft vignette silhouette.
-    for edge_index, (name, xc) in enumerate((("L", 24.0), ("R", w - 24.0))):
-        edge = color_rect(editor, "G.edge{0}".format(name), 93 + edge_index,
-                          1, total,
-                          (0.0, 0.0, 0.0), alpha=0.18)
-        place_rect(edge, xc, h / 2.0, 48, h, w, h)
-    for pulse_at in (376, 586, 856, 1141):
-        key_linear(topbar, "blend_alpha",
-                   [(pulse_at - 4, 0.22), (pulse_at + 4, 0.42),
-                    (pulse_at + 14, 0.22)], "letterbox pulse")
-        key_linear(botbar, "blend_alpha",
-                   [(pulse_at - 4, 0.22), (pulse_at + 4, 0.42),
-                    (pulse_at + 14, 0.22)], "letterbox pulse")
+        mat = ui_material("UI.mat.S{0:02d}".format(shot["number"]), image)
+        plane = add_mesh_object(
+            scene,
+            make_rounded_plane_mesh(
+                "ui.{0}.mesh".format(shot["number"]),
+                SLAB_W, SLAB_H, UI_RADIUS, 14),
+            "UI.S{0:02d}.{1}".format(shot["number"], face), mat, parent=slab)
 
-    # ---------- final title ----------
-    # The final authored UI strip fades back to the cloud stage underneath,
-    # leaving this closing promise clean without fabricating another screen.
-    t_end = add_text(editor, "T.title-end", 55, 1148, 1200, "You stay in control.",
-                     cyan, 88, w / 2.0, h * 0.58)
-    s_end = add_text(editor, "T.title-end-sub", 56, 1156, 1200,
-                     "SkyBao keeps the loop yours — every source, every step,"
-                     " every approval.", white, 34, w / 2.0, h * 0.46)
-    animate_text_fade(t_end, 9, (1148, 1200), "final title")
-    animate_text_fade(s_end, 9, (1156, 1200), "final sub")
-    end_rule = add_bar(editor, "A.end-rule", 54, 1152, 1200, cyan,
-                       w / 2.0, h * 0.52, 180, 4, 1.0)
-    key_linear(end_rule.transform, "offset_x",
-               [(1152, w * 0.5), (1164, 0.0)], "end rule")
+        # Later shots sit microns closer during a dissolve, avoiding z-fight.
+        face_sign = 1.0 if is_back else -1.0
+        layer = index * 0.000012
+        plane.location.y = face_sign * (SLAB_HALF_T + UI_OFFSET + layer)
+        plane.scale.x = -1.0 if is_back else 1.0
+        if clip_info:
+            clip_info["plane"] = plane
+            clip_info["layer"] = layer
+            FILM_CLIP_INFO.append(clip_info)
+
+        plane.hide_render = True
+        if render_start > 1:
+            plane.keyframe_insert(data_path="hide_render",
+                                  frame=render_start - 1)
+        plane.hide_render = False
+        plane.keyframe_insert(data_path="hide_render", frame=render_start)
+        plane.hide_render = True
+        plane.keyframe_insert(data_path="hide_render", frame=render_end + 1)
+
+        _set_opacity(mat, render_start, 1.0 if flip_in else
+                     0.0 if dissolve_in else 1.0)
+        if dissolve_in:
+            _set_opacity(mat, min(render_end, shot_start + DISSOLVE_FRAMES), 1.0)
+        if dissolve_out:
+            _set_opacity(mat, shot_end, 1.0)
+            _set_opacity(mat, render_end, 0.0)
+        planes.append(plane)
+
+    manifest["ui_planes"] = len(planes)
+    return planes
+
+
+def build_cursor_tracks(scene, slab, paths, materials, manifest):
+    """Render cursor motion from navigation timeline JSON, separate from UI pixels."""
+    count = 0
+    for info in FILM_CLIP_INFO:
+        shot = info["shot"]
+        if shot.get("kind") != "navigation" or not info.get("timeline"):
+            continue
+        timeline = load_json(info["timeline"])
+        events = timeline.get("cursor", [])
+        trim_zero = info["trim_start"] - 1
+        events = [event for event in events
+                  if trim_zero <= int(event["frame"]) <= info["trim_end"] - 1]
+        if not events:
+            raise FilmError("navigation shot {0} has no cursor timeline".format(
+                shot["id"]))
+
+        face_sign = 1.0 if info["face"] == "back" else -1.0
+        root = bpy.data.objects.new("Cursor.{0}".format(shot["id"]), None)
+        scene.collection.objects.link(root)
+        root.parent = slab
+        root.scale.x = -1.0 if info["face"] == "back" else 1.0
+        root.location.y = face_sign * (
+            SLAB_HALF_T + UI_OFFSET + info.get("layer", 0.0) + 0.0008)
+
+        outer = add_mesh_object(
+            scene, make_cursor_mesh("cursor.outer.mesh", 0.069),
+            "Cursor.outer.{0}".format(shot["number"]),
+            materials["cursor_outline"], parent=root)
+        inner = add_mesh_object(
+            scene, make_cursor_mesh("cursor.inner.mesh", 0.053),
+            "Cursor.inner.{0}".format(shot["number"]),
+            materials["cursor_fill"], parent=root)
+        inner.location = (0.004, face_sign * 0.00018, -0.004)
+
+        first_global = None
+        last_click = None
+        for event in events:
+            global_frame = info["shot_start"] + (int(event["frame"]) - trim_zero)
+            if global_frame < info["render_start"] or global_frame > info["render_end"]:
+                continue
+            nx = float(event.get("nx", 0.5))
+            ny = float(event.get("ny", 0.5))
+            x = (nx - 0.5) * SLAB_W
+            if info["face"] == "back":
+                x *= -1.0
+            z = (0.5 - ny) * SLAB_H
+            root.location.x = x
+            root.location.z = z
+            root.keyframe_insert(data_path="location", frame=global_frame)
+            first_global = global_frame if first_global is None else first_global
+            if event.get("event") == "click":
+                last_click = global_frame
+                base_x = -1.0 if info["face"] == "back" else 1.0
+                root.scale = (base_x, 1.0, 1.0)
+                root.keyframe_insert(data_path="scale", frame=max(1, global_frame - 1))
+                root.scale = (base_x * 0.82, 0.82, 0.82)
+                root.keyframe_insert(data_path="scale", frame=global_frame)
+                root.scale = (base_x, 1.0, 1.0)
+                root.keyframe_insert(data_path="scale", frame=global_frame + 3)
+
+        if first_global is None:
+            continue
+        hide_frame = min(info["render_end"] + 1,
+                         (last_click + 7) if last_click else info["shot_end"] + 1)
+        # Object visibility is not inherited reliably from an Empty in Eevee,
+        # so keyframe the root and both rendered cursor layers explicitly.
+        for cursor_object in (root, outer, inner):
+            cursor_object.hide_render = True
+            cursor_object.keyframe_insert(
+                data_path="hide_render", frame=max(1, first_global - 1))
+            cursor_object.hide_render = False
+            cursor_object.keyframe_insert(
+                data_path="hide_render", frame=first_global)
+            cursor_object.hide_render = True
+            cursor_object.keyframe_insert(
+                data_path="hide_render", frame=hide_frame)
+        count += 1
+    manifest["cursor_tracks"] = count
+    return count
 
 
 # ---------------------------------------------------------------------------
-# Build: sound
+# Camera
 # ---------------------------------------------------------------------------
-def build_sound(editor, cfg, paths, manifest):
+def build_camera(scene, total):
+    cam_data = bpy.data.cameras.new("FilmCamera")
+    cam_data.lens = FOCAL_MM
+    cam_data.sensor_width = float(nested(
+        ENVIRONMENT, ("camera", "sensorWidthMM"), 36.0))
+    dof = cam_data.dof
+    dof.use_dof = True
+    dof.aperture_fstop = 4.0
+    dof.focus_distance = CAM_Z
+    cam = bpy.data.objects.new("FilmCamera", cam_data)
+    scene.collection.objects.link(cam)
+    # Explicit orientation avoids the ambiguous roll produced when a tracking
+    # quaternion's up axis is parallel to the view direction. From -Y the
+    # camera looks toward +Y, with world +Z as screen-up and +X as screen-right.
+    cam.location = (0.0, -CAM_Z, 0.0)
+    cam.rotation_euler = (math.radians(90.0), 0.0, 0.0)
+    scene.camera = cam
+
+    # Slow Z breathing only — the camera never wanders in X/Y.
+    for frame in range(1, total + 1, 15):
+        t = frame / FPS
+        z = CAM_Z + BREATH_AMP * math.sin(2.0 * math.pi * t / BREATH_PERIOD_S)
+        cam.location.y = -z
+        cam.keyframe_insert(data_path="location", frame=frame)
+    return cam
+
+
+# ---------------------------------------------------------------------------
+# Slab flip animation
+# ---------------------------------------------------------------------------
+def smootherstep(t):
+    t = max(0.0, min(1.0, t))
+    return t * t * t * (t * (t * 6.0 - 15.0) + 10.0)
+
+
+def build_flips(slab, shotlist, total):
+    """Continuous clockwise 180-degree flips only at major-area boundaries."""
+    flips = shotlist.get("direction", {}).get("flips", [])
+    tilt = math.radians(float(nested(
+        ENVIRONMENT, ("glass", "tiltDegrees"), 3.0)))
+    slab.rotation_euler = (tilt, 0.0, 0.0)
+    slab.keyframe_insert(data_path="rotation_euler", frame=1)
+
+    for index, flip in enumerate(flips):
+        a = int(flip["start"])
+        b = int(flip["end"])
+        start_angle = index * math.pi
+        end_angle = (index + 1) * math.pi
+        slab.rotation_euler.z = start_angle
+        slab.keyframe_insert(data_path="rotation_euler", frame=max(1, a))
+        step = 2
+        for frame in range(a + step, b, step):
+            t = (frame - a) / float(b - a)
+            angle = start_angle + smootherstep(t) * (end_angle - start_angle)
+            slab.rotation_euler.z = angle
+            slab.keyframe_insert(data_path="rotation_euler", frame=frame)
+        slab.rotation_euler.z = end_angle
+        slab.keyframe_insert(data_path="rotation_euler", frame=min(total, b))
+
+    slab.rotation_euler.z = len(flips) * math.pi
+    slab.keyframe_insert(data_path="rotation_euler", frame=total)
+
+
+# ---------------------------------------------------------------------------
+# Sound
+# ---------------------------------------------------------------------------
+FILM_CLIP_INFO = []  # populated by build_ui_planes for per-frame UI updates
+
+
+def prepare_ui_frame(sc, frame):
+    """Point the active shot's UI texture at the correct capture frame.
+
+    Clip frames are loaded as plain images (no sequences: those lose their
+    buffer in background Eevee). Before each render, the plane for the shot
+    covering ``frame`` is pointed at its exact source frame via filepath +
+    reload, which always decodes in background mode.
+    """
+    for info in FILM_CLIP_INFO:
+        if not (info["render_start"] <= frame <= info["render_end"]):
+            continue
+        offset = max(0, min(frame - info["shot_start"],
+                            info["trim_end"] - info["trim_start"]))
+        cf = info["trim_start"] + offset
+        path = os.path.join(info["directory"], frame_name(cf))
+        if not os.path.isfile(path):
+            continue
+        tex = next(n for n in
+                   info["plane"].data.materials[0].node_tree.nodes
+                   if n.type == "TEX_IMAGE")
+        if tex.image.filepath == path:
+            continue
+        try:
+            tex.image.filepath = path
+            tex.image.reload()
+        except Exception as exc:
+            raise FilmError("cannot load clip frame {0}: {1}".format(path, exc))
+
+
+def build_sound(scene, paths, manifest):
     """Attach the generated mix WAV if present; otherwise note + continue."""
-    total = cfg["total"]
+    total = scene.frame_end
     wav = paths["audio"]
     if not os.path.isfile(wav):
         manifest["sound"] = "SKIPPED (missing: {0})".format(wav)
         return None
+    scene.sequence_editor_create()
+    editor = scene.sequence_editor
     try:
         s = editor.strips.new_sound("Audio.skybao-mix", wav, 120, 1, stream=0)
-        set_range(s, 1, total)
+        s.frame_start = 1
+        s.frame_final_end = total + 1
         manifest["sound"] = os.path.basename(wav)
         return s
     except Exception as exc:
@@ -906,46 +1284,136 @@ def build_sound(editor, cfg, paths, manifest):
 # Manifest / save / render
 # ---------------------------------------------------------------------------
 def write_manifest(cfg, paths, manifest):
-    shotlist = manifest["shotlist_path"]
     print("=" * 64)
-    print("SkyBao film · Blender build manifest")
+    print("SkyBao film · Blender 3D build manifest")
     print("  format  : {0}x{1} @ {2}fps, frames 1..{3}".format(
         cfg["width"], cfg["height"], cfg["fps"], cfg["total"]))
-    print("  shotlist: {0}".format(shotlist))
+    print("  engine  : Eevee (motion blur, DOF, parallax cloud cards)")
+    print("  slab    : {0}m x {1}m x {2}m glass, bevelled".format(
+        SLAB_W, SLAB_H, SLAB_T))
     print("  shots   : {0}".format(len(manifest["shots"])))
     for shot in manifest["shots"]:
-        print("    S{0:02d} {1:<22} frames {2}-{3}  ch {4}  {5} {6}".format(
-            shot["number"], shot["title"], shot["frames"][0], shot["frames"][1],
-            shot["channel"], shot["source"], shot["trim"]))
-    print("  cursors : {0} interaction overlays".format(
-        manifest.get("cursors", 0)))
+        print("    S{0:02d} {1:<6} {2:<30} frames {3}-{4}  {5}".format(
+            shot["number"], shot["face"], shot["id"],
+            shot["frames"][0], shot["frames"][1], shot["source"]))
+    print("  ui planes: {0}".format(manifest.get("ui_planes", 0)))
+    print("  cursor tracks: {0}".format(manifest.get("cursor_tracks", 0)))
+    print("  area flips: {0}".format(manifest.get("area_flips", 0)))
     print("  sound   : {0}".format(manifest.get("sound", "none")))
     print("  out     : {0}".format(paths["blendout"]))
 
 
-def save_blend(paths):
+def sha256_file(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def write_build_manifest(sc, cfg, paths, catalog, manifest):
+    """Record exact inputs/settings so a UI change has an auditable rebuild."""
+    input_assets = {}
+    for input_id, relative_path in ENVIRONMENT.get("toolInputs", {}).items():
+        if input_id in ("uiCatalog", "shotlist"):
+            continue
+        absolute_path = os.path.join(paths["repo"], relative_path)
+        if os.path.isfile(absolute_path):
+            input_assets[input_id] = {
+                "path": relative_path,
+                "sha256": sha256_file(absolute_path),
+            }
+    catalog_assets = catalog.get("assets", [])
+    used_ui_assets = {}
+    for shot in load_json(paths["shotlist"]).get("shots", []):
+        source = shot.get("source", {})
+        key = "{0}:{1}:{2}".format(
+            source.get("type"), source.get("id"), source.get("framing"))
+        if key in used_ui_assets:
+            continue
+        entry = next((item for item in catalog_assets
+                      if item.get("type") == source.get("type")
+                      and item.get("id") == source.get("id")
+                      and item.get("framing") == source.get("framing")), None)
+        if not entry:
+            raise FilmError("cannot lock missing UI asset {0}".format(key))
+        recipe_sha = entry.get("recipeSha256")
+        content_sha = entry.get("contentSha256")
+        if not recipe_sha or not content_sha:
+            raise FilmError("cannot lock legacy UI asset {0}".format(key))
+        used_ui_assets[key] = {
+            "type": source.get("type"),
+            "id": source.get("id"),
+            "framing": source.get("framing"),
+            "ownerId": entry.get("ownerId"),
+            "recipeVersion": entry.get("recipeVersion"),
+            "recipeSha256": recipe_sha,
+            "contentSha256": content_sha,
+        }
+    payload = {
+        "schemaVersion": 1,
+        "shotlist": {
+            "path": os.path.relpath(paths["shotlist"], paths["repo"]),
+            "sha256": sha256_file(paths["shotlist"]),
+        },
+        "environment": {
+            "path": os.path.relpath(paths["environment"], paths["repo"]),
+            "sha256": sha256_file(paths["environment"]),
+            "id": ENVIRONMENT.get("id"),
+            "seed": ENVIRONMENT.get("seed"),
+        },
+        "uiCatalog": {
+            "path": os.path.relpath(paths["catalog"], paths["repo"]),
+            "sha256": sha256_file(paths["catalog"]),
+            "aggregateSha256": catalog.get("aggregateSha256"),
+        },
+        "inputAssets": input_assets,
+        "usedUiAssets": [used_ui_assets[key]
+                         for key in sorted(used_ui_assets)],
+        "blender": {
+            "version": bpy.app.version_string,
+            "engine": sc.render.engine,
+            "objects": len(sc.collection.objects),
+        },
+        "format": {
+            "width": cfg["width"], "height": cfg["height"],
+            "fps": cfg["fps"], "frames": cfg["total"],
+        },
+        "scene": manifest,
+    }
+    os.makedirs(os.path.dirname(paths["build_manifest"]), exist_ok=True)
+    with open(paths["build_manifest"], "w", encoding="utf-8") as handle:
+        json.dump(payload, handle, indent=2, sort_keys=True)
+        handle.write("\n")
+    return paths["build_manifest"]
+
+
+def save_blend(sc, paths):
     out = paths["blendout"]
     os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
-    with WindowContext(bpy.context.scene):
+    with WindowContext(sc):
         bpy.ops.wm.save_as_mainfile(filepath=out)
     return out
 
 
-def render_frames(sc, cfg, quality, paths):
-    """Render PNG frames into frames/<quality>/ using per-frame writes."""
-    out_dir = os.path.join(paths["film"], "frames", quality)
-    os.makedirs(out_dir, exist_ok=True)
-    scene_render = sc.render
-    scene_render.resolution_percentage = 50 if quality == "preview" else 100
+def _prepare_render(scene, quality, out_dir):
+    scene_render = scene.render
+    scene_render.resolution_percentage = 50 if quality in ("preview", "sample") else 100
     scene_render.image_settings.file_format = "PNG"
     scene_render.image_settings.color_mode = "RGBA"
     scene_render.image_settings.compression = 15
-    scene_render.filepath = os.path.join(out_dir, "frame_")
 
-    print("  rendering {0} frames into {1} ...".format(
-        cfg["total"], out_dir))
+
+def render_frames(sc, cfg, quality, paths):
+    """Render every film frame into frames/<quality>/ (delivery pipeline)."""
+    out_dir = os.path.join(paths["film"], "frames", quality)
+    os.makedirs(out_dir, exist_ok=True)
+    _prepare_render(sc, quality, out_dir)
+    scene_render = sc.render
+    print("  rendering {0} frames into {1} ...".format(cfg["total"], out_dir))
     for frame in range(cfg["start_frame"], cfg["total"] + 1):
         sc.frame_set(frame)
+        prepare_ui_frame(sc, frame)
         scene_render.filepath = os.path.join(
             out_dir, "frame-{0:06d}.png".format(frame))
         with WindowContext(sc):
@@ -959,16 +1427,14 @@ def render_samples(sc, cfg, frames, paths):
     """Render selected half-resolution review frames without a full export."""
     out_dir = os.path.join(paths["film"], "review")
     os.makedirs(out_dir, exist_ok=True)
+    _prepare_render(sc, "sample", out_dir)
     scene_render = sc.render
-    scene_render.resolution_percentage = 50
-    scene_render.image_settings.file_format = "PNG"
-    scene_render.image_settings.color_mode = "RGBA"
-    scene_render.image_settings.compression = 15
     for frame in frames:
         if frame < 1 or frame > cfg["total"]:
             raise FilmError("sample frame {0} outside 1..{1}".format(
                 frame, cfg["total"]))
         sc.frame_set(frame)
+        prepare_ui_frame(sc, frame)
         scene_render.filepath = os.path.join(
             out_dir, "frame-{0:04d}.png".format(frame))
         with WindowContext(sc):
@@ -977,14 +1443,42 @@ def render_samples(sc, cfg, frames, paths):
     return out_dir
 
 
+def sample_frames_for_shots(shotlist, requested):
+    """Resolve shot IDs/numbers to compact start/mid/end visual reviews."""
+    wanted = set(requested or [])
+    frames = set()
+    found = set()
+    for shot in shotlist.get("shots", []):
+        keys = {str(shot.get("number")), str(shot.get("id", ""))}
+        if not wanted.intersection(keys):
+            continue
+        found.update(wanted.intersection(keys))
+        start = int(shot["frames"]["start"])
+        end = int(shot["frames"]["end"])
+        frames.update((start, (start + end) // 2, end))
+        transition = shot.get("transitionOut", {})
+        if transition.get("type") == "area-flip":
+            frames.update((int(transition["start"]),
+                           int(transition["edgeOn"]),
+                           int(transition["end"])))
+    missing = wanted - found
+    if missing:
+        raise FilmError("unknown --shots values: {0}".format(
+            ", ".join(sorted(missing))))
+    return sorted(frames)
+
+
 # ---------------------------------------------------------------------------
 # Main build
 # ---------------------------------------------------------------------------
 def build(args):
-    global BRAND_FONT
     paths = resolve_paths(args)
     shotlist = load_json(paths["shotlist"])
+    environment = load_json(paths["environment"])
     catalog = load_json(paths["catalog"])
+    apply_environment_config(environment, shotlist)
+    FILM_CLIP_INFO.clear()
+    random.seed(int(environment.get("seed", 0)))
     cfg = dict(
         width=int(args["width"]),
         height=int(args["height"]),
@@ -1005,42 +1499,85 @@ def build(args):
 
     catalog_index = build_catalog_index(catalog)
     sc = ensure_scene("skybao-film", cfg)
-    require_file(paths["font"])
-    try:
-        BRAND_FONT = bpy.data.fonts.load(paths["font"], check_existing=True)
-    except TypeError:
-        BRAND_FONT = bpy.data.fonts.load(paths["font"])
-    editor = sc.sequence_editor
-    if editor is None:
-        raise FilmError("sequence_editor_create() did not produce an editor")
 
-    manifest = dict(shotlist_path=paths["shotlist"], shots=[], cursors=0,
-                    sound="none")
+    # --- materials ---
+    materials = {
+        "glass": glass_material("Mat.glass"),
+        "edge_cyan": edge_accent_material(
+            "Mat.edge.cyan", rgb(
+                nested(environment, ("edge", "palette"), ["#38BDF8"])[0],
+                (0.22, 0.72, 1.0)),
+            float(nested(environment, ("edge", "baseEmission"), 0.12))),
+        "edge_glint": edge_accent_material(
+            "Mat.edge.glint", rgb(
+                nested(environment, ("edge", "palette"),
+                       ["#38BDF8", "#2563EB"])[-1],
+                (0.12, 0.55, 1.0)),
+            float(nested(environment, ("edge", "highlightEmission"), 0.45))),
+        "cover": clear_cover_material("Mat.glass.cover"),
+        "metal": brushed_metal_material("Mat.metal"),
+        "led_cyan": led_material("Mat.led.cyan", (0.0, 0.85, 1.0)),
+        "led_blue": led_material("Mat.led.blue", (0.08, 0.35, 1.0)),
+        "cursor_outline": cursor_material(
+            "Mat.cursor.outline", (0.005, 0.01, 0.02)),
+        "cursor_fill": cursor_material(
+            "Mat.cursor.fill", (0.92, 0.97, 1.0)),
+    }
 
-    build_background(editor, cfg, paths)
-    build_media(editor, cfg, shotlist, catalog_index, paths, manifest)
-    build_cursors(editor, cfg, shotlist, catalog_index, paths, manifest)
-    build_titles_and_overlays(editor, cfg, shotlist, manifest)
-    build_sound(editor, cfg, paths, manifest)
+    build_world(sc)
+    build_lights(sc)
+    build_server_room(sc, materials)
+    build_cloud_cards(sc, cfg["total"], paths)
+    slab = build_slab(sc, materials, cfg["total"])
+    build_clear_covers(sc, slab, materials["cover"])
+    camera = build_camera(sc, cfg["total"])
 
-    # Mark all loaded UI images straight-alpha (catalog guarantees it).
-    for img in bpy.data.images:
-        if hasattr(img, "alpha_mode") and img.pixels is not None:
-            try:
-                img.alpha_mode = "STRAIGHT"
-            except Exception:
-                pass
+    # Motivated rack focus only at the four meaningful area flips.
+    dof = camera.data.dof
+    for flip in shotlist.get("direction", {}).get("flips", []):
+        a = int(flip["start"])
+        mid = int(flip["edgeOn"])
+        b = int(flip["end"])
+        for frame, dist in ((a, CAM_Z), (mid, CAM_Z - 0.35), (b, CAM_Z)):
+            dof.focus_distance = dist
+            dof.keyframe_insert(data_path="focus_distance", frame=frame)
+
+    manifest = dict(shotlist_path=paths["shotlist"], shots=[], ui_planes=0,
+                    cursor_tracks=0, sound="none",
+                    area_flips=len(shotlist.get("direction", {}).get(
+                        "flips", [])), environment=environment.get("id"))
+    for shot in shots:
+        src = shot["source"]
+        manifest["shots"].append({
+            "number": shot["number"],
+            "id": shot.get("id", "shot-{0}".format(shot["number"])),
+            "kind": shot.get("kind", "action"),
+            "group": shot.get("group"),
+            "face": shot.get("face", "front"),
+            "frames": [shot["frames"]["start"], shot["frames"]["end"]],
+            "source": "{0}:{1}".format(src["type"], src["id"]),
+        })
+
+    build_ui_planes(sc, slab, shotlist, catalog_index, paths, manifest)
+    build_cursor_tracks(sc, slab, paths, materials, manifest)
+    build_flips(slab, shotlist, cfg["total"])
+    build_sound(sc, paths, manifest)
 
     write_manifest(cfg, paths, manifest)
-    saved = save_blend(paths)
+    saved = save_blend(sc, paths)
+    built_manifest = write_build_manifest(sc, cfg, paths, catalog, manifest)
     print("  saved blend: {0}".format(saved))
-    print("  strips total: {0}".format(len(editor.strips)))
+    print("  build manifest: {0}".format(built_manifest))
+    print("  objects: {0}".format(len(sc.collection.objects)))
     print("=" * 64)
 
     if args["quality"]:
         render_frames(sc, cfg, args["quality"], paths)
-    if args["samples"]:
-        render_samples(sc, cfg, args["samples"], paths)
+    sample_frames = set(args["samples"] or [])
+    if args["shots"]:
+        sample_frames.update(sample_frames_for_shots(shotlist, args["shots"]))
+    if sample_frames:
+        render_samples(sc, cfg, sorted(sample_frames), paths)
     return saved
 
 

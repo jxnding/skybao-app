@@ -18,6 +18,7 @@ import {
 import WorkspaceFrame, { WorkspaceSurface } from "@/components/WorkspaceFrame";
 import { ACME_STORY_PROMPT } from "./storyData";
 import { useCapture } from "./capture";
+import CaptureNavigationDrawer from "./CaptureNavigationDrawer";
 import "./styles.css";
 
 const RESEARCH_STEPS = [
@@ -477,6 +478,7 @@ export default function AssistantStory() {
             </div>
           </div>
           <StorySourcePreview source={source} onClose={() => setSource(null)} />
+          <CaptureNavigationDrawer area="assistant" />
         </main>
       </WorkspaceSurface>
     </WorkspaceFrame>

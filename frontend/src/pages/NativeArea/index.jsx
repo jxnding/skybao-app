@@ -12,17 +12,13 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import {
   Bell,
-  BookOpen,
   Robot,
   CheckCircle,
-  ChatCircleDots,
   Clock,
   Database,
   DotsThree,
   FileText,
   Folder,
-  GearSix,
-  Layout,
   MagnifyingGlass,
   PaperPlaneTilt,
   Plus,
@@ -35,54 +31,9 @@ import Workspace from "@/models/workspace";
 import paths from "@/utils/paths";
 import { ACME_STORY_PROMPT } from "./storyData";
 import { useCapture } from "./capture";
+import CaptureNavigationDrawer from "./CaptureNavigationDrawer";
+import { PRIMARY_AREAS as AREAS } from "./navigation";
 import "./styles.css";
-
-const AREAS = [
-  {
-    id: "assistant",
-    label: "Assistant",
-    icon: ChatCircleDots,
-    children: ["Chat", "History"],
-  },
-  {
-    id: "knowledge",
-    label: "Knowledge",
-    icon: BookOpen,
-    children: ["Files", "Collections", "Data", "Connections", "Skills"],
-  },
-  {
-    id: "communications",
-    label: "Communications",
-    icon: PaperPlaneTilt,
-    children: ["Inbox", "Slack"],
-  },
-  {
-    id: "work",
-    label: "Work",
-    icon: Layout,
-    children: [
-      "Overview",
-      "Board",
-      "Tasks",
-      "Reminders",
-      "Approvals",
-      "Agent runs",
-    ],
-  },
-  {
-    id: "admin",
-    label: "Admin",
-    icon: GearSix,
-    children: [
-      "Privacy",
-      "Users",
-      "Permissions",
-      "Models",
-      "Deployment",
-      "System",
-    ],
-  },
-];
 
 const FILES = [
   [
@@ -2291,6 +2242,7 @@ export default function NativeArea({ area }) {
         </div>
       )}
       <SkillPanel skill={skill} close={() => setSkill(null)} />
+      <CaptureNavigationDrawer area={area} />
     </main>
   );
 }

@@ -1,0 +1,283 @@
+{
+  "id": "area-nav-communications-work",
+  "fps": 30,
+  "frameCount": 44,
+  "durationSeconds": 1.4666666666666666,
+  "sampled": false,
+  "capturedFrames": [
+    {
+      "frame": 0,
+      "file": "frame-000001.png"
+    },
+    {
+      "frame": 1,
+      "file": "frame-000002.png"
+    },
+    {
+      "frame": 2,
+      "file": "frame-000003.png"
+    },
+    {
+      "frame": 3,
+      "file": "frame-000004.png"
+    },
+    {
+      "frame": 4,
+      "file": "frame-000005.png"
+    },
+    {
+      "frame": 5,
+      "file": "frame-000006.png"
+    },
+    {
+      "frame": 6,
+      "file": "frame-000007.png"
+    },
+    {
+      "frame": 7,
+      "file": "frame-000008.png"
+    },
+    {
+      "frame": 8,
+      "file": "frame-000009.png"
+    },
+    {
+      "frame": 9,
+      "file": "frame-000010.png"
+    },
+    {
+      "frame": 10,
+      "file": "frame-000011.png"
+    },
+    {
+      "frame": 11,
+      "file": "frame-000012.png"
+    },
+    {
+      "frame": 12,
+      "file": "frame-000013.png"
+    },
+    {
+      "frame": 13,
+      "file": "frame-000014.png"
+    },
+    {
+      "frame": 14,
+      "file": "frame-000015.png"
+    },
+    {
+      "frame": 15,
+      "file": "frame-000016.png"
+    },
+    {
+      "frame": 16,
+      "file": "frame-000017.png"
+    },
+    {
+      "frame": 17,
+      "file": "frame-000018.png"
+    },
+    {
+      "frame": 18,
+      "file": "frame-000019.png"
+    },
+    {
+      "frame": 19,
+      "file": "frame-000020.png"
+    },
+    {
+      "frame": 20,
+      "file": "frame-000021.png"
+    },
+    {
+      "frame": 21,
+      "file": "frame-000022.png"
+    },
+    {
+      "frame": 22,
+      "file": "frame-000023.png"
+    },
+    {
+      "frame": 23,
+      "file": "frame-000024.png"
+    },
+    {
+      "frame": 24,
+      "file": "frame-000025.png"
+    },
+    {
+      "frame": 25,
+      "file": "frame-000026.png"
+    },
+    {
+      "frame": 26,
+      "file": "frame-000027.png"
+    },
+    {
+      "frame": 27,
+      "file": "frame-000028.png"
+    },
+    {
+      "frame": 28,
+      "file": "frame-000029.png"
+    },
+    {
+      "frame": 29,
+      "file": "frame-000030.png"
+    },
+    {
+      "frame": 30,
+      "file": "frame-000031.png"
+    },
+    {
+      "frame": 31,
+      "file": "frame-000032.png"
+    },
+    {
+      "frame": 32,
+      "file": "frame-000033.png"
+    },
+    {
+      "frame": 33,
+      "file": "frame-000034.png"
+    },
+    {
+      "frame": 34,
+      "file": "frame-000035.png"
+    },
+    {
+      "frame": 35,
+      "file": "frame-000036.png"
+    },
+    {
+      "frame": 36,
+      "file": "frame-000037.png"
+    },
+    {
+      "frame": 37,
+      "file": "frame-000038.png"
+    },
+    {
+      "frame": 38,
+      "file": "frame-000039.png"
+    },
+    {
+      "frame": 39,
+      "file": "frame-000040.png"
+    },
+    {
+      "frame": 40,
+      "file": "frame-000041.png"
+    },
+    {
+      "frame": 41,
+      "file": "frame-000042.png"
+    },
+    {
+      "frame": 42,
+      "file": "frame-000043.png"
+    },
+    {
+      "frame": 43,
+      "file": "frame-000044.png"
+    }
+  ],
+  "cursor": [
+    {
+      "frame": 8,
+      "x": 960,
+      "y": 540,
+      "nx": 0.5,
+      "ny": 0.5,
+      "event": "move"
+    },
+    {
+      "frame": 9,
+      "x": 847,
+      "y": 505.79,
+      "nx": 0.44115,
+      "ny": 0.46832,
+      "event": "move"
+    },
+    {
+      "frame": 10,
+      "x": 734,
+      "y": 471.57,
+      "nx": 0.38229,
+      "ny": 0.43664,
+      "event": "move"
+    },
+    {
+      "frame": 11,
+      "x": 621,
+      "y": 437.36,
+      "nx": 0.32344,
+      "ny": 0.40496,
+      "event": "move"
+    },
+    {
+      "frame": 12,
+      "x": 508,
+      "y": 403.14,
+      "nx": 0.26458,
+      "ny": 0.37328,
+      "event": "move"
+    },
+    {
+      "frame": 13,
+      "x": 395,
+      "y": 368.93,
+      "nx": 0.20573,
+      "ny": 0.3416,
+      "event": "move"
+    },
+    {
+      "frame": 14,
+      "x": 282,
+      "y": 334.71,
+      "nx": 0.14688,
+      "ny": 0.30992,
+      "event": "move"
+    },
+    {
+      "frame": 15,
+      "x": 169,
+      "y": 300.5,
+      "nx": 0.08802,
+      "ny": 0.27824,
+      "event": "move"
+    },
+    {
+      "frame": 16,
+      "x": 169,
+      "y": 300.5,
+      "nx": 0.08802,
+      "ny": 0.27824,
+      "event": "move"
+    },
+    {
+      "frame": 16,
+      "x": 169,
+      "y": 300.5,
+      "nx": 0.08802,
+      "ny": 0.27824,
+      "event": "down"
+    },
+    {
+      "frame": 16,
+      "x": 169,
+      "y": 300.5,
+      "nx": 0.08802,
+      "ny": 0.27824,
+      "event": "up"
+    },
+    {
+      "frame": 16,
+      "x": 169,
+      "y": 300.5,
+      "nx": 0.08802,
+      "ny": 0.27824,
+      "event": "click"
+    }
+  ]
+}

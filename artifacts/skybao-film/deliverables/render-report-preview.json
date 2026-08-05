@@ -1,0 +1,38 @@
+{
+  "title": "SkyBao · The Acme Workspace Flow",
+  "mode": "preview",
+  "durationSeconds": 40,
+  "frames": 1200,
+  "fps": 30,
+  "dimensions": "960x540",
+  "video": {
+    "index": 0,
+    "codec_name": "h264",
+    "codec_type": "video",
+    "width": 960,
+    "height": 540,
+    "pix_fmt": "yuv420p",
+    "color_space": "bt709",
+    "color_transfer": "bt709",
+    "color_primaries": "bt709",
+    "r_frame_rate": "30/1"
+  },
+  "audio": {
+    "index": 1,
+    "codec_name": "aac",
+    "codec_type": "audio",
+    "sample_rate": "48000",
+    "channels": 2,
+    "r_frame_rate": "0/0"
+  },
+  "files": {
+    "video": "artifacts/skybao-film/deliverables/skybao-40s-preview.mp4",
+    "blend": "artifacts/skybao-film/skybao-film.blend",
+    "mix": "artifacts/skybao-film/audio/skybao-mix.wav"
+  },
+  "sha256": {
+    "video": "e67af4bcd78fe802d822790be3640c90f10c4ca51b801ccfe798342d77daba37",
+    "blend": "832a4f26e725e871ac8556e0151730af41a0b4cb02c78323777f050756c744a2",
+    "mix": "ff4c45fa4973e7c71936ec4cdb93e3d4f9283aa5de4aa699e6a7ed22197f2833"
+  }
+}

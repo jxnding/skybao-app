@@ -1,86 +1,107 @@
-# SkyBao 40-second film
+# SkyBao durable film recipe
 
-This folder turns the editor-neutral SkyBao UI library into a finished, silent-narration product film with deterministic instrumental music and restrained interaction sound effects. The edit is built in Blender's Video Sequence Editor so it remains easy to open, trim, restyle, and re-render.
+This folder is the durable, editor-neutral recipe for the 40-second SkyBao
+product film. It uses real React/Puppeteer UI captures as image sequences and
+an editable Blender scene; no UI frame is painted by hand. A UI change should
+therefore mean recapturing and rerendering, not rebuilding the video concept.
 
-## Render
+## Contract
 
-Generate the complete UI library first if `artifacts/skybao-ui/catalog.json` is missing:
+`shotlist.json` is schema v2 and is the source of truth for the edit:
+
+- 1,200 contiguous frames, 40 seconds, 30 fps, 1920×1080.
+- Nineteen shots: fourteen UI actions, four primary-area navigation bridges,
+  and one final Admin hold.
+- Five ordered areas: Assistant, Knowledge, Communications, Work, Admin.
+- A group keeps one slab face. Faces alternate only at the four area changes.
+- The only rotations are four continuous clockwise flips: 231–251, 471–491,
+  711–731, and 951–971. Their beat-centered edge-on frames are 241, 481, 721,
+  and 961.
+- Same-face edits use a six-frame dissolve. Ordinary action and navigation
+  clips remain workspace-framed, so app chrome only appears when the real
+  navigation capture deliberately exposes it.
+- Every navigation bridge shares one zero-based timing contract: click at 16,
+  drawer retraction at 18, and flip start at 23. Validation enforces the causal
+  order before Blender is allowed to render.
+
+`environment.json` is schema v1 and owns the visual contract consumed by the
+Blender builder:
+
+- a real rounded, layered 5 mm glass panel and matching rounded UI mask;
+- sharp emissive UI over the frosted glass backing;
+- cyan/blue perimeter lighting with one restrained traveling glint;
+- three seeded blue-gray cloud/fog cards at separate depths for parallax;
+- a centered, enlarged, nearly locked camera and low-key blue lighting.
+
+The environment recipe intentionally contains no alternate accent colors. It
+is data, not a one-off render tweak: changing a visual value here and
+regenerating is the supported revision path.
+
+## Regenerate after a UI change
+
+From the repository root:
 
 ```bash
+# 1. Rebuild the capture library from the real React mock and its capture IDs.
 yarn video:assets
-```
 
-Then run one of the film targets from the repository root:
+# A quick retake is also supported by the capture command:
+yarn video:assets --only=work-board-drag,area-nav-work-admin
 
-```bash
-# 960x540 review MP4; the default
+# 2. Refuse a film build if any used capture is stale or a film contract broke.
+yarn video:film --check
+
+# 3. Build an editable Blender scene, then make the review render.
+yarn video:film --build-only
 yarn video:film
 
-# Save the editable Blender project without rendering video
-yarn video:film --build-only
-
-# 1920x1080, 30 fps, 40-second H.264 master
+# 4. Produce the 1080p delivery master only after the review is approved.
 yarn video:film --final
 ```
 
-Add `--keep-frames` to retain the intermediate PNG render sequence. Otherwise the verified frames are removed after encoding to avoid leaving a large redundant cache.
+Every film command first performs a read-only freshness check of the exact 19
+capture owners referenced by the shotlist. The generated `build-manifest.json`
+locks each used owner's recipe and content SHA-256 alongside the shotlist,
+environment, cloud texture, builder, and UI catalog hashes. If the React UI or
+capture recipe changes, the film refuses to render until those owners are
+recaptured.
 
-The runner looks for Blender at `/Applications/Blender.app/Contents/MacOS/Blender` and FFmpeg under Homebrew, then falls back to executables on `PATH`. Override any executable explicitly when needed:
+The capture manifest defines the real interaction and cursor timeline for each
+clip. Navigation bridges are normal capture assets too: open the actual primary
+navigation, move the cursor, click the next area, then let the slab flip. Do
+not substitute a separately drawn navigation overlay.
 
-```bash
-BLENDER_BIN=/path/to/blender \
-FFMPEG_BIN=/path/to/ffmpeg \
-FFPROBE_BIN=/path/to/ffprobe \
-yarn video:film --final
-```
+When adding or changing a UI action:
 
-## Output
+1. Add or update the asset in `frontend/scripts/video/skybao-assets.mjs`.
+2. Preserve stable `data-capture-id` selectors in the React surface.
+3. Give the motion asset deterministic frame actions and a cursor timeline.
+4. Reference its exact source range in `shotlist.json`.
+5. Regenerate the assets, validate, review samples, then render.
 
-Generated files are checked into Git so the Blender edit and delivery master can be opened without first recapturing or rerendering the UI:
+## Targeted review checkpoint
 
-```text
-artifacts/skybao-film/
-├── skybao-film.blend
-├── audio/skybao-mix.wav
-├── deliverables/
-│   ├── skybao-40s-preview.mp4
-│   ├── skybao-40s-master.mp4
-│   └── render-report-{preview|final}.json
-└── frames/{preview|final}/          # only with --keep-frames
-```
-
-The render report verifies duration, frame rate, dimensions, audio format, and SHA-256 hashes. The final encode is H.264/yuv420p with BT.709 metadata, fast start, stereo 48 kHz AAC, and an audio target of -16 LUFS / -1.5 dBTP.
-
-## Editorial structure
-
-`shotlist.json` is the source of truth: fourteen contiguous shots, exactly 1,200 frames at 30 fps. It uses only real views and interactions already captured from the SkyBao mock:
-
-1. Assistant establish and global Ask SkyBao
-2. Research cascade and live answer typing
-3. Knowledge search, source preview, and data analysis
-4. Communications selection, draft review, and task conversion
-5. Work board drag, approval, and agent-run detail
-6. Assistant return and closing control message
-
-Blender adds the editorial layer: cloud staging, straight-alpha compositing, per-shot Z-axis pushes and pans, short crossfades, section typography, sliding panels, dropping dots, moving flow lines, a subtle cinematic frame, and the closing dim-out. The source clips provide the actual UI interactions; the edit does not fabricate unsupported Word or node-canvas product surfaces.
-
-## Files to edit
-
-- `shotlist.json` — timing, clip trims, camera start/end values, transitions, and SFX cues.
-- `build-blender.py` — VSE construction, type, branded overlays, and camera animation.
-- `generate-audio.mjs` — deterministic score and per-shot sound design.
-- `validate.mjs` — source, timing, and audio assertions.
-- `render.mjs` — Blender/FFmpeg orchestration and delivery validation.
-
-To review a few frames without rendering the whole film, run the builder directly:
+Before a full render, inspect stable UI frames and the four flip midpoints. The
+supported targeted command rebuilds the editable scene and renders only those
+review frames:
 
 ```bash
-/Applications/Blender.app/Contents/MacOS/Blender \
-  --background --factory-startup \
-  --python frontend/scripts/video/film/build-blender.py -- \
-  --repo "$PWD" \
-  --out "$PWD/artifacts/skybao-film/skybao-film.blend" \
-  --samples 30,150,300,540,700,900,1100,1190
+yarn video:film --samples=60,150,241,300,420,481,560,660,721,800,900,961,1030,1120,1180
 ```
 
-Sample images are written to `artifacts/skybao-film/review/`.
+Approve only when these conditions hold:
+
+- UI remains sharp, rounded, and approximately 10–15% larger than the prior
+  centered framing.
+- The background has slow layered parallax, while the camera does not drift.
+- The glass edge stays cyan/blue and never becomes a bright edge-on bar.
+- Every area change reads as a real sidebar cursor click followed by the same
+  clockwise flip; no hard cut is used between product areas.
+- The Admin group lands and holds cleanly without editorial title text.
+
+The preflight checks capture recipe/content freshness, schema, five-group
+choreography, all four flips, same-face dissolves, navigation timing,
+rounded/environment values, optical UI coverage, every catalog reference,
+every source PNG in each trim, and each required cursor timeline. A failure
+after changing UI is actionable: recapture the named asset or correct the
+recipe rather than hand-editing rendered frames.

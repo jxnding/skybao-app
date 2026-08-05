@@ -2380,8 +2380,72 @@
 }
 
 /* Native route host: the existing AnythingLLM sidebar owns primary navigation. */
-.sb-native-area { display:block; min-height:100%; width:100%; }.sb-native-area .sb-content{max-width:1380px;margin:0 auto;padding:28px 34px 100px}.sb-native-head{position:sticky;top:0;z-index:8;display:flex;align-items:center;justify-content:space-between;gap:18px;padding:19px 34px;border-bottom:1px solid var(--sb-line);background:var(--sb-panel-strong);backdrop-filter:blur(18px)}.sb-native-head h1{font:700 22px "Space Grotesk",Inter,sans-serif;margin:3px 0 0;color:var(--sb-strong)}.sb-native-tabs{display:flex;gap:4px;overflow:auto}.sb-native-tabs button{border:0;border-radius:8px;background:transparent;padding:8px 10px;color:var(--sb-nav-muted);font:600 11px Inter,sans-serif;white-space:nowrap;cursor:pointer}.sb-native-tabs button:hover,.sb-native-tabs button.selected{background:var(--sb-control-hover);color:var(--sb-strong)}
-@media(max-width:700px){.sb-native-head{position:static;display:block;padding:18px 16px 12px}.sb-native-tabs{margin-top:12px}.sb-native-area .sb-content{padding:22px 16px 90px}}
+.sb-native-area {
+  display: block;
+  min-height: 100%;
+  width: 100%;
+}
+.sb-native-area .sb-content {
+  max-width: 1380px;
+  margin: 0 auto;
+  padding: 28px 34px 100px;
+}
+.sb-native-head {
+  position: sticky;
+  top: 0;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 19px 34px;
+  border-bottom: 1px solid var(--sb-line);
+  background: var(--sb-panel-strong);
+  backdrop-filter: blur(18px);
+}
+.sb-native-head h1 {
+  font:
+    700 22px "Space Grotesk",
+    Inter,
+    sans-serif;
+  margin: 3px 0 0;
+  color: var(--sb-strong);
+}
+.sb-native-tabs {
+  display: flex;
+  gap: 4px;
+  overflow: auto;
+}
+.sb-native-tabs button {
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  padding: 8px 10px;
+  color: var(--sb-nav-muted);
+  font:
+    600 11px Inter,
+    sans-serif;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.sb-native-tabs button:hover,
+.sb-native-tabs button.selected {
+  background: var(--sb-control-hover);
+  color: var(--sb-strong);
+}
+@media (max-width: 700px) {
+  .sb-native-head {
+    position: static;
+    display: block;
+    padding: 18px 16px 12px;
+  }
+  .sb-native-tabs {
+    margin-top: 12px;
+  }
+  .sb-native-area .sb-content {
+    padding: 22px 16px 90px;
+  }
+}
 
 /* Final theme pass: legacy shorthand declarations use the site fonts and
    foreground tokens without changing icon rendering. */
@@ -3812,6 +3876,85 @@ html.skybao-artifact-capture *::after {
   width: auto !important;
   height: calc(100% - 32px) !important;
   margin: 16px !important;
+}
+
+/* Capture-only: primary-area handoff before the physical slab flips. The
+ * component supplies these values from the frame clock; no timer is involved. */
+.sb-capture-nav-drawer {
+  position: fixed;
+  z-index: 60;
+  top: 46px;
+  bottom: 46px;
+  left: 42px;
+  width: 254px;
+  box-sizing: border-box;
+  padding: 22px 14px;
+  border: 1px solid rgba(125, 211, 252, 0.24);
+  border-radius: 20px;
+  background: rgba(8, 18, 35, 0.9);
+  box-shadow: 20px 18px 48px rgba(2, 8, 23, 0.42);
+  backdrop-filter: blur(20px);
+  color: #e5f3ff;
+  pointer-events: auto;
+}
+.sb-capture-nav-brand {
+  padding: 0 10px;
+  color: #f8fbff;
+  font:
+    700 21px "Space Grotesk",
+    Inter,
+    sans-serif;
+  letter-spacing: -0.04em;
+}
+.sb-capture-nav-drawer > p {
+  margin: 6px 10px 23px;
+  color: #8ba5bf;
+  font:
+    600 10px Inter,
+    sans-serif;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.sb-capture-nav-drawer nav {
+  display: grid;
+  gap: 5px;
+}
+.sb-capture-nav-drawer button {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 43px;
+  gap: 11px;
+  border: 0;
+  border-radius: 11px;
+  padding: 0 12px;
+  background: transparent;
+  color: #9db2c9;
+  font:
+    600 13px Inter,
+    sans-serif;
+  text-align: left;
+}
+.sb-capture-nav-drawer button.selected {
+  background: rgba(14, 165, 233, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.16);
+  color: #effaff;
+}
+.sb-capture-nav-drawer button svg {
+  width: 18px;
+  height: 18px;
+  color: #7dd3fc;
+}
+.sb-capture-nav-drawer button i {
+  margin-left: auto;
+  border-radius: 999px;
+  padding: 2px 6px;
+  background: rgba(56, 189, 248, 0.18);
+  color: #bae6fd;
+  font:
+    700 10px Inter,
+    sans-serif;
+  font-style: normal;
 }
 
 @keyframes sb-story-spin {

@@ -1,13 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import {
-  BookOpen,
-  ChatCircleDots,
-  GearSix,
-  Layout,
-  List,
-  PaperPlaneTilt,
-  Plus,
-} from "@phosphor-icons/react";
+import { List, Plus } from "@phosphor-icons/react";
 import NewWorkspaceModal, {
   useNewWorkspaceModal,
 } from "../Modals/NewWorkspace";
@@ -23,33 +15,21 @@ import { useSidebarToggle, ToggleSidebarButton } from "./SidebarToggle";
 import SearchBox from "./SearchBox";
 import { Tooltip } from "react-tooltip";
 import { createPortal } from "react-dom";
-
-const PRIMARY_AREAS = [
-  { label: "Assistant", to: "/", icon: ChatCircleDots },
-  { label: "Knowledge", to: "/knowledge", icon: BookOpen },
-  {
-    label: "Communications",
-    to: "/communications",
-    icon: PaperPlaneTilt,
-    badge: "1",
-  },
-  { label: "Work", to: "/work", icon: Layout },
-  { label: "Admin", to: "/admin", icon: GearSix, admin: true },
-];
+import { PRIMARY_AREAS } from "@/pages/NativeArea/navigation";
 
 function PrimaryAreas({ onNavigate }) {
   const { pathname } = useLocation();
   return (
     <nav className="flex flex-col gap-1" aria-label="SkyBao primary areas">
-      {PRIMARY_AREAS.map(({ label, to, icon: Icon, badge, admin }) => {
+      {PRIMARY_AREAS.map(({ label, route, icon: Icon, badge, admin }) => {
         const active =
-          to === "/"
+          route === "/"
             ? pathname === "/" || pathname.startsWith("/workspace/")
-            : pathname.startsWith(to);
+            : pathname.startsWith(route);
         return (
           <Link
-            key={to}
-            to={to}
+            key={route}
+            to={route}
             onClick={onNavigate}
             aria-current={active ? "page" : undefined}
             className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${admin ? "mt-3 border-t border-white/10 pt-5 light:border-slate-300" : ""} ${active ? "bg-sky-500/20 text-sky-200 light:bg-sky-500/15 light:text-sky-800" : "text-slate-300 hover:bg-white/10 hover:text-white light:text-slate-600 light:hover:bg-sky-100 light:hover:text-sky-800"}`}

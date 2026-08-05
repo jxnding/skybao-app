@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 1,
+  "id": "skybao-glass-atmosphere",
+  "seed": 830194,
+  "format": {
+    "width": 1920,
+    "height": 1080,
+    "fps": 30
+  },
+  "toolInputs": {
+    "uiCatalog": "artifacts/skybao-ui/catalog.json",
+    "shotlist": "frontend/scripts/video/film/shotlist.json",
+    "cloudTexture": "frontend/public/clouds-dark.webp",
+    "consumer": "frontend/scripts/video/film/build-blender.py"
+  },
+  "glass": {
+    "widthM": 3.3,
+    "heightM": 1.85625,
+    "thicknessM": 0.005,
+    "cornerRadiusM": 0.055,
+    "cornerSegments": 8,
+    "uiInsetM": 0.012,
+    "uiMaskCornerRadiusM": 0.043,
+    "layers": {
+      "backing": {
+        "roughness": 0.21,
+        "transmission": 0.8,
+        "ior": 1.45,
+        "baseColor": "#1B2B3F"
+      },
+      "ui": {
+        "mode": "crisp-emissive",
+        "offsetM": 0.0004
+      },
+      "coverRim": {
+        "roughness": 0.035,
+        "transmission": 0.97,
+        "ior": 1.45,
+        "coatWeight": 0.25,
+        "opacity": 0.055,
+        "bevelM": 0.001
+      }
+    }
+  },
+  "edge": {
+    "palette": ["#7DD3FC", "#38BDF8", "#2563EB"],
+    "baseEmission": 0.07,
+    "highlightEmission": 0.2,
+    "highlightPath": "rounded-perimeter",
+    "highlightCircuitSeconds": 14,
+    "highlightBreath": 0.05,
+    "curveBevelM": 0.0008,
+    "glintLengthM": 0.075,
+    "glintBevelM": 0.00055
+  },
+  "cloudCards": [
+    {
+      "id": "near",
+      "source": "frontend/public/clouds-dark.webp",
+      "depthM": 1.4,
+      "opacity": 0.14,
+      "tint": [0.11, 0.27, 0.43],
+      "emission": 0.9,
+      "uvScale": [1.0, 1.0, 1.0],
+      "uvOffset": [0.0, 0.0, 0.0],
+      "low": 0.08,
+      "high": 0.32,
+      "driftWidthRatio": 0.035,
+      "driftHeightRatio": 0.018,
+      "periodSeconds": 14,
+      "phase": 0.13
+    },
+    {
+      "id": "mid",
+      "source": "frontend/public/clouds-dark.webp",
+      "depthM": 2.8,
+      "opacity": 0.085,
+      "tint": [0.075, 0.2, 0.35],
+      "emission": 0.82,
+      "uvScale": [1.24, 1.24, 1.0],
+      "uvOffset": [0.19, 0.08, 0.0],
+      "low": 0.07,
+      "high": 0.3,
+      "driftWidthRatio": -0.025,
+      "driftHeightRatio": 0.012,
+      "periodSeconds": 19,
+      "phase": 0.47
+    },
+    {
+      "id": "far",
+      "source": "frontend/public/clouds-dark.webp",
+      "depthM": 4.5,
+      "opacity": 0.055,
+      "tint": [0.055, 0.14, 0.27],
+      "emission": 0.75,
+      "uvScale": [1.52, 1.52, 1.0],
+      "uvOffset": [0.43, 0.14, 0.0],
+      "low": 0.06,
+      "high": 0.28,
+      "driftWidthRatio": 0.018,
+      "driftHeightRatio": -0.01,
+      "periodSeconds": 27,
+      "phase": 0.79
+    }
+  ],
+  "camera": {
+    "distanceM": 5.86,
+    "baselineDistanceM": 6.72,
+    "lensMM": 50,
+    "sensorWidthMM": 36,
+    "maxBreathM": 0.018,
+    "lockXY": true,
+    "rackFocusAtAreaFlips": true
+  },
+  "lighting": {
+    "world": "#010207",
+    "key": "#D9ECFF",
+    "rim": "#38BDF8",
+    "fill": "#9CC8FF",
+    "led": "#38BDF8",
+    "floor": "#0F172A"
+  }
+}
