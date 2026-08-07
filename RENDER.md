@@ -194,7 +194,8 @@ yarn video:film --samples=targeted
 yarn video:film --samples=60,150,241
 
 # The focused scene-contract checkpoints are also available without a full render.
-yarn video:film:scene-contract --blend artifacts/skybao-film/skybao-film.blend
+yarn video:film:scene-contract --repo . --blend artifacts/skybao-film/skybao-film.blend \
+  --manifest artifacts/skybao-film/build-manifest.json
 
 # 5. Build the editable scene and render the 960x540 review.
 yarn video:film --build-only

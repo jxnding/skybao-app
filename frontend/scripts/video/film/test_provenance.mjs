@@ -1,4 +1,8 @@
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { assertCurrentProfileManifest, assertCurrentRenderReport, bindManifest, inputFingerprint, profileFingerprint } from "./provenance.mjs";
 
 // Fast fixture for the handoff contract. This deliberately constructs the same
@@ -36,6 +40,18 @@ const report = {
 };
 assertCurrentProfileManifest(final, preview.inputFingerprint);
 assertCurrentRenderReport(report, final.inputFingerprint, "2".repeat(64));
+
+const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "skybao-report-"));
+const fixtureManifest = path.join(fixtureRoot, "build-manifest-final.json");
+fs.writeFileSync(fixtureManifest, "versioned manifest bytes");
+const fixtureHash = crypto.createHash("sha256").update(fs.readFileSync(fixtureManifest)).digest("hex");
+const checksumFixture = {
+  sha256: { buildManifest: fixtureHash },
+  provenance: { buildManifest: { path: fixtureManifest, sha256: fixtureHash } },
+};
+assert.equal(checksumFixture.sha256.buildManifest, fixtureHash);
+assert.equal(checksumFixture.provenance.buildManifest.sha256, fixtureHash);
+fs.rmSync(fixtureRoot, { recursive: true, force: true });
 
 const changed = fixture("final");
 changed.scene.objects = 2;

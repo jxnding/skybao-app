@@ -513,7 +513,7 @@ run(
 run(
   blender,
   ["--background", stagedBlendPath, "--python", path.join(here, "scene-contract.py"), "--",
-    "--repo", repo, "--manifest", stagedManifestPath, "--allow-staged"],
+    "--repo", repo, "--manifest", stagedManifestPath, "--audio", stagedAudioPath, "--allow-staged"],
   "staged scene contract"
 );
 
@@ -799,6 +799,7 @@ fs.writeFileSync(stagedVersionedManifestPath, `${JSON.stringify(versionedManifes
 // Reports bind to the immutable profile manifest (including its blend hash),
 // not merely to the unversioned editable manifest.
 report.provenance.buildManifest.sha256 = sha256(stagedVersionedManifestPath);
+report.sha256.buildManifest = sha256(stagedVersionedManifestPath);
 fs.writeFileSync(stagedReportPath, `${JSON.stringify(report, null, 2)}\n`);
 
 const promotions = [

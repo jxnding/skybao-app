@@ -505,15 +505,17 @@ def check_dissolves(shotlist):
     return count // 2
 
 
-def check_audio(repo, manifest_path, allow_staged=False):
+def check_audio(repo, manifest_path, allow_staged=False, audio_path=None):
     if not manifest_path: die("--manifest is required for exact saved-scene audio validation")
     manifest = read_json(manifest_path)
     audio = manifest.get("audio")
     if not isinstance(audio, dict) or not isinstance(audio.get("sha256"), str): die("manifest audio provenance is missing")
     canonical = os.path.realpath(os.path.join(repo, "artifacts/skybao-film/audio/skybao-mix.wav"))
-    if not os.path.isfile(canonical): die("canonical manifest audio file is missing")
+    selected = os.path.realpath(audio_path) if allow_staged and audio_path else canonical
+    if allow_staged and not audio_path: die("--allow-staged requires --audio")
+    if not os.path.isfile(selected): die("manifest audio file is missing")
     import hashlib
-    digest = hashlib.sha256(open(canonical, "rb").read()).hexdigest()
+    with open(selected, "rb") as handle: digest = hashlib.sha256(handle.read()).hexdigest()
     if digest != audio["sha256"]: die("saved-scene audio hash differs from manifest")
     editor = bpy.context.scene.sequence_editor
     all_strips = list(
@@ -540,7 +542,7 @@ def check_audio(repo, manifest_path, allow_staged=False):
     repo_root = os.path.realpath(repo)
     try: under_repo = os.path.commonpath((repo_root, actual)) == repo_root
     except ValueError: under_repo = False
-    actual_digest = hashlib.sha256(open(actual, "rb").read()).hexdigest() if os.path.isfile(actual) else None
+    actual_digest = hashlib.sha256(open(selected, "rb").read()).hexdigest() if os.path.isfile(selected) else None
     if actual != canonical or actual_digest != audio["sha256"]:
         die("audio strip is external or not the canonical manifest audio")
     if audio.get("path") != "artifacts/skybao-film/audio/skybao-mix.wav":
@@ -764,13 +766,13 @@ def check_slab(shotlist, environment):
 
 
 def main():
-    parser=argparse.ArgumentParser(); parser.add_argument("--repo",default=None); parser.add_argument("--manifest",default=None); parser.add_argument("--allow-staged",action="store_true")
+    parser=argparse.ArgumentParser(); parser.add_argument("--repo",default=None); parser.add_argument("--manifest",default=None); parser.add_argument("--audio",default=None); parser.add_argument("--allow-staged",action="store_true")
     args,_=parser.parse_known_args(sys.argv[sys.argv.index("--")+1:] if "--" in sys.argv else [])
     global ENVIRONMENT, REPO
     repo=os.path.abspath(args.repo or os.path.join(os.path.dirname(__file__),"../../../..")); REPO=repo
     shotlist=read_json(os.path.join(repo,"frontend/scripts/video/film/shotlist.json")); environment=read_json(os.path.join(repo,"frontend/scripts/video/film/environment.json"))
     ENVIRONMENT=environment
-    tracks=check_cursor(repo,shotlist,environment); check_callouts(shotlist,environment); check_ui_materials(shotlist); check_slab(shotlist,environment); check_camera(environment, shotlist); dissolves=check_dissolves(shotlist); check_audio(repo, args.manifest, args.allow_staged)
+    tracks=check_cursor(repo,shotlist,environment); check_callouts(shotlist,environment); check_ui_materials(shotlist); check_slab(shotlist,environment); check_camera(environment, shotlist); dissolves=check_dissolves(shotlist); check_audio(repo, args.manifest, args.allow_staged, args.audio)
     print("scene-contract: PASS (cursorWindows=%d, dissolves=%d, callouts=%d, focusWindows=%d)"%(tracks,dissolves,len(shotlist["editorialCallouts"]),len(environment["camera"]["focusMoves"])))
 
 

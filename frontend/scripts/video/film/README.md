@@ -199,7 +199,8 @@ only `--samples=targeted` claims canonical coverage:
 
 ```bash
 BLENDER_BIN=/Applications/Blender.app/Contents/MacOS/Blender \
-  yarn video:film:scene-contract --blend artifacts/skybao-film/skybao-film.blend
+  yarn video:film:scene-contract --repo . --blend artifacts/skybao-film/skybao-film.blend \
+  --manifest artifacts/skybao-film/build-manifest.json
 ```
 
 Render staging runs this same read-only check before promotion. It verifies the

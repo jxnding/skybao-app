@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 "use strict";
 
-import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { spawnSync } from "child_process";
@@ -147,6 +146,34 @@ function assertImage(file, width, height) {
     throw new Error(`${file} is not ${width}x${height}`);
 }
 
+function assertReportAssets(report, profile, manifest, videoPath, blendPath, mixPath, manifestPath) {
+  const expected = {
+    mode: profile,
+    video: path.relative(repo, videoPath),
+    blend: path.relative(repo, blendPath),
+    mix: path.relative(repo, mixPath),
+    buildManifest: path.relative(repo, manifestPath),
+  };
+  if (report.mode !== expected.mode || report.render?.cycles?.profile !== expected.mode)
+    throw new Error(`full handoff rejected: ${profile} report has the wrong mode/profile`);
+  for (const [name, relative] of Object.entries(expected).filter(([name]) => name !== "mode")) {
+    if (report.files?.[name] !== relative)
+      throw new Error(`full handoff rejected: ${profile} report has the wrong ${name} path`);
+  }
+  const files = { video: videoPath, blend: blendPath, mix: mixPath, buildManifest: manifestPath };
+  for (const [name, file] of Object.entries(files)) {
+    if (!fs.existsSync(file) || report.sha256?.[name] !== sha256(file))
+      throw new Error(`full handoff rejected: ${profile} report ${name} checksum does not match the bound file`);
+  }
+  const manifestHash = sha256(manifestPath);
+  if (report.provenance?.buildManifest?.path !== expected.buildManifest ||
+      report.provenance?.buildManifest?.sha256 !== manifestHash ||
+      report.sha256.buildManifest !== manifestHash)
+    throw new Error(`full handoff rejected: ${profile} report build manifest checksum is inconsistent`);
+  if (manifest.artifacts?.blend?.sha256 !== sha256(blendPath))
+    throw new Error(`full handoff rejected: ${profile} manifest blend checksum does not match the bound blend`);
+}
+
 function promoteWithRollback(items, stage) {
   const rollbackRoot = path.join(stage, "rollback");
   const moved = [];
@@ -199,7 +226,15 @@ if (!reviewOnly) {
     if (!fs.existsSync(full)) throw new Error(`full handoff requires ${file}`);
     let value; try { value = JSON.parse(fs.readFileSync(full, "utf8")); } catch { value = null; }
     const profile = file.includes("preview") ? "preview" : "final";
-    try { assertCurrentRenderReport(value, fingerprint, sha256(path.join(deliverableRoot, `build-manifest-${profile}.json`))); } catch { throw new Error(`full handoff rejected: ${file} is not bound to the current ${profile} profile manifest (stale v3 deliverable)`); }
+    const manifest = manifests.get(profile);
+    try {
+      assertCurrentRenderReport(value, fingerprint, sha256(path.join(deliverableRoot, `build-manifest-${profile}.json`)));
+      assertReportAssets(value, profile, manifest,
+        profile === "final" ? masterPath : previewPath,
+        path.join(artifactRoot, `skybao-film-${profile}.blend`),
+        path.join(artifactRoot, "audio", "skybao-mix.wav"),
+        path.join(deliverableRoot, `build-manifest-${profile}.json`));
+    } catch (error) { throw new Error(`full handoff rejected: ${file} is not bound to the current ${profile} profile manifest: ${error.message}`); }
   }
   for (const file of ["skybao-film-preview.blend", "skybao-film-final.blend"]) {
     const full = path.join(artifactRoot, file);
@@ -222,13 +257,14 @@ function staged(relative) {
   return { source, target };
 }
 
+let poster = null;
 if (!reviewOnly) {
 const posterShot = shotlist.shots.find((shot) => shot.id === "work-board-drag");
 if (!posterShot) throw new Error("shotlist is missing work-board-drag");
 const posterFrame = Math.round(
   shotStart(posterShot) + (shotEnd(posterShot) - shotStart(posterShot)) * 0.73
 );
-const poster = staged("deliverables/skybao-poster.png");
+poster = staged("deliverables/skybao-poster.png");
 renderPng(
   masterPath,
   poster.source,
