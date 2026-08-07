@@ -204,7 +204,7 @@ yarn video:film
 # 6. After review approval, render the 1920x1080 master.
 yarn video:film --final
 
-# 7. Refresh only editor-facing derivatives when the master is unchanged.
+# 7. Explicitly refresh editor-facing derivatives after both current renders.
 yarn video:film:handoff
 ```
 

@@ -23,7 +23,7 @@
   "inputAssets": {
     "builder": {
       "path": "frontend/scripts/video/film/build-blender.py",
-      "sha256": "68a54355353f7f4acc99c7d2b7840758d6155b8a1d2d0c951b80eaf390c4a6a0"
+      "sha256": "a051550e928d42da1348f82b68cf3d0ae92674d84ffa9498858d4900e12807d9"
     },
     "cloudCard-far": {
       "path": "frontend/public/clouds-dark.webp",
@@ -43,7 +43,7 @@
     },
     "consumer": {
       "path": "frontend/scripts/video/film/build-blender.py",
-      "sha256": "68a54355353f7f4acc99c7d2b7840758d6155b8a1d2d0c951b80eaf390c4a6a0"
+      "sha256": "a051550e928d42da1348f82b68cf3d0ae92674d84ffa9498858d4900e12807d9"
     },
     "cursorHelper": {
       "path": "frontend/scripts/video/film/cursor_window.py",
@@ -51,7 +51,7 @@
     },
     "sceneContract": {
       "path": "frontend/scripts/video/film/scene-contract.py",
-      "sha256": "1a4030a03291104388b90b8b1b8d485cbde8bf393d34cc0e2fe00dab7146e608"
+      "sha256": "9554b5d08318cf419674002becdb863f488144382508351b18a1ee1ea1dea99d"
     },
     "shotlist": {
       "path": "frontend/scripts/video/film/shotlist.json",
@@ -103,7 +103,7 @@
         "use": true
       }
     ],
-    "elapsedRenderSeconds": 33.352675291003834,
+    "elapsedRenderSeconds": 32.943215417006286,
     "engine": "CYCLES",
     "metalRT": "AUTO",
     "persistentData": true,
@@ -506,7 +506,7 @@
       "missing": 0,
       "sounds": 1
     },
-    "shotlist_path": "/Users/ding/Projects/anything-llm/frontend/scripts/video/film/shotlist.json",
+    "shotlist_path": "frontend/scripts/video/film/shotlist.json",
     "shots": [
       {
         "face": "front",
@@ -1068,6 +1068,6 @@
       "type": "still"
     }
   ],
-  "inputFingerprint": "6003052791cd365007cc3a537e1ef09716de3d9b3a7819a7e583424c4708f270",
-  "profileFingerprint": "a2ee40970fd995db236c6e00453c77b005a0349b4dfda71ff2a42aba886cbbb3"
+  "inputFingerprint": "4800e90528e8082ddfd0515e8a1c288b5bb38e39830ba66a078010b376d825c0",
+  "profileFingerprint": "77cedcb2962e0a85b1b845ab6bcc3479c3dc88ddb3b355ce3fc56c5f697728d0"
 }

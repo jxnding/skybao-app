@@ -5,7 +5,7 @@ import fs from "fs";
 import path from "path";
 import { spawnSync } from "child_process";
 import { fileURLToPath } from "url";
-import { assertCurrentProfileManifest, assertCurrentRenderReport, inputFingerprint, sha256, sha256Json } from "./provenance.mjs";
+import { assertCurrentProfileManifest, assertCurrentRenderReport, assertManifestInputsCurrent, inputFingerprint, sha256, sha256Json } from "./provenance.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.resolve(here, "../../../..");
@@ -84,6 +84,7 @@ function requireCanonicalReview() {
   };
   if (JSON.stringify(receipt.provenance) !== JSON.stringify(sources)) throw new Error("canonical targeted review receipt provenance is stale");
   const manifest = JSON.parse(fs.readFileSync(path.join(artifactRoot, "build-manifest.json"), "utf8"));
+  assertManifestInputsCurrent(manifest, { repo });
   if (receipt.inputFingerprint !== inputFingerprint(manifest)) throw new Error("canonical targeted review receipt input fingerprint is stale");
   return receipt;
 }

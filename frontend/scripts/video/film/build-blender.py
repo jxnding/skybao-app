@@ -36,6 +36,7 @@ import json
 import math
 import os
 import random
+import subprocess
 import sys
 import time
 import traceback
@@ -161,7 +162,7 @@ def parse_argv(argv):
                 quality=None, samples=None, shots=None, device="auto",
                 profile=None,
                 frames_out=None, manifest_out=None, audio=None,
-                audio_canonical=None, device_probe=False, build_only=False)
+                audio_canonical=None, receipt=None, device_probe=False, build_only=False)
     raw_toks = list(argv)
     # Blender appends its own arguments before the separator.  Once a
     # separator exists, none of those arguments belong to this strict parser.
@@ -184,7 +185,7 @@ def parse_argv(argv):
             val = toks[i + 1]
         if key in ("repo", "out", "width", "height", "quality", "samples",
                    "shots", "device", "cycles-device", "profile", "frames-out",
-                   "manifest-out", "audio", "audio-canonical"):
+                   "manifest-out", "audio", "audio-canonical", "receipt"):
             if val is None or val == "":
                 raise FilmError("missing value for --{0}".format(key))
             if key == "repo":
@@ -221,6 +222,8 @@ def parse_argv(argv):
                 args["audio"] = os.path.abspath(val)
             elif key == "audio-canonical":
                 args["audio_canonical"] = os.path.abspath(val)
+            elif key == "receipt":
+                args["receipt"] = os.path.abspath(val)
             else:
                 args["quality"] = val.lower()
             i += 2
@@ -2845,7 +2848,7 @@ def build(args):
             dof.focus_distance = dist
             dof.keyframe_insert(data_path="focus_distance", frame=frame)
 
-    manifest = dict(shotlist_path=paths["shotlist"], shots=[], ui_planes=0,
+    manifest = dict(shotlist_path=os.path.relpath(paths["shotlist"], paths["repo"]), shots=[], ui_planes=0,
                     editorial_callouts=0, cursor_tracks=0, sound="none",
                     area_flips=len(shotlist.get("direction", {}).get(
                         "flips", [])), environment=environment.get("id"))
@@ -2869,6 +2872,10 @@ def build(args):
     sound_strip = build_sound(sc, paths, manifest)
 
     write_manifest(cfg, paths, manifest)
+    if args.get("receipt") and args.get("quality"):
+        subprocess.run([os.environ.get("NODE_BIN", "node"), os.path.join(paths["film_dir"], "receipt-gate.mjs"),
+                        "--repo", paths["repo"], "--manifest", paths["build_manifest"],
+                        "--receipt", args["receipt"], "--audio", paths["audio"]], check=True)
     render_started = time.perf_counter()
     rendered = False
     if args["quality"]:

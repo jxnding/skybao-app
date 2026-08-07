@@ -6,7 +6,7 @@ import fs from "fs";
 import path from "path";
 import { spawnSync } from "child_process";
 import { fileURLToPath } from "url";
-import { bindManifest, inputFingerprint, sha256, sha256Json } from "./provenance.mjs";
+import { assertManifestInputsCurrent, bindManifest, inputFingerprint, sha256, sha256Json } from "./provenance.mjs";
 
 const executingHere = path.dirname(fileURLToPath(import.meta.url));
 const scriptArgs = process.argv.slice(2);
@@ -207,6 +207,7 @@ function reviewReceipt() {
     if (receipt.hashes?.[String(frame)] !== sha256(file)) throw new Error(`canonical targeted review hash mismatch at frame ${frame}`);
   }
   const manifest = JSON.parse(fs.readFileSync(buildManifestPath, "utf8"));
+  assertManifestInputsCurrent(manifest, { repo });
   const sources = {
     shotlist: sha256(shotlistPath),
     environment: sha256(path.join(here, "environment.json")),
@@ -468,6 +469,7 @@ if (["preview", "final"].includes(mode)) {
   framesDir = stagedFramesRoot;
   blenderArgs.push("--frames-out", framesDir);
   blenderArgs.push("--quality", mode);
+  blenderArgs.push("--receipt", targetedReceiptPath);
 }
 if (mode === "review") blenderArgs.push("--frames-out", stagedReviewRoot);
 if (canonicalTargeted) blenderArgs.push("--samples", canonicalFrames.join(","));

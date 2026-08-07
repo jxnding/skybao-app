@@ -117,7 +117,7 @@ yarn video:film
 # 4. Produce the 1080p delivery master only after the review is approved.
 yarn video:film --final
 
-# Refresh only the editable/review revision and current-revision checksums.
+# Refresh only the editable/review revision and current-revision checksums after both current preview and final renders.
 # Previously approved v3 MP4s/reports/blends remain deferred and are excluded.
 yarn video:film:handoff --review-only
 
@@ -136,9 +136,8 @@ Preview and final reports reference their immutable
 `skybao-film-preview.blend` and `skybao-film-final.blend` projects; the shorter
 `skybao-film.blend` path remains the most recently generated editable scene.
 `video:film:handoff` derives its selections from `shotlist.json`, validates each
-generated image/video, and promotes the handoff set atomically. A successful
-final render invokes it automatically; the standalone command is useful when
-only editor-facing derivatives need to be refreshed.
+generated image/video, and promotes the handoff set atomically. Render commands
+do not invoke handoff automatically; run it after both current renders.
 
 When changing `environment.json`, use the same sequence: `--check` to verify
 the Cycles contract/device, `--samples=<frame indices>` for a fast visual
@@ -219,7 +218,7 @@ Approve only when these conditions hold:
 - The glass edge stays cyan/blue and never becomes a bright edge-on bar.
 - Every area change reads as a real sidebar cursor click followed by the same
   clockwise flip; no hard cut is used between product areas.
-- The Admin group lands and holds cleanly without editorial title text.
+- `Enterprise Governance` appears and fades before the clean final Admin hold.
 
 The preflight checks capture recipe/content freshness, schema, five-group
 choreography, all four flips, same-face dissolves, navigation timing,
