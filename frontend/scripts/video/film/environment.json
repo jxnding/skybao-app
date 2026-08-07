@@ -11,7 +11,8 @@
     "uiCatalog": "artifacts/skybao-ui/catalog.json",
     "shotlist": "frontend/scripts/video/film/shotlist.json",
     "cloudTexture": "frontend/public/clouds-dark.webp",
-    "consumer": "frontend/scripts/video/film/build-blender.py"
+    "consumer": "frontend/scripts/video/film/build-blender.py",
+    "cursorHelper": "frontend/scripts/video/film/cursor_window.py"
   },
   "glass": {
     "widthM": 3.3,
@@ -112,8 +113,16 @@
     "lensMM": 50,
     "sensorWidthMM": 36,
     "maxBreathM": 0.018,
-    "lockXY": true,
-    "rackFocusAtAreaFlips": true
+    "rackFocusAtAreaFlips": true,
+    "focusMoves": [
+      { "id": "focus-source-preview", "shotId": "knowledge-source-preview", "start": 350, "end": 378, "targetOffsetM": [0.18, 0.08], "lensStartMM": 50, "lensPeakMM": 54, "lensEndMM": 50, "easeFrames": 8 },
+      { "id": "focus-task-approval", "shotId": "work-task-approval", "start": 834, "end": 866, "targetOffsetM": [-0.16, 0.06], "lensStartMM": 50, "lensPeakMM": 55, "lensEndMM": 50, "easeFrames": 8 },
+      { "id": "focus-admin-governance", "shotId": "admin-privacy-to-users", "start": 1000, "end": 1032, "targetOffsetM": [0.12, 0.04], "lensStartMM": 50, "lensPeakMM": 53, "lensEndMM": 50, "easeFrames": 8 }
+    ]
+  },
+  "editorial": {
+    "textColor": "#E8F6FF",
+    "emissionStrength": 1.4
   },
   "render": {
     "engine": "CYCLES",

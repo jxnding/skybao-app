@@ -6,19 +6,26 @@ import fs from "fs";
 import path from "path";
 import { spawnSync } from "child_process";
 import { fileURLToPath } from "url";
+import { bindManifest, inputFingerprint, sha256, sha256Json } from "./provenance.mjs";
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const repo = path.resolve(here, "../../../..");
+const executingHere = path.dirname(fileURLToPath(import.meta.url));
+const scriptArgs = process.argv.slice(2);
+const repoIndex = scriptArgs.indexOf("--repo");
+const repo = path.resolve(repoIndex >= 0 ? scriptArgs[repoIndex + 1] || "" : path.resolve(executingHere, "../../../.."));
+if (!fs.existsSync(repo)) throw new Error(`repository does not exist: ${repo}`);
+const here = path.join(repo, "frontend", "scripts", "video", "film");
+if (repoIndex >= 0 && fs.realpathSync(executingHere) !== fs.realpathSync(path.join(here, "render.mjs")))
+  console.warn("render: alternate repository consumers selected");
 const artifactRoot = path.join(repo, "artifacts", "skybao-film");
 const blendPath = path.join(artifactRoot, "skybao-film.blend");
 const audioPath = path.join(artifactRoot, "audio", "skybao-mix.wav");
 const deliverableRoot = path.join(artifactRoot, "deliverables");
 const buildManifestPath = path.join(artifactRoot, "build-manifest.json");
+const targetedReceiptPath = path.join(artifactRoot, "provenance", "targeted-review-receipt.json");
 // Kept beside, rather than inside, the committed film artifact directory. The
 // private .gitignore makes interrupted render work invisible to Git while
 // leaving it available for diagnosis or manual cleanup.
 const stagingRoot = path.join(repo, "artifacts", ".skybao-film-staging");
-const scriptArgs = process.argv.slice(2);
 const shotlistPath = path.join(here, "shotlist.json");
 const captureScript = path.join(
   repo,
@@ -41,7 +48,8 @@ Usage:
   yarn video:film --preview        Same as the default
   yarn video:film --final          Build the 1920x1080 H.264 master
   yarn video:film --build-only     Generate audio, validate, and save the .blend
-  yarn video:film --samples=30,241 Render selected review frames
+  yarn video:film --samples=targeted Render canonical recipe review frames
+  yarn video:film --samples=30,241 Render ad-hoc review frames
   yarn video:film --shots=assistant-research,work-board-drag
   yarn video:film --check          Validate manifests, inputs, and Cycles device without writing
 
@@ -71,7 +79,9 @@ if (!new Set(["auto", "metal", "cpu"]).has(cyclesDevice))
 
 function parseSampleFrames(argument) {
   if (!argument) return null;
-  const values = argument.split("=", 2)[1].split(",");
+  const raw = argument.split("=", 2)[1];
+  if (raw === "targeted") return "targeted";
+  const values = raw.split(",");
   if (values.length === 0 || values.some((value) => !/^\d+$/.test(value)))
     throw new Error(
       "--samples must be a comma-separated list of frame indices"
@@ -84,6 +94,13 @@ function parseSampleFrames(argument) {
 
 const sampleFrames = parseSampleFrames(samplesArg);
 const targetedReview = Boolean(samplesArg || shotsArg);
+const canonicalTargeted = sampleFrames === "targeted";
+const recipe = JSON.parse(fs.readFileSync(shotlistPath, "utf8"));
+const canonicalFrames = recipe.targetedReviewFrames;
+if (canonicalTargeted && (!Array.isArray(canonicalFrames) || canonicalFrames.length === 0 ||
+  canonicalFrames.some((frame) => !Number.isInteger(frame) || frame < 1 || frame > (recipe.format?.frames || 1200)) ||
+  new Set(canonicalFrames).size !== canonicalFrames.length))
+  throw new Error("shotlist.targetedReviewFrames must be unique bounded integer frames");
 const modeFlags = ["--preview", "--final", "--build-only", "--check"].filter(
   has
 );
@@ -102,6 +119,7 @@ const mode = has("--check")
         ? "build-only"
         : "preview";
 const keepFrames = has("--keep-frames");
+const strictProvenance = has("--strict-provenance");
 const unknown = scriptArgs.filter(
   (arg) =>
     ![
@@ -110,10 +128,14 @@ const unknown = scriptArgs.filter(
       "--build-only",
       "--check",
       "--keep-frames",
+      "--strict-provenance",
+      "--repo",
     ].includes(arg) &&
     !arg.startsWith("--samples=") &&
     !arg.startsWith("--shots=") &&
     !arg.startsWith("--cycles-device=")
+    && arg !== "--repo"
+    && arg !== (repoIndex >= 0 ? scriptArgs[repoIndex + 1] : null)
 );
 if (unknown.length) throw new Error(`unknown option(s): ${unknown.join(", ")}`);
 
@@ -170,10 +192,30 @@ function run(command, args, label, options = {}) {
   };
 }
 
-function sha256(file) {
-  const hash = crypto.createHash("sha256");
-  hash.update(fs.readFileSync(file));
-  return hash.digest("hex");
+function reviewReceipt() {
+  if (!exists(targetedReceiptPath)) throw new Error("canonical targeted review receipt is missing; run --samples=targeted first");
+  let receipt;
+  try { receipt = JSON.parse(fs.readFileSync(targetedReceiptPath, "utf8")); } catch { throw new Error("canonical targeted review receipt is invalid"); }
+  const expected = [...canonicalFrames].sort((a, b) => a - b);
+  if (JSON.stringify(receipt.frames) !== JSON.stringify(expected)) throw new Error("canonical targeted review receipt frame set is stale");
+  const reviewRoot = path.join(artifactRoot, "review");
+  const names = fs.readdirSync(reviewRoot).filter((name) => /^frame-\d{4}\.png$/.test(name)).sort();
+  const expectedNames = expected.map((frame) => `frame-${String(frame).padStart(4, "0")}.png`).sort();
+  if (JSON.stringify(names) !== JSON.stringify(expectedNames)) throw new Error("canonical targeted review PNG set is incomplete or has extras");
+  for (const frame of expected) {
+    const file = path.join(reviewRoot, `frame-${String(frame).padStart(4, "0")}.png`);
+    if (receipt.hashes?.[String(frame)] !== sha256(file)) throw new Error(`canonical targeted review hash mismatch at frame ${frame}`);
+  }
+  const manifest = JSON.parse(fs.readFileSync(buildManifestPath, "utf8"));
+  const sources = {
+    shotlist: sha256(shotlistPath),
+    environment: sha256(path.join(here, "environment.json")),
+    catalog: sha256(path.join(repo, "artifacts", "skybao-ui", "catalog.json")),
+    scene: sha256Json(manifest.scene),
+  };
+  if (JSON.stringify(receipt.provenance) !== JSON.stringify(sources)) throw new Error("canonical targeted review receipt provenance is stale");
+  if (receipt.inputFingerprint !== inputFingerprint(manifest)) throw new Error("canonical targeted review receipt input fingerprint is stale");
+  return receipt;
 }
 
 function createStage(mode) {
@@ -322,6 +364,26 @@ function assertCyclesBuildManifest(buildManifest, requestedDevice) {
     );
 }
 
+function canonicalManifestIsCurrent() {
+  if (!fs.existsSync(buildManifestPath)) return false;
+  let manifest;
+  try {
+    manifest = JSON.parse(fs.readFileSync(buildManifestPath, "utf8"));
+  } catch {
+    return false;
+  }
+  if (!manifest || typeof manifest !== "object") return false;
+  if (manifest.inputFingerprint && manifest.inputFingerprint !== inputFingerprint(manifest)) return false;
+  const entries = [manifest.shotlist, manifest.environment, manifest.uiCatalog,
+    ...(manifest.inputAssets ? Object.values(manifest.inputAssets) : []), manifest.audio];
+  return entries.every((entry) => {
+    if (!entry || typeof entry.path !== "string" || !/^[a-f0-9]{64}$/.test(entry.sha256 || "")) return false;
+    const file = entry.path === "artifacts/skybao-film/audio/skybao-mix.wav"
+      ? audioPath : path.resolve(repo, entry.path);
+    try { return fs.existsSync(file) && sha256(file) === entry.sha256; } catch { return false; }
+  });
+}
+
 run(
   process.execPath,
   [captureScript, "--check", `--only=${filmAssetIds().join(",")}`],
@@ -329,7 +391,19 @@ run(
 );
 
 if (mode === "check") {
-  run(process.execPath, [path.join(here, "validate.mjs")], "source validation");
+  run(process.execPath, [path.join(here, "validate.mjs"), ...(strictProvenance ? ["--strict-provenance"] : [])], "source validation");
+  if (fs.existsSync(blendPath) && fs.existsSync(buildManifestPath)) {
+    if (canonicalManifestIsCurrent()) {
+      run(
+        blender,
+        ["--background", blendPath, "--python", path.join(here, "scene-contract.py"), "--",
+          "--repo", repo, "--manifest", buildManifestPath],
+        "saved scene contract"
+      );
+    } else {
+      console.warn("saved scene contract: skipped because the canonical manifest is stale; staged validation remains mandatory");
+    }
+  }
   run(
     blender,
     [
@@ -350,7 +424,8 @@ if (mode === "check") {
   process.exit(0);
 }
 
-run(process.execPath, [path.join(here, "validate.mjs")], "source validation");
+run(process.execPath, [path.join(here, "validate.mjs"), ...(strictProvenance ? ["--strict-provenance"] : [])], "source validation");
+if (["preview", "final"].includes(mode)) reviewReceipt();
 
 // Do not let an incomplete render replace an approved review/master. Every
 // Blender output, sequence, encode, report, and rollback copy lives here until
@@ -395,7 +470,8 @@ if (["preview", "final"].includes(mode)) {
   blenderArgs.push("--quality", mode);
 }
 if (mode === "review") blenderArgs.push("--frames-out", stagedReviewRoot);
-if (sampleFrames) blenderArgs.push("--samples", sampleFrames.join(","));
+if (canonicalTargeted) blenderArgs.push("--samples", canonicalFrames.join(","));
+else if (sampleFrames) blenderArgs.push("--samples", sampleFrames.join(","));
 if (shotsArg) blenderArgs.push("--shots", shotsArg.split("=", 2)[1]);
 
 const blenderRun = run(
@@ -410,8 +486,36 @@ const blenderRun = run(
 
 if (!fs.existsSync(stagedBlendPath))
   throw new Error(`Blender did not create ${stagedBlendPath}`);
+// Bind the exact source/scene inputs before any downstream validation or
+// deliverable is made.  This is intentionally independent of the selected
+// preview/final/sample render profile.
+const boundManifest = bindManifest(JSON.parse(fs.readFileSync(stagedManifestPath, "utf8")));
+fs.writeFileSync(stagedManifestPath, `${JSON.stringify(boundManifest, null, 2)}\n`);
 const buildManifest = readBuildManifest(stagedManifestPath);
 assertCyclesBuildManifest(buildManifest, cyclesDevice);
+// Validate the manifest produced by this exact build before anything can be
+// promoted.  The staged audio override is important: a newly generated mix is
+// intentionally not the old canonical file until atomic promotion succeeds.
+run(
+  process.execPath,
+  [
+    path.join(here, "validate.mjs"),
+    "--repo",
+    repo,
+    "--manifest",
+    stagedManifestPath,
+    "--audio",
+    stagedAudioPath,
+    "--strict-provenance",
+  ],
+  "staged provenance validation"
+);
+run(
+  blender,
+  ["--background", stagedBlendPath, "--python", path.join(here, "scene-contract.py"), "--",
+    "--repo", repo, "--manifest", stagedManifestPath, "--allow-staged"],
+  "staged scene contract"
+);
 
 if (mode === "build-only") {
   promoteWithRollback(
@@ -429,9 +533,32 @@ if (mode === "build-only") {
 if (mode === "review") {
   if (!exists(stagedReviewRoot))
     throw new Error(`Blender did not create review output ${stagedReviewRoot}`);
+  if (canonicalTargeted) {
+    const actual = fs.readdirSync(stagedReviewRoot).filter((name) => /^frame-\d{4}\.png$/.test(name)).sort();
+    const expected = canonicalFrames.map((frame) => `frame-${String(frame).padStart(4, "0")}.png`).sort();
+    if (actual.length !== expected.length || actual.some((name, index) => name !== expected[index]))
+      throw new Error(`canonical targeted review must contain exactly ${expected.length} staged PNGs (found ${actual.length})`);
+    const receipt = {
+      schemaVersion: 1,
+      frames: [...canonicalFrames].sort((a, b) => a - b),
+      hashes: Object.fromEntries(canonicalFrames.map((frame) => [String(frame), sha256(path.join(stagedReviewRoot, `frame-${String(frame).padStart(4, "0")}.png`))])),
+      provenance: {
+        shotlist: sha256(shotlistPath),
+        environment: sha256(path.join(here, "environment.json")),
+        catalog: sha256(path.join(repo, "artifacts", "skybao-ui", "catalog.json")),
+        scene: sha256Json(JSON.parse(fs.readFileSync(stagedManifestPath, "utf8")).scene),
+      },
+      inputFingerprint: inputFingerprint(JSON.parse(fs.readFileSync(stagedManifestPath, "utf8"))),
+    };
+    const stagedReceiptPath = path.join(stage, "targeted-review-receipt.json");
+    fs.mkdirSync(path.dirname(stagedReceiptPath), { recursive: true });
+    fs.writeFileSync(stagedReceiptPath, `${JSON.stringify(receipt, null, 2)}\n`);
+    // Receipt is promoted atomically with the exact scene and PNG set.
+    var targetedReceiptPromotion = { source: stagedReceiptPath, target: targetedReceiptPath };
+  }
   const reviewTarget = path.join(artifactRoot, "review");
   const mergedReviewRoot = path.join(stage, "review-merged");
-  if (exists(reviewTarget))
+  if (exists(reviewTarget) && !canonicalTargeted)
     fs.cpSync(reviewTarget, mergedReviewRoot, { recursive: true });
   else fs.mkdirSync(mergedReviewRoot, { recursive: true });
   fs.cpSync(stagedReviewRoot, mergedReviewRoot, {
@@ -444,6 +571,7 @@ if (mode === "review") {
       { source: stagedManifestPath, target: buildManifestPath },
       { source: stagedAudioPath, target: audioPath },
       { source: mergedReviewRoot, target: reviewTarget },
+      ...(canonicalTargeted ? [targetedReceiptPromotion] : []),
     ],
     stage
   );
@@ -597,6 +725,8 @@ if (/black_(?:start|end|duration):/.test(blackDetect.stderr || ""))
   throw new Error("encoded video contains a detected black segment");
 
 const report = {
+  schemaVersion: 2,
+  inputFingerprint: boundManifest.inputFingerprint,
   title: "SkyBao · The Acme Workspace Flow",
   mode,
   durationSeconds: duration,
@@ -651,6 +781,7 @@ const report = {
     buildManifest: sha256(stagedManifestPath),
   },
   provenance: {
+    inputFingerprint: boundManifest.inputFingerprint,
     buildManifest: {
       path: path.relative(repo, versionedManifestPath),
       schemaVersion: buildManifest.raw.schemaVersion ?? null,
@@ -658,8 +789,16 @@ const report = {
     },
   },
 };
-fs.copyFileSync(stagedManifestPath, stagedVersionedManifestPath);
 fs.copyFileSync(stagedBlendPath, stagedVersionedBlendPath);
+const versionedManifest = JSON.parse(fs.readFileSync(stagedManifestPath, "utf8"));
+versionedManifest.artifacts = {
+  ...(versionedManifest.artifacts || {}),
+  blend: { path: path.relative(repo, versionedBlendPath), sha256: sha256(stagedVersionedBlendPath) },
+};
+fs.writeFileSync(stagedVersionedManifestPath, `${JSON.stringify(versionedManifest, null, 2)}\n`);
+// Reports bind to the immutable profile manifest (including its blend hash),
+// not merely to the unversioned editable manifest.
+report.provenance.buildManifest.sha256 = sha256(stagedVersionedManifestPath);
 fs.writeFileSync(stagedReportPath, `${JSON.stringify(report, null, 2)}\n`);
 
 const promotions = [
@@ -684,13 +823,10 @@ else
 promoteWithRollback(promotions, stage);
 discardStage(stage);
 
-if (mode === "final") {
-  run(
-    process.execPath,
-    [path.join(here, "handoff.mjs")],
-    "regenerate final handoff assets"
-  );
-}
+// Full handoff is deliberately explicit. Rendering must never report failure
+// after promoting a valid render merely because optional review derivatives
+// could not be generated; run `yarn video:film:handoff` as a separate atomic
+// post-render transaction.
 
 console.log(`\nSkyBao film ready`);
 console.log(`  video:  ${outputPath}`);

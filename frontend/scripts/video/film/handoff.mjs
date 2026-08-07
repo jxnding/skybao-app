@@ -6,20 +6,25 @@ import fs from "fs";
 import path from "path";
 import { spawnSync } from "child_process";
 import { fileURLToPath } from "url";
+import { assertCurrentProfileManifest, assertCurrentRenderReport, inputFingerprint, sha256, sha256Json } from "./provenance.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.resolve(here, "../../../..");
 const artifactRoot = path.join(repo, "artifacts", "skybao-film");
 const deliverableRoot = path.join(artifactRoot, "deliverables");
 const reviewRoot = path.join(artifactRoot, "review");
+const receiptPath = path.join(artifactRoot, "provenance", "targeted-review-receipt.json");
 const stagingRoot = path.join(repo, "artifacts", ".skybao-film-staging");
 const masterPath = path.join(deliverableRoot, "skybao-40s-master.mp4");
 const previewPath = path.join(deliverableRoot, "skybao-40s-preview.mp4");
+const reviewOnly = process.argv.includes("--review-only");
+if (process.argv.slice(2).some((arg) => arg !== "--review-only")) throw new Error("unknown handoff option");
 const shotlist = JSON.parse(
   fs.readFileSync(path.join(here, "shotlist.json"), "utf8")
 );
 const fps = shotlist.format?.fps || 30;
 const totalFrames = shotlist.format?.frames || 1200;
+const canonicalFrames = shotlist.targetedReviewFrames;
 
 function commandFrom(candidates, envName) {
   if (process.env[envName]) return process.env[envName];
@@ -59,10 +64,29 @@ function run(command, args, label, capture = false) {
   return result;
 }
 
-function sha256(file) {
-  const hash = crypto.createHash("sha256");
-  hash.update(fs.readFileSync(file));
-  return hash.digest("hex");
+function requireCanonicalReview() {
+  if (!Array.isArray(canonicalFrames) || !canonicalFrames.length) throw new Error("shotlist has no canonical targeted review set");
+  if (!fs.existsSync(receiptPath)) throw new Error("canonical targeted review receipt is required");
+  let receipt; try { receipt = JSON.parse(fs.readFileSync(receiptPath, "utf8")); } catch { throw new Error("canonical targeted review receipt is invalid"); }
+  const frames = [...canonicalFrames].sort((a, b) => a - b);
+  if (JSON.stringify(receipt.frames) !== JSON.stringify(frames)) throw new Error("canonical targeted review receipt frame set is stale");
+  const names = fs.readdirSync(reviewRoot).filter((name) => /^frame-\d{4}\.png$/.test(name)).sort();
+  const expected = frames.map((frame) => `frame-${String(frame).padStart(4, "0")}.png`).sort();
+  if (JSON.stringify(names) !== JSON.stringify(expected)) throw new Error("canonical targeted review set is incomplete or contains extras");
+  for (const frame of frames) {
+    const file = path.join(reviewRoot, `frame-${String(frame).padStart(4, "0")}.png`);
+    if (receipt.hashes?.[String(frame)] !== sha256(file)) throw new Error(`canonical targeted review hash mismatch at frame ${frame}`);
+  }
+  const sources = {
+    shotlist: sha256(path.join(here, "shotlist.json")),
+    environment: sha256(path.join(here, "environment.json")),
+    catalog: sha256(path.join(repo, "artifacts", "skybao-ui", "catalog.json")),
+    scene: sha256Json(JSON.parse(fs.readFileSync(path.join(artifactRoot, "build-manifest.json"), "utf8")).scene),
+  };
+  if (JSON.stringify(receipt.provenance) !== JSON.stringify(sources)) throw new Error("canonical targeted review receipt provenance is stale");
+  const manifest = JSON.parse(fs.readFileSync(path.join(artifactRoot, "build-manifest.json"), "utf8"));
+  if (receipt.inputFingerprint !== inputFingerprint(manifest)) throw new Error("canonical targeted review receipt input fingerprint is stale");
+  return receipt;
 }
 
 function zeroBased(frame) {
@@ -158,8 +182,33 @@ function promoteWithRollback(items, stage) {
   fs.rmSync(rollbackRoot, { recursive: true, force: true });
 }
 
-if (!fs.existsSync(masterPath) || !fs.existsSync(previewPath))
-  throw new Error("both the final master and preview MP4 are required");
+const receipt = requireCanonicalReview();
+if (!reviewOnly) {
+  if (!fs.existsSync(masterPath) || !fs.existsSync(previewPath)) throw new Error("full handoff requires both current final and preview MP4s");
+  const fingerprint = receipt.inputFingerprint;
+  const manifests = new Map();
+  for (const file of ["deliverables/build-manifest-preview.json", "deliverables/build-manifest-final.json"]) {
+    const full = path.join(artifactRoot, file);
+    if (!fs.existsSync(full)) throw new Error(`full handoff requires ${file}`);
+    let value; try { value = JSON.parse(fs.readFileSync(full, "utf8")); } catch { value = null; }
+    try { assertCurrentProfileManifest(value, fingerprint); } catch { throw new Error(`full handoff rejected: ${file} is not a current profile manifest (stale v3 deliverable)`); }
+    manifests.set(file.includes("preview") ? "preview" : "final", value);
+  }
+  for (const file of ["deliverables/render-report-preview.json", "deliverables/render-report-final.json"]) {
+    const full = path.join(artifactRoot, file);
+    if (!fs.existsSync(full)) throw new Error(`full handoff requires ${file}`);
+    let value; try { value = JSON.parse(fs.readFileSync(full, "utf8")); } catch { value = null; }
+    const profile = file.includes("preview") ? "preview" : "final";
+    try { assertCurrentRenderReport(value, fingerprint, sha256(path.join(deliverableRoot, `build-manifest-${profile}.json`))); } catch { throw new Error(`full handoff rejected: ${file} is not bound to the current ${profile} profile manifest (stale v3 deliverable)`); }
+  }
+  for (const file of ["skybao-film-preview.blend", "skybao-film-final.blend"]) {
+    const full = path.join(artifactRoot, file);
+    const sidecar = path.join(artifactRoot, "deliverables", `build-manifest-${file.includes("preview") ? "preview" : "final"}.json`);
+    if (!fs.existsSync(full) || !fs.existsSync(sidecar)) throw new Error(`full handoff requires current ${file} and its companion manifest`);
+    const value = manifests.get(file.includes("preview") ? "preview" : "final");
+    if (value.inputFingerprint !== fingerprint || value.artifacts?.blend?.sha256 !== sha256(full)) throw new Error(`full handoff rejected: ${file} is stale or not bound to its companion manifest`);
+  }
+}
 
 fs.mkdirSync(stagingRoot, { recursive: true });
 const stage = fs.mkdtempSync(path.join(stagingRoot, "handoff-"));
@@ -173,6 +222,7 @@ function staged(relative) {
   return { source, target };
 }
 
+if (!reviewOnly) {
 const posterShot = shotlist.shots.find((shot) => shot.id === "work-board-drag");
 if (!posterShot) throw new Error("shotlist is missing work-board-drag");
 const posterFrame = Math.round(
@@ -320,24 +370,22 @@ if (
   Math.abs(Number(boundaryMetadata.format.duration) - boundaryDuration) > 0.05
 )
   throw new Error("assistant-to-knowledge boundary metadata is invalid");
+}
 
 const checksumRelativePaths = [
   "audio/skybao-mix.wav",
   "build-manifest.json",
   "cursor/cursor.png",
-  "deliverables/build-manifest-final.json",
-  "deliverables/build-manifest-preview.json",
-  "deliverables/render-report-final.json",
-  "deliverables/render-report-preview.json",
-  "deliverables/skybao-40s-master.mp4",
-  "deliverables/skybao-40s-preview.mp4",
-  "provenance/skybao-ui-catalog-rendered-v3.json",
-  "provenance/skybao-ui-checksums-rendered-v3.sha256",
+  ...(reviewOnly ? [] : [
+    "deliverables/build-manifest-final.json", "deliverables/build-manifest-preview.json",
+    "deliverables/render-report-final.json", "deliverables/render-report-preview.json",
+    "deliverables/skybao-40s-master.mp4", "deliverables/skybao-40s-preview.mp4",
+  ]),
+  "provenance/targeted-review-receipt.json",
   ...stagedByTarget.keys(),
+  ...canonicalFrames.map((frame) => path.join("review", `frame-${String(frame).padStart(4, "0")}.png`)),
   "skybao-film.blend",
-  "skybao-film.blend1",
-  "skybao-film-final.blend",
-  "skybao-film-preview.blend",
+  ...(reviewOnly ? [] : ["skybao-film-final.blend", "skybao-film-preview.blend"]),
 ]
   .filter((relative, index, all) => all.indexOf(relative) === index)
   .filter((relative) =>
@@ -365,7 +413,9 @@ promoteWithRollback(
 );
 fs.rmSync(stage, { recursive: true, force: true });
 
-console.log("SkyBao final handoff ready");
-console.log(`  poster:    ${path.relative(repo, poster.target)}`);
-console.log(`  contacts:  ${path.relative(repo, reviewRoot)}`);
+console.log(reviewOnly ? "SkyBao review-only handoff ready (old v3 deliverables deferred)" : "SkyBao final handoff ready");
+if (!reviewOnly) {
+  console.log(`  poster:    ${path.relative(repo, poster.target)}`);
+  console.log(`  contacts:  ${path.relative(repo, reviewRoot)}`);
+}
 console.log(`  checksums: ${path.relative(repo, checksums.target)}`);

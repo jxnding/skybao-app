@@ -11,10 +11,29 @@
   },
   "shotCount": 19,
   "groupOrder": ["assistant", "knowledge", "communications", "work", "admin"],
+  "targetedReviewFrames": [
+    45,
+    94,
+    223,
+    241,
+    296,
+    370,
+    481,
+    535,
+    721,
+    775,
+    800,
+    856,
+    961,
+    1015,
+    1085,
+    1180
+  ],
   "direction": {
     "rotationDirection": "continuous clockwise",
     "rotationFrames": 20,
     "sameFaceDissolveFrames": 6,
+    "sameFaceDissolveWindow": "incoming and outgoing opacity keys share S..S+5; complementary linear easing",
     "navigationTiming": {
       "clickFrame": 16,
       "drawerCloseStartFrame": 18,
@@ -45,6 +64,13 @@
       { "from": "work", "to": "admin", "start": 951, "end": 971, "edgeOn": 961 }
     ]
   },
+  "editorialCallouts": [
+    { "id": "callout-assistant", "group": "assistant", "text": "Grounded Answers with Citations", "shotId": "assistant-research", "frames": { "start": 18, "end": 72 }, "face": "front", "positionM": [-1.30, -0.66], "fontSizeM": 0.09, "fadeFrames": 8 },
+    { "id": "callout-knowledge", "group": "knowledge", "text": "Unified Knowledge Search", "shotId": "knowledge-file-search", "frames": { "start": 269, "end": 323 }, "face": "back", "positionM": [-1.30, -0.66], "fontSizeM": 0.09, "fadeFrames": 8 },
+    { "id": "callout-communications", "group": "communications", "text": "Connected Team Context", "shotId": "communications-filter-select", "frames": { "start": 510, "end": 560 }, "face": "front", "positionM": [-1.30, -0.66], "fontSizeM": 0.09, "fadeFrames": 8 },
+    { "id": "callout-work", "group": "work", "text": "Automated Agent Workflows", "shotId": "work-board-drag", "frames": { "start": 750, "end": 800 }, "face": "back", "positionM": [-1.30, -0.66], "fontSizeM": 0.09, "fadeFrames": 8 },
+    { "id": "callout-admin", "group": "admin", "text": "Enterprise Governance", "shotId": "admin-privacy-to-users", "frames": { "start": 990, "end": 1040 }, "face": "front", "positionM": [-1.30, -0.66], "fontSizeM": 0.09, "fadeFrames": 8 }
+  ],
   "shots": [
     {
       "number": 1,

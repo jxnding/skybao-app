@@ -20,6 +20,9 @@ therefore mean recapturing and rerendering, not rebuilding the video concept.
 - Same-face edits use a six-frame dissolve. Ordinary action and navigation
   clips remain workspace-framed, so app chrome only appears when the real
   navigation capture deliberately exposes it.
+- A dissolve entering at global frame `S` uses exactly `S..S+5` for both
+  incoming and outgoing opacity keys. Complementary linear easing prevents a
+  one-frame boundary dip.
 - Every navigation bridge shares one zero-based timing contract: click at 16,
   drawer retraction at 18, and flip start at 23. Validation enforces the causal
   order before Blender is allowed to render.
@@ -31,7 +34,27 @@ Blender builder:
 - sharp emissive UI over the frosted glass backing;
 - cyan/blue perimeter lighting with one restrained traveling glint;
 - three seeded blue-gray cloud/fog cards at separate depths for parallax;
-- a centered, enlarged, nearly locked camera and low-key blue lighting.
+- a centered, enlarged, nearly locked camera and low-key blue lighting;
+- bounded `camera.focusMoves` push-ins that target key micro-interactions.
+
+`shotlist.json.editorialCallouts` contains one 2–4-word lower-third per area.
+The Blender builder creates these as camera-facing Cycles text objects (never
+painted into the React PNGs), with keyed eased opacity, safe lower-third
+coordinates, and Blender's built-in Bfont (deliberately, for portable glyph
+metrics). `positionM` is a screen-space LEFT/CENTER anchor; validation uses
+conservative full Bfont title extents rather than only the anchor. Their
+complete estimated bounds, frame windows, and copy are
+validated before a build. `environment.json` owns the focus moves: each
+move specifies a shot, frame window, screen-space target offset, subtle lens
+peak, and ease duration. The 10–15% camera enlargement is the resting/baseline
+coverage contract; focus peaks are intentionally bounded editorial pushes and
+may exceed that resting enlargement. Moves return to neutral lens/offset and
+are rejected when they cross flips, dissolves, or one another. `cornerSegments`
+and `uiInsetM` are consumed by Blender geometry rather than decorative fields.
+`uiInsetM` is a horizontal inset from each slab side for displayed UI only:
+`uiWidth = slabWidth - 2*uiInsetM` and `uiHeight = uiWidth * 9/16`. This single
+rectangle is used on both faces, in rounded-mask UVs, and for normalized cursor
+mapping; physical clear covers remain the full slab width, height, and slab radius.
 
 The environment recipe intentionally contains no alternate accent colors. It
 is data, not a one-off render tweak: changing a visual value here and
@@ -94,7 +117,12 @@ yarn video:film
 # 4. Produce the 1080p delivery master only after the review is approved.
 yarn video:film --final
 
-# Rebuild only the poster, contact sheets, boundary review, and checksums.
+# Refresh only the editable/review revision and current-revision checksums.
+# Previously approved v3 MP4s/reports/blends remain deferred and are excluded.
+yarn video:film:handoff --review-only
+
+# Full handoff is intentionally stricter: every profile blend, report, manifest,
+# and MP4 must carry the exact current targeted-review input fingerprint.
 yarn video:film:handoff
 ```
 
@@ -125,6 +153,15 @@ environment, cloud texture, builder, and UI catalog hashes. If the React UI or
 capture recipe changes, the film refuses to render until those owners are
 recaptured.
 
+## Revision artifact state
+
+The canonical `skybao-film.blend`, targeted review frames, build manifest, and
+checksums represent this revision. Profile-specific preview/final blends and
+MP4 deliverables remain the previously approved render until a full
+preview/final render is explicitly approved. The old master does not contain
+these changes; do not run the 1,200-frame preview/final render for revision
+validation.
+
 Capture recipe v4 binds freshness to the deterministic frontend source tree,
 toolchain identity, and explicit recipe version. The Vite `dist` hash remains
 in `catalog.json` for auditing but is intentionally non-binding because this
@@ -146,13 +183,32 @@ When adding or changing a UI action:
 
 ## Targeted review checkpoint
 
-Before a full render, inspect stable UI frames and the four flip midpoints. The
-supported targeted command rebuilds the editable scene and renders only those
-review frames:
+Before a full render, inspect the canonical targeted set: all five callouts,
+an in-dissolve frame, navigation click/pulse, source-preview cursor/focus,
+board drag, task-approval focus/click, Admin focus, all four flip peaks, and a
+resting enlarged UI frame. The supported command rebuilds the editable scene
+and renders only those review frames:
 
 ```bash
-yarn video:film --samples=60,150,241,300,420,481,560,660,721,800,900,961,1030,1120,1180
+  yarn video:film --samples=targeted
 ```
+
+The saved Blender scene contract can also be checked without writing the blend. The
+explicit `--samples=<frames>` form remains available for noncanonical review, but
+only `--samples=targeted` claims canonical coverage:
+
+```bash
+BLENDER_BIN=/Applications/Blender.app/Contents/MacOS/Blender \
+  yarn video:film:scene-contract --blend artifacts/skybao-film/skybao-film.blend
+```
+
+Render staging runs this same read-only check before promotion. It verifies the
+saved F-curves, cursor activity windows, rig/track provenance, and configured
+callout/focus windows; a temporary mutated blend must fail it.
+
+Cursor window resolution is shared by `build-blender.py` and
+`scene-contract.py` through the Blender-safe `cursor_window.py` helper, which
+is included in the environment tool-input provenance.
 
 Approve only when these conditions hold:
 

@@ -15,6 +15,10 @@ const BITS_PER_SAMPLE = 16;
 const TOTAL_SAMPLES = Math.round(SAMPLE_RATE * DURATION); // 1,920,000
 const BPM = 120;
 const SPB = 60 / BPM; // seconds per beat = 0.5
+const TOTAL_FRAMES = 1200;
+const FPS = 30;
+const SHOT_COUNT = 19;
+const EXPECTED_FLIPS = [[231, 251, 241], [471, 491, 481], [711, 731, 721], [951, 971, 961]];
 
 // Deterministic PRNG (mulberry32) so output is stable across runs.
 function mulberry32(seed) {
@@ -28,14 +32,52 @@ function mulberry32(seed) {
   };
 }
 
-// Best-effort read of shotlist.json (never fatal to synthesis).
-function loadShotlist() {
-  const p = path.join(__dirname, "shotlist.json");
+// Audio is an edit deliverable, so a missing or malformed edit must fail closed.
+function loadShotlist(p) {
   try {
-    return JSON.parse(fs.readFileSync(p, "utf8"));
-  } catch {
-    return null;
+    const shotlist = JSON.parse(fs.readFileSync(p, "utf8"));
+    if (!shotlist || typeof shotlist !== "object" || Array.isArray(shotlist) ||
+        !Array.isArray(shotlist.shots))
+      throw new Error("shotlist root/shots are malformed");
+    return shotlist;
+  } catch (error) {
+    throw new Error(`required shotlist is missing, unreadable, or malformed (${error.message})`);
   }
+}
+
+function validateEdit(shotlist) {
+  const format = shotlist.format;
+  if (!format || format.fps !== FPS || format.frames !== TOTAL_FRAMES ||
+      format.durationSeconds !== 40 || format.width !== 1920 || format.height !== 1080)
+    throw new Error("film format must be exactly 1920x1080, 1200 frames at 30fps");
+  if (shotlist.shotCount !== SHOT_COUNT || shotlist.shots.length !== SHOT_COUNT)
+    throw new Error("film must contain exactly 19 shots");
+  let expected = 1;
+  for (const [index, shot] of shotlist.shots.entries()) {
+    if (!shot || typeof shot !== "object" || Array.isArray(shot) || shot.number !== index + 1)
+      throw new Error(`shot ${index + 1} is malformed or out of order`);
+    const frames = shot.frames;
+    if (!frames || !Number.isInteger(frames.start) || !Number.isInteger(frames.end) ||
+        !Number.isInteger(frames.count) || frames.start !== expected || frames.start < 1 ||
+        frames.end < frames.start || frames.end > TOTAL_FRAMES ||
+        frames.count !== frames.end - frames.start + 1)
+      throw new Error(`shot ${shot.number} has non-contiguous or invalid coverage`);
+    expected = frames.end + 1;
+    if (!Array.isArray(shot.sfxCues)) throw new Error(`shot ${shot.number} sfxCues must be an array`);
+    for (const [cueIndex, cue] of shot.sfxCues.entries()) {
+      if (!cue || typeof cue !== "object" || Array.isArray(cue) ||
+          !["click", "whoosh", "chime"].includes(cue.type) ||
+          !Number.isInteger(cue.frame) || cue.frame < 1 || cue.frame > frames.count)
+        throw new Error(`shot ${shot.number} sfxCues[${cueIndex}] is malformed`);
+    }
+  }
+  if (expected !== TOTAL_FRAMES + 1) throw new Error("shots must cover frames 1..1200");
+  const flips = shotlist.direction?.flips;
+  if (shotlist.direction?.rotationDirection !== "continuous clockwise" ||
+      shotlist.direction?.rotationFrames !== 20 || !Array.isArray(flips) || flips.length !== 4 ||
+      flips.some((flip, i) => !flip || flip.start !== EXPECTED_FLIPS[i][0] ||
+        flip.end !== EXPECTED_FLIPS[i][1] || flip.edgeOn !== EXPECTED_FLIPS[i][2]))
+    throw new Error("film must contain the four approved bounded flips");
 }
 
 const midiToHz = (m) => 440 * Math.pow(2, (m - 69) / 12);
@@ -213,7 +255,30 @@ function synthMix() {
 // ---------------- SFX aligned to shotlist cues ----------------
 function addSfx(L, R, shotlist) {
   if (!shotlist || !Array.isArray(shotlist.shots)) return;
-  const index = (frame) => Math.round((frame / 30) * SAMPLE_RATE);
+  for (const [shotIndex, shot] of shotlist.shots.entries()) {
+    if (!shot || typeof shot !== "object" || Array.isArray(shot))
+      throw new Error(`shot ${shotIndex + 1} must be an object before audio generation`);
+    const frames = shot.frames;
+    if (!frames || typeof frames !== "object" || Array.isArray(frames) ||
+        !Number.isInteger(frames.start) || !Number.isInteger(frames.end) ||
+        !Number.isInteger(frames.count) || frames.start < 1 ||
+        frames.end < frames.start || frames.end - frames.start + 1 !== frames.count ||
+         frames.end > TOTAL_FRAMES)
+      throw new Error(`shot ${shot.number ?? shotIndex + 1} has invalid frames before audio generation`);
+    if (!Array.isArray(shot.sfxCues))
+      throw new Error(`shot ${shot.number ?? shotIndex + 1} sfxCues must be an array`);
+    for (const [cueIndex, cue] of shot.sfxCues.entries()) {
+      if (!cue || typeof cue !== "object" || Array.isArray(cue) ||
+          !["click", "whoosh", "chime"].includes(cue.type) ||
+          !Number.isInteger(cue.frame) || cue.frame < 1 || cue.frame > frames.count)
+        throw new Error(`shot ${shot.number ?? shotIndex + 1} sfxCues[${cueIndex}] is malformed`);
+    }
+  }
+  const index = (frame) => {
+    if (!Number.isInteger(frame) || frame < 1 || frame > TOTAL_FRAMES)
+      throw new Error(`cue frame must be within 1..${TOTAL_FRAMES}`);
+    return Math.round(((frame - 1) / FPS) * SAMPLE_RATE);
+  };
 
   const click = (i0, gain) => {
     if (i0 < 0 || i0 >= TOTAL_SAMPLES) return;
@@ -258,6 +323,8 @@ function addSfx(L, R, shotlist) {
     if (!Array.isArray(shot.sfxCues)) continue;
     for (const cue of shot.sfxCues) {
       const globalFrame = shot.frames.start - 1 + cue.frame;
+      if (globalFrame < 1 || globalFrame > TOTAL_FRAMES)
+        throw new Error(`shot ${shot.number} cue resolves outside film frames`);
       const i0 = index(globalFrame);
       if (cue.type === "click") click(i0, 0.09);
       else if (cue.type === "whoosh") whoosh(i0, 0.1);
@@ -338,21 +405,30 @@ function writeWav(outL, outR, file) {
 
 function main() {
   const args = process.argv.slice(2);
-  let out = path.join(
-    __dirname,
-    "..",
-    "..",
-    "..",
-    "..",
-    "artifacts",
-    "skybao-film",
-    "audio",
-    "skybao-mix.wav"
-  );
-  const outIdx = args.indexOf("--out");
-  if (outIdx !== -1 && args[outIdx + 1]) out = path.resolve(args[outIdx + 1]);
+  let repo = path.resolve(path.join(__dirname, "..", "..", "..", ".."));
+  let out = path.join(repo, "artifacts", "skybao-film", "audio", "skybao-mix.wav");
+  let explicitOut = false;
+  for (let i = 0; i < args.length; i += 1) {
+    const flag = args[i];
+    if (flag !== "--repo" && flag !== "--out")
+      throw new Error(`unknown option: ${flag}`);
+    const value = args[i + 1];
+    if (!value || value.startsWith("-")) throw new Error(`missing value for ${flag}`);
+    if (flag === "--repo") {
+      repo = path.resolve(value);
+      if (!explicitOut) out = path.join(repo, "artifacts", "skybao-film", "audio", "skybao-mix.wav");
+    } else {
+      out = path.resolve(value);
+      explicitOut = true;
+    }
+    i += 1;
+  }
+  const filmDir = path.join(repo, "frontend", "scripts", "video", "film");
+  const shotlistPath = path.join(filmDir, "shotlist.json");
+  if (!fs.existsSync(shotlistPath)) throw new Error(`missing shotlist: ${shotlistPath}`);
 
-  const shotlist = loadShotlist();
+  const shotlist = loadShotlist(shotlistPath);
+  validateEdit(shotlist);
   const mix = synthMix();
   addSfx(mix.L, mix.R, shotlist);
   const { outL, outR, peak } = master(mix);
@@ -376,4 +452,9 @@ function main() {
   console.log("done.");
 }
 
-main();
+try {
+  main();
+} catch (error) {
+  console.error(`audio generation failed: ${error.message}`);
+  process.exitCode = 1;
+}

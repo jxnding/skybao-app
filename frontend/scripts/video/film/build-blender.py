@@ -8,8 +8,9 @@ major-area transition rotates the slab exactly 180 degrees around its vertical
 axis so the incoming UI is revealed on the reverse face. Actions inside an area
 stay on one face and use one restrained dissolve. The camera remains centered;
 rounded glass, cloud cards, a cyan perimeter glint, UI motion, and the four
-meaningful navigation flips carry the movement. Everything is procedural and
-deterministic: no downloaded assets, no editorial text overlays.
+meaningful navigation flips and data-driven editorial graphics carry the
+movement. Everything is procedural and deterministic: UI text still comes only
+from React captures; lower-thirds are separate Blender text objects.
 
 Usage (from the orchestrator):
   blender --background --python build-blender.py -- \
@@ -39,6 +40,12 @@ import sys
 import time
 import traceback
 
+# Blender 5.2 does not always add a --python script's directory to sys.path.
+# Keep the shared helper import normal and deterministic in both Blender and
+# plain-Python execution.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from cursor_window import event_for_frame
+
 try:
     import bpy  # type: ignore
     from mathutils import Vector
@@ -63,6 +70,10 @@ SLAB_HALF_T = SLAB_T / 2.0
 SLAB_RADIUS = 0.065
 UI_RADIUS = 0.053
 UI_OFFSET = 0.00055       # crisp UI rests just proud of frosted backing
+UI_INSET = 0.012
+UI_W = SLAB_W - 2.0 * UI_INSET
+UI_H = UI_W * 9.0 / 16.0
+CORNER_SEGMENTS = 8
 CAM_Z = 5.88
 FOCAL_MM = 50.0
 ROT_FRAMES = 20           # frames for a full 180-degree area flip
@@ -70,6 +81,15 @@ DISSOLVE_FRAMES = 6
 BREATH_AMP = 0.018
 BREATH_PERIOD_S = 12.0
 FPS = 30
+FILM_TOTAL = 1200
+FILM_SHOT_COUNT = 19
+MAX_SHOTS = 100
+EXPECTED_FLIPS = (
+    ("assistant", "knowledge", 231, 251, 241),
+    ("knowledge", "communications", 471, 491, 481),
+    ("communications", "work", 711, 731, 721),
+    ("work", "admin", 951, 971, 961),
+)
 ENVIRONMENT = {}
 RENDER_RUNTIME = {}
 
@@ -96,7 +116,7 @@ def rgb(value, default=(0.0, 0.0, 0.0)):
 def apply_environment_config(config, shotlist):
     """Load scene constants from the versioned environment manifest."""
     global ENVIRONMENT, SLAB_W, SLAB_H, SLAB_T, SLAB_HALF_T
-    global SLAB_RADIUS, UI_RADIUS, UI_OFFSET, CAM_Z, FOCAL_MM
+    global SLAB_RADIUS, UI_RADIUS, UI_OFFSET, UI_INSET, UI_W, UI_H, CORNER_SEGMENTS, CAM_Z, FOCAL_MM
     global ROT_FRAMES, DISSOLVE_FRAMES, BREATH_AMP, BREATH_PERIOD_S, FPS
 
     ENVIRONMENT = config
@@ -111,6 +131,13 @@ def apply_environment_config(config, shotlist):
     UI_RADIUS = float(glass.get(
         "uiMaskCornerRadiusM", glass.get("uiCornerRadius",
                                          SLAB_RADIUS * 0.82)))
+    UI_INSET = float(glass.get("uiInsetM", UI_INSET))
+    # uiInsetM is a horizontal inset only.  The displayed rectangle is the
+    # single authoritative 16:9 capture rectangle; its height is derived
+    # rather than independently shrinking the physical slab vertically.
+    UI_W = SLAB_W - 2.0 * UI_INSET
+    UI_H = UI_W * 9.0 / 16.0
+    CORNER_SEGMENTS = max(3, int(glass.get("cornerSegments", CORNER_SEGMENTS)))
     UI_OFFSET = float(nested(
         glass, ("layers", "ui", "offsetM"), glass.get("uiOffset", UI_OFFSET)))
     CAM_Z = float(camera.get("distanceM", camera.get("distance", CAM_Z)))
@@ -135,12 +162,23 @@ def parse_argv(argv):
                 profile=None,
                 frames_out=None, manifest_out=None, audio=None,
                 audio_canonical=None, device_probe=False, build_only=False)
-    toks = list(argv)
-    if toks and toks[0] == "--":
-        toks = toks[1:]
+    raw_toks = list(argv)
+    # Blender appends its own arguments before the separator.  Once a
+    # separator exists, none of those arguments belong to this strict parser.
+    # In direct-script use there is no separator, so retain strict parsing of
+    # every supplied token.
+    if "--" in raw_toks:
+        toks = raw_toks[raw_toks.index("--") + 1:]
+    else:
+        toks = raw_toks
     i = 0
     while i < len(toks):
-        key = toks[i].lstrip("-")
+        token = toks[i]
+        if not token.startswith("--") or token == "--":
+            raise FilmError("unknown option: {0}".format(token))
+        key = token[2:]
+        if not key:
+            raise FilmError("unknown option: {0}".format(token))
         val = None
         if i + 1 < len(toks) and not toks[i + 1].startswith("--"):
             val = toks[i + 1]
@@ -153,15 +191,21 @@ def parse_argv(argv):
                 args["repo"] = os.path.abspath(val)
             elif key == "out":
                 args["out"] = os.path.abspath(val)
-            elif key == "width":
-                args["width"] = int(val)
-            elif key == "height":
-                args["height"] = int(val)
+            elif key in ("width", "height"):
+                try:
+                    parsed = int(val)
+                except (TypeError, ValueError):
+                    raise FilmError("--{0} must be an integer".format(key))
+                if parsed < 1:
+                    raise FilmError("--{0} must be positive".format(key))
+                args[key] = parsed
             elif key == "samples":
                 try:
                     args["samples"] = [int(frame) for frame in val.split(",")]
                 except ValueError:
                     raise FilmError("--samples must be comma-separated frame numbers")
+                if any(frame < 1 for frame in args["samples"]):
+                    raise FilmError("--samples frame numbers must be positive")
             elif key == "shots":
                 args["shots"] = [item.strip() for item in val.split(",")
                                   if item.strip()]
@@ -187,7 +231,7 @@ def parse_argv(argv):
             args["build_only"] = True
             i += 1
         else:
-            i += 1
+            raise FilmError("unknown option: --{0}".format(key))
     if args["quality"] not in (None, "preview", "final"):
         raise FilmError(
             "--quality must be preview or final, got {0!r}".format(args["quality"]))
@@ -205,8 +249,14 @@ def parse_argv(argv):
 # ---------------------------------------------------------------------------
 def resolve_paths(args):
     film_dir = os.path.dirname(os.path.abspath(__file__))
-    repo = args["repo"] or os.path.abspath(
-        os.path.join(film_dir, "..", "..", "..", ".."))
+    repo = os.path.realpath(args["repo"] or os.path.join(
+        film_dir, "..", "..", "..", ".."))
+    if not os.path.isdir(repo):
+        raise FilmError("repository does not exist: {0}".format(repo))
+    if args["repo"]:
+        film_dir = os.path.join(repo, "frontend", "scripts", "video", "film")
+        if not os.path.isdir(film_dir):
+            raise FilmError("alternate repository has no frontend/scripts/video/film: {0}".format(repo))
     canonical_audio = (args.get("audio_canonical") or os.path.join(
         repo, "artifacts", "skybao-film", "audio", "skybao-mix.wav"))
     return dict(
@@ -230,8 +280,14 @@ def resolve_paths(args):
 def load_json(path):
     if not os.path.isfile(path):
         raise FilmError("missing file: {0}".format(path))
-    with open(path, "r", encoding="utf-8") as fh:
-        return json.load(fh)
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            value = json.load(fh)
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise FilmError("cannot read JSON file {0}: {1}".format(path, exc))
+    if not isinstance(value, dict):
+        raise FilmError("JSON root must be an object: {0}".format(path))
+    return value
 
 
 def require_file(path):
@@ -239,18 +295,125 @@ def require_file(path):
         raise FilmError("missing asset file: {0}".format(path))
 
 
+MAX_ASSET_FRAME = 100000
+MAX_SOURCE_RANGE = 10000
+
+
+def safe_catalog_path(root, value, label):
+    """Resolve a catalog path without allowing traversal or symlink escapes."""
+    if not isinstance(value, str) or not value.strip():
+        raise FilmError("{0} must be a nonempty relative catalog path".format(label))
+    candidate = value.strip().replace("\\", os.sep)
+    if (os.path.isabs(candidate) or candidate.startswith("//") or
+            ":" in candidate.split(os.sep)[0] or
+            any(part == ".." for part in candidate.split(os.sep))):
+        raise FilmError("{0} escapes artifacts/skybao-ui: {1!r}".format(label, value))
+    base = os.path.realpath(root)
+    resolved = os.path.realpath(os.path.join(base, candidate))
+    try:
+        inside = os.path.commonpath((base, resolved)) == base
+    except ValueError:
+        inside = False
+    if not inside or resolved == base:
+        raise FilmError("{0} escapes artifacts/skybao-ui: {1!r}".format(label, value))
+    return resolved
+
+
+def safe_repo_path(root, value, label):
+    """Resolve a data path under --repo, including symlink containment."""
+    if not isinstance(value, str) or not value.strip():
+        raise FilmError("{0} must be a nonempty relative repository path".format(label))
+    candidate = value.strip().replace("\\", os.sep)
+    if (os.path.isabs(candidate) or candidate.startswith("//") or
+            ":" in candidate.split(os.sep)[0] or
+            any(part == ".." for part in candidate.split(os.sep))):
+        raise FilmError("{0} escapes repository root: {1!r}".format(label, value))
+    base = os.path.realpath(root)
+    resolved = os.path.realpath(os.path.join(base, candidate))
+    try:
+        inside = os.path.commonpath((base, resolved)) == base
+    except ValueError:
+        inside = False
+    if not inside or resolved == base:
+        raise FilmError("{0} escapes repository root: {1!r}".format(label, value))
+    return resolved
+
+
+def bounded_frame_range(start, end, label, maximum=MAX_ASSET_FRAME):
+    if (isinstance(start, bool) or isinstance(end, bool) or
+            not isinstance(start, int) or not isinstance(end, int) or
+            start < 1 or end < start or end > maximum or
+            end - start + 1 > MAX_SOURCE_RANGE):
+        raise FilmError("{0} must be bounded integer frames (1..{1}, max {2} frames)".format(
+            label, maximum, MAX_SOURCE_RANGE))
+
+
 def frame_name(n):
     return "frame-{0:06d}.png".format(int(n))
 
 
-def build_catalog_index(catalog):
+def safe_clip_frame(directory, frame, label):
+    """Realpath an individual PNG immediately before Blender loads it."""
+    candidate = os.path.join(directory, frame_name(frame))
+    resolved = os.path.realpath(candidate)
+    root = os.path.realpath(directory)
+    try:
+        inside = os.path.commonpath((root, resolved)) == root and resolved != root
+    except ValueError:
+        inside = False
+    if not inside:
+        raise FilmError("{0} escapes its catalog clip directory".format(label))
+    if not os.path.isfile(resolved):
+        raise FilmError("missing asset file: {0}".format(resolved))
+    return resolved
+
+
+def build_catalog_index(catalog, ui_root):
     """catalog -> {(type, id, framing) -> entry}, workspace preferred."""
     index = {}
-    for a in catalog.get("assets", []):
+    assets = catalog.get("assets")
+    if not isinstance(assets, list):
+        raise FilmError("UI catalog assets must be an array")
+    ui_root = os.path.realpath(ui_root)
+    for asset_index, a in enumerate(assets):
+        if not isinstance(a, dict):
+            raise FilmError("UI catalog assets[{0}] must be an object".format(asset_index))
+        for key in ("file", "directory", "timeline"):
+            if key in a:
+                safe_catalog_path(ui_root, a[key], "UI catalog assets[{0}].{1}".format(asset_index, key))
+        if a.get("type") == "clip":
+            count = a.get("frameCount")
+            if (isinstance(count, bool) or not isinstance(count, int) or
+                    count < 1 or count > MAX_ASSET_FRAME):
+                raise FilmError("UI catalog assets[{0}].frameCount must be 1..{1}".format(
+                    asset_index, MAX_ASSET_FRAME))
         key = (a.get("type"), a.get("id"), a.get("framing"))
         index[key] = a
         if a.get("framing") == "workspace":
             index[(a.get("type"), a.get("id"), None)] = a
+    for asset_index, a in enumerate(assets):
+        if a.get("type") != "clip":
+            continue
+        timeline_path = safe_catalog_path(ui_root, a.get("timeline"),
+                                          "UI catalog assets[{0}].timeline".format(asset_index))
+        timeline = load_json(timeline_path)
+        if timeline.get("frameCount") != a.get("frameCount"):
+            raise FilmError("UI catalog assets[{0}] timeline.frameCount must equal catalog frameCount".format(asset_index))
+        events = timeline.get("cursor")
+        if not isinstance(events, list):
+            raise FilmError("UI catalog assets[{0}] timeline.cursor must be an array".format(asset_index))
+        for event_index, event in enumerate(events):
+            if (not isinstance(event, dict) or isinstance(event.get("frame"), bool) or
+                    not isinstance(event.get("frame"), int) or event["frame"] < 0 or
+                    event["frame"] >= a["frameCount"] or
+                    isinstance(event.get("nx"), bool) or
+                    not isinstance(event.get("nx"), (int, float)) or
+                    not math.isfinite(event["nx"]) or not 0.0 <= event["nx"] <= 1.0 or
+                    isinstance(event.get("ny"), bool) or
+                    not isinstance(event.get("ny"), (int, float)) or
+                    not math.isfinite(event["ny"]) or not 0.0 <= event["ny"] <= 1.0 or
+                    event.get("event") not in ("move", "down", "up", "click")):
+                raise FilmError("UI catalog assets[{0}] cursor[{1}] is malformed".format(asset_index, event_index))
     return index
 
 
@@ -773,6 +936,25 @@ def edge_accent_material(name, color, strength):
     return mat
 
 
+def editorial_text_material(name, color, strength):
+    """Camera-facing title material with deterministic keyed opacity."""
+    mat = new_material(name)
+    emission = add_node(mat, "ShaderNodeEmission", "EditorialEmission")
+    set_input(emission, "Color", (*color, 1.0))
+    set_input(emission, "Strength", strength)
+    opacity = add_node(mat, "ShaderNodeValue", "Opacity")
+    opacity.outputs[0].default_value = 0.0
+    transparent = add_node(mat, "ShaderNodeBsdfTransparent", "Transparent")
+    mix = add_node(mat, "ShaderNodeMixShader", "EditorialMix")
+    out = add_node(mat, "ShaderNodeOutputMaterial", "Out")
+    link(mat, opacity.outputs[0], mix.inputs[0])
+    link(mat, transparent.outputs["BSDF"], mix.inputs[1])
+    link(mat, emission.outputs["Emission"], mix.inputs[2])
+    link(mat, mix.outputs["Shader"], out.inputs["Surface"])
+    mat.blend_method = "BLEND"
+    return mat
+
+
 def cursor_material(name, color):
     return edge_accent_material(name, color, 1.0)
 
@@ -970,6 +1152,8 @@ def make_rounded_plane_mesh(name, w, h, radius, segments=10):
     mesh = bpy.data.meshes.new(name)
     mesh.from_pydata(verts, [], faces)
     uv = mesh.uv_layers.new(name="UVMap")
+    if w <= 0.0 or h <= 0.0:
+        raise FilmError("rounded plane dimensions must be positive")
     for poly in mesh.polygons:
         for loop_index in poly.loop_indices:
             vertex_index = mesh.loops[loop_index].vertex_index
@@ -999,6 +1183,16 @@ def add_mesh_object(scene, mesh, name, material, parent=None):
     if parent is not None:
         obj.parent = parent
     return obj
+
+
+def ui_plane_local_transform(index, face):
+    """Return the parent-local transform emitted for a UI plane."""
+    is_back = face == "back"
+    sign = 1.0 if is_back else -1.0
+    layer = index * 0.000012
+    return ((0.0, sign * (SLAB_HALF_T + UI_OFFSET + layer), 0.0),
+            (0.0, 0.0, 0.0),
+            (-1.0 if is_back else 1.0, 1.0, 1.0))
 
 
 # ---------------------------------------------------------------------------
@@ -1119,7 +1313,8 @@ def build_cloud_cards(scene, total, paths):
         image = None
         source = config.get("source")
         if source:
-            image = _load_image(os.path.join(paths["repo"], source))
+            image = _load_image(safe_repo_path(
+                paths["repo"], source, "environment cloudCards[{0}].source".format(index)))
         material = cloud_card_material(
             "Mat.cloud.{0}".format(config.get("id", index)), card_cfg, image)
         width = float(config.get("width", 9.5 + index * 2.0))
@@ -1232,7 +1427,8 @@ def build_slab(scene, materials, total):
     """Rounded layered glass with a quiet cyan perimeter and traveling glint."""
     slab = add_mesh_object(
         scene, make_rounded_panel_mesh(
-            "slab.glass.mesh", SLAB_W, SLAB_T, SLAB_H, SLAB_RADIUS, 14),
+            "slab.glass.mesh", SLAB_W, SLAB_T, SLAB_H, SLAB_RADIUS,
+            CORNER_SEGMENTS),
         "Glass.slab", materials["glass"])
     bevel = slab.modifiers.new("Bevel", "BEVEL")
     bevel.width = float(nested(
@@ -1289,7 +1485,7 @@ def build_clear_covers(scene, slab, material):
             scene,
             make_rounded_plane_mesh(
                 "glass.cover.{0}.mesh".format(face),
-                SLAB_W, SLAB_H, SLAB_RADIUS, 14),
+                SLAB_W, SLAB_H, SLAB_RADIUS, CORNER_SEGMENTS),
             "Glass.cover.{0}".format(face), material, parent=slab)
         cover.location.y = sign * offset
         covers.append(cover)
@@ -1308,6 +1504,11 @@ def _load_image(path):
         img.reload()
     except Exception:
         pass
+    # Keep provenance on the datablock as well as in filepath.  Packing an
+    # image (or Blender's staged-save path remap) can remove the latter; the
+    # digest is only useful when consumers bind it back to these exact bytes.
+    img["anything_llm_capture_source"] = os.path.realpath(path)
+    img["anything_llm_capture_sha256"] = sha256_file(path)
     return img
 
 
@@ -1317,6 +1518,50 @@ def _set_opacity(material, frame, value):
         return
     node.outputs[0].default_value = float(value)
     node.outputs[0].keyframe_insert(data_path="default_value", frame=frame)
+
+
+def _iter_action_fcurves(animation_data):
+    """Yield F-curves on both legacy and slotted Blender Actions.
+
+    Blender 5.2 removed ``Action.fcurves`` in favour of channel bags.  Do
+    not rely on the version number: files can be opened by a newer minor
+    release, and the legacy collection is still present in older releases.
+    """
+    action = getattr(animation_data, "action", None) if animation_data else None
+    if action is None:
+        return
+    seen = set()
+
+    def emit(collection):
+        for curve in collection or []:
+            marker = id(curve)
+            if marker not in seen:
+                seen.add(marker)
+                yield curve
+
+    yield from emit(getattr(action, "fcurves", None))
+    slots = list(getattr(action, "slots", []) or [])
+    for layer in list(getattr(action, "layers", []) or []):
+        for strip in list(getattr(layer, "strips", []) or []):
+            yield from emit(getattr(strip, "fcurves", None))
+            for bag in list(getattr(strip, "channelbags", []) or []):
+                yield from emit(getattr(bag, "fcurves", None))
+            channelbag = getattr(strip, "channelbag", None)
+            if callable(channelbag):
+                for slot in slots:
+                    try:
+                        yield from emit(getattr(channelbag(slot), "fcurves", None))
+                    except (TypeError, RuntimeError):
+                        continue
+
+
+def _set_deterministic_easing(animation_data):
+    """Make all generated keys use the same bounded, reproducible easing."""
+    for fcurve in _iter_action_fcurves(animation_data):
+        for key in fcurve.keyframe_points:
+            key.interpolation = "BEZIER"
+            key.handle_left_type = "AUTO_CLAMPED"
+            key.handle_right_type = "AUTO_CLAMPED"
 
 
 def build_ui_planes(scene, slab, shotlist, catalog_index, paths, manifest):
@@ -1332,8 +1577,11 @@ def build_ui_planes(scene, slab, shotlist, catalog_index, paths, manifest):
             raise FilmError("shot {0}: {1} {2} ({3}) not in catalog".format(
                 shot["number"], src["type"], src["id"], src.get("framing")))
 
-        shot_start = int(shot["frames"]["start"])
-        shot_end = int(shot["frames"]["end"])
+        bounded_frame_range(shot["frames"]["start"], shot["frames"]["end"],
+                            "shot {0} frame range".format(shot["number"]),
+                            int(shotlist["format"]["frames"]))
+        shot_start = shot["frames"]["start"]
+        shot_end = shot["frames"]["end"]
         face = shot.get("face", "front")
         is_back = face == "back"
         previous = shots[index - 1] if index > 0 else None
@@ -1353,38 +1601,51 @@ def build_ui_planes(scene, slab, shotlist, catalog_index, paths, manifest):
 
         clip_info = None
         if src["type"] == "clip":
-            first = os.path.join(paths["ui"], entry["directory"],
-                                 frame_name(int(src["startFrame"])))
+            bounded_frame_range(src["startFrame"], src["endFrame"],
+                                "shot {0} source frame range".format(shot["number"]))
+            if src["endFrame"] > entry.get("frameCount", 0):
+                raise FilmError("shot {0}: source trim exceeds catalog frameCount".format(shot["number"]))
+            directory = safe_catalog_path(paths["ui"], entry.get("directory"),
+                                          "shot {0} catalog directory".format(shot["number"]))
+            timeline = (safe_catalog_path(paths["ui"], entry.get("timeline"),
+                                          "shot {0} catalog timeline".format(shot["number"]))
+                        if entry.get("timeline") is not None else None)
+            first = safe_clip_frame(directory, src["startFrame"],
+                                    "shot {0} source PNG".format(shot["number"]))
             image = _load_image(first)
             clip_info = {
-                "directory": os.path.join(paths["ui"], entry["directory"]),
-                "trim_start": int(src["startFrame"]),
-                "trim_end": int(src["endFrame"]),
+                "directory": directory,
+                "trim_start": src["startFrame"],
+                "trim_end": src["endFrame"],
                 "shot_start": shot_start,
                 "shot_end": shot_end,
                 "render_start": render_start,
                 "render_end": render_end,
-                "timeline": (os.path.join(paths["ui"], entry["timeline"])
-                             if entry.get("timeline") else None),
+                "timeline": timeline,
                 "shot": shot,
                 "face": face,
             }
         else:
-            image = _load_image(os.path.join(paths["ui"], entry["file"]))
+            image = _load_image(safe_catalog_path(
+                paths["ui"], entry.get("file"),
+                "shot {0} catalog file".format(shot["number"])))
 
         mat = ui_material("UI.mat.S{0:02d}".format(shot["number"]), image)
         plane = add_mesh_object(
             scene,
             make_rounded_plane_mesh(
-                "ui.{0}.mesh".format(shot["number"]),
-                SLAB_W, SLAB_H, UI_RADIUS, 14),
+                 "ui.{0}.mesh".format(shot["number"]),
+                  UI_W, UI_H,
+                  UI_RADIUS, CORNER_SEGMENTS),
             "UI.S{0:02d}.{1}".format(shot["number"], face), mat, parent=slab)
 
         # Later shots sit microns closer during a dissolve, avoiding z-fight.
-        face_sign = 1.0 if is_back else -1.0
+        # These are parent-local transforms; the slab owns the world flip.
+        local_location, local_rotation, local_scale = ui_plane_local_transform(index, face)
+        plane.location = local_location
+        plane.rotation_euler = local_rotation
+        plane.scale = local_scale
         layer = index * 0.000012
-        plane.location.y = face_sign * (SLAB_HALF_T + UI_OFFSET + layer)
-        plane.scale.x = -1.0 if is_back else 1.0
         if clip_info:
             clip_info["plane"] = plane
             clip_info["layer"] = layer
@@ -1402,9 +1663,13 @@ def build_ui_planes(scene, slab, shotlist, catalog_index, paths, manifest):
         _set_opacity(mat, render_start, 1.0 if flip_in else
                      0.0 if dissolve_in else 1.0)
         if dissolve_in:
-            _set_opacity(mat, min(render_end, shot_start + DISSOLVE_FRAMES), 1.0)
+            # Six displayed frames are S..S+5.  Keeping both keys on that
+            # exact window makes the two alpha curves complementary at every
+            # rendered boundary frame (there is no S-1/S+6 boundary dip).
+            _set_opacity(mat, min(render_end, shot_start + DISSOLVE_FRAMES - 1), 1.0)
         if dissolve_out:
-            _set_opacity(mat, shot_end, 1.0)
+            dissolve_start = following["frames"]["start"]
+            _set_opacity(mat, dissolve_start, 1.0)
             _set_opacity(mat, render_end, 0.0)
         planes.append(plane)
 
@@ -1412,84 +1677,252 @@ def build_ui_planes(scene, slab, shotlist, catalog_index, paths, manifest):
     return planes
 
 
-def build_cursor_tracks(scene, slab, paths, materials, manifest):
-    """Render cursor motion from navigation timeline JSON, separate from UI pixels."""
+def _load_editorial_font():
+    # Deliberately use Blender's built-in Bfont.  Platform font paths change
+    # glyph metrics and can move a lower-third outside the safe area.
+    return None
+
+
+def _set_editorial_opacity(material, frame, value):
+    node = material.node_tree.nodes.get("Opacity")
+    node.outputs[0].default_value = float(value)
+    node.outputs[0].keyframe_insert(data_path="default_value", frame=frame)
+
+
+def build_editorial_callouts(scene, slab, shotlist, manifest):
+    """Create true Blender lower-thirds, independent of the captured UI pixels."""
+    callouts = shotlist.get("editorialCallouts", [])
+    color = rgb(nested(ENVIRONMENT, ("editorial", "textColor"), "#E8F6FF"))
+    strength = float(nested(ENVIRONMENT, ("editorial", "emissionStrength"), 1.4))
+    font = _load_editorial_font()
+    for callout in callouts:
+        start = int(callout["frames"]["start"])
+        end = int(callout["frames"]["end"])
+        fade = int(callout.get("fadeFrames", 8))
+        face = callout["face"]
+        sign = 1.0 if face == "back" else -1.0
+        mat = editorial_text_material(
+            "Editorial.mat." + callout["id"], color, strength)
+        data = bpy.data.curves.new("Editorial.text." + callout["id"], "FONT")
+        data.body = callout["text"]
+        data.align_x = "LEFT"
+        data.align_y = "CENTER"
+        data.size = float(callout.get("fontSizeM", 0.115))
+        data.extrude = 0.00035
+        data.space_character = 1.05
+        if font is not None:
+            data.font = font
+        text = bpy.data.objects.new("Editorial." + callout["id"], data)
+        scene.collection.objects.link(text)
+        text.parent = slab
+        # positionM is a screen-space LEFT/CENTER anchor.  The back face needs
+        # both local axes mirrored: X restores reading order and Y counters the
+        # panel's 180-degree screen rotation so glyphs remain upright.
+        screen_x = float(callout["positionM"][0])
+        local_x = -screen_x if face == "back" else screen_x
+        text.location = (local_x,
+                         sign * (SLAB_HALF_T + UI_OFFSET + 0.0012),
+                         float(callout["positionM"][1]))
+        text.rotation_euler = (math.radians(-90.0 if face == "back" else 90.0), 0.0, 0.0)
+        text.scale = (-1.0, -1.0, 1.0) if face == "back" else (1.0, 1.0, 1.0)
+        text.data.materials.append(mat)
+        text.hide_render = True
+        text.keyframe_insert(data_path="hide_render", frame=max(1, start - fade - 1))
+        text.hide_render = False
+        text.keyframe_insert(data_path="hide_render", frame=max(1, start - fade))
+        text.hide_render = True
+        text.keyframe_insert(data_path="hide_render", frame=min(shotlist["format"]["frames"], end + fade + 1))
+        _set_editorial_opacity(mat, max(1, start - fade), 0.0)
+        _set_editorial_opacity(mat, start, 1.0)
+        _set_editorial_opacity(mat, end, 1.0)
+        _set_editorial_opacity(mat, min(shotlist["format"]["frames"], end + fade), 0.0)
+    manifest["editorial_callouts"] = len(callouts)
+
+
+def build_cursor_tracks(scene, slab, catalog_index, paths, materials, manifest):
+    """Render sparse timelines using two shared face rigs.
+
+    A consecutive explicit move run is a real drag/path and is keyed at its
+    captured coordinates with LINEAR interpolation. Other event clusters are
+    static, short-lived registrations around their event. ``provenance`` still
+    records every logical shot track; the geometry is deliberately shared.
+    """
     count = 0
+    provenance = []
+    skipped = []
+    rigs = {}
+    shared_outer_mesh = make_cursor_mesh("cursor.shared.outer.mesh", 0.069)
+    shared_inner_mesh = make_cursor_mesh("cursor.shared.inner.mesh", 0.053)
+    for face, face_sign in (("front", -1.0), ("back", 1.0)):
+        root = bpy.data.objects.new("CursorRig.{0}".format(face), None)
+        scene.collection.objects.link(root)
+        root.parent = slab
+        root.scale.x = -1.0 if face == "back" else 1.0
+        root.location.y = face_sign * (SLAB_HALF_T + UI_OFFSET + 0.0008)
+        outer = add_mesh_object(scene, shared_outer_mesh, "CursorRig.outer.{0}".format(face),
+                                materials["cursor_outline"], parent=root)
+        inner = add_mesh_object(scene, shared_inner_mesh, "CursorRig.inner.{0}".format(face),
+                                materials["cursor_fill"], parent=root)
+        inner.location = (0.004, face_sign * 0.00018, -0.004)
+        for obj in (root, outer, inner):
+            obj.hide_render = True
+            obj.keyframe_insert(data_path="hide_render", frame=1)
+        rigs[face] = {"root": root, "outer": outer, "inner": inner,
+                      "sign": face_sign, "windows": []}
+
+    def set_linear(obj):
+        for curve in _iter_action_fcurves(obj.animation_data):
+            for key in curve.keyframe_points:
+                key.interpolation = "LINEAR"
+
+    def point(info, event):
+        nx, ny = float(event["nx"]), float(event["ny"])
+        x = (nx - 0.5) * UI_W
+        if info["face"] == "back": x *= -1.0
+        return (x, (0.5 - ny) * UI_H)
+
     for info in FILM_CLIP_INFO:
         shot = info["shot"]
-        if shot.get("kind") != "navigation" or not info.get("timeline"):
+        if not info.get("timeline"):
             continue
         timeline = load_json(info["timeline"])
         events = timeline.get("cursor", [])
+        if not isinstance(events, list):
+            raise FilmError("shot {0} cursor timeline must contain an array".format(shot["id"]))
+        timeline_count = timeline.get("frameCount")
+        entry = catalog_index.get((shot["source"]["type"], shot["source"]["id"],
+                                   shot["source"].get("framing")),
+                                  catalog_index.get((shot["source"]["type"], shot["source"]["id"], None)))
+        expected_count = entry.get("frameCount") if entry else None
+        if (isinstance(timeline_count, bool) or not isinstance(timeline_count, int) or
+                timeline_count < 1 or timeline_count > MAX_ASSET_FRAME or
+                timeline_count != expected_count):
+            raise FilmError("shot {0} cursor timeline has an invalid frameCount".format(shot["id"]))
+        for event_index, event in enumerate(events):
+            if (not isinstance(event, dict) or
+                    isinstance(event.get("frame"), bool) or not isinstance(event.get("frame"), int) or
+                    event["frame"] < 0 or event["frame"] >= timeline_count or
+                    not isinstance(event.get("nx"), (int, float)) or isinstance(event.get("nx"), bool) or
+                    not math.isfinite(event["nx"]) or not 0.0 <= event["nx"] <= 1.0 or
+                    not isinstance(event.get("ny"), (int, float)) or isinstance(event.get("ny"), bool) or
+                    not math.isfinite(event["ny"]) or not 0.0 <= event["ny"] <= 1.0 or
+                    event.get("event") not in ("move", "down", "up", "click")):
+                raise FilmError("shot {0} cursor[{1}] is malformed".format(
+                    shot["id"], event_index))
         trim_zero = info["trim_start"] - 1
         events = [event for event in events
                   if trim_zero <= int(event["frame"]) <= info["trim_end"] - 1]
         if not events:
-            raise FilmError("navigation shot {0} has no cursor timeline".format(
-                shot["id"]))
-
-        face_sign = 1.0 if info["face"] == "back" else -1.0
-        root = bpy.data.objects.new("Cursor.{0}".format(shot["id"]), None)
-        scene.collection.objects.link(root)
-        root.parent = slab
-        root.scale.x = -1.0 if info["face"] == "back" else 1.0
-        root.location.y = face_sign * (
-            SLAB_HALF_T + UI_OFFSET + info.get("layer", 0.0) + 0.0008)
-
-        outer = add_mesh_object(
-            scene, make_cursor_mesh("cursor.outer.mesh", 0.069),
-            "Cursor.outer.{0}".format(shot["number"]),
-            materials["cursor_outline"], parent=root)
-        inner = add_mesh_object(
-            scene, make_cursor_mesh("cursor.inner.mesh", 0.053),
-            "Cursor.inner.{0}".format(shot["number"]),
-            materials["cursor_fill"], parent=root)
-        inner.location = (0.004, face_sign * 0.00018, -0.004)
-
-        first_global = None
-        last_click = None
-        for event in events:
-            global_frame = info["shot_start"] + (int(event["frame"]) - trim_zero)
-            if global_frame < info["render_start"] or global_frame > info["render_end"]:
-                continue
-            nx = float(event.get("nx", 0.5))
-            ny = float(event.get("ny", 0.5))
-            x = (nx - 0.5) * SLAB_W
-            if info["face"] == "back":
-                x *= -1.0
-            z = (0.5 - ny) * SLAB_H
-            root.location.x = x
-            root.location.z = z
-            root.keyframe_insert(data_path="location", frame=global_frame)
-            first_global = global_frame if first_global is None else first_global
-            if event.get("event") == "click":
-                last_click = global_frame
-                base_x = -1.0 if info["face"] == "back" else 1.0
-                root.scale = (base_x, 1.0, 1.0)
-                root.keyframe_insert(data_path="scale", frame=max(1, global_frame - 1))
-                root.scale = (base_x * 0.82, 0.82, 0.82)
-                root.keyframe_insert(data_path="scale", frame=global_frame)
-                root.scale = (base_x, 1.0, 1.0)
-                root.keyframe_insert(data_path="scale", frame=global_frame + 3)
-
-        if first_global is None:
+            # A valid capture may simply not use a pointer.  Do not invent one,
+            # and do not turn an empty timeline into a build failure.
+            skipped.append({"shot": shot["id"], "reason": "timeline has no cursor events"})
             continue
-        hide_frame = min(info["render_end"] + 1,
-                         (last_click + 7) if last_click else info["shot_end"] + 1)
-        # Object visibility is not inherited reliably from an Empty in Eevee,
-        # so keyframe the root and both rendered cursor layers explicitly.
-        for cursor_object in (root, outer, inner):
-            cursor_object.hide_render = True
-            cursor_object.keyframe_insert(
-                data_path="hide_render", frame=max(1, first_global - 1))
-            cursor_object.hide_render = False
-            cursor_object.keyframe_insert(
-                data_path="hide_render", frame=first_global)
-            cursor_object.hide_render = True
-            cursor_object.keyframe_insert(
-                data_path="hide_render", frame=hide_frame)
+
+        rig = rigs[info["face"]]
+        root, outer, inner = rig["root"], rig["outer"], rig["inner"]
+        frame_events = []
+        for event in events:
+            # Timeline frames are zero-based; source PNG names are one-based.
+            global_frame = info["shot_start"] + (int(event["frame"]) - trim_zero)
+            if global_frame < info["shot_start"] or global_frame > info["shot_end"]:
+                continue
+            frame_events.append((global_frame, event))
+        if not frame_events:
+            continue
+        # Partition consecutive move samples into path runs. A down event at
+        # the first move sample is part of that same activity, not a separate
+        # click registration. The windows are merged below before visibility
+        # keys are written; otherwise the old click hide key could land in the
+        # middle of a drag and briefly produce a second/vanishing cursor.
+        runs = []
+        pending = []
+        for item in frame_events:
+            frame, event = item
+            if event.get("event") == "move" and (not pending or frame == pending[-1][0] + 1):
+                pending.append(item)
+            else:
+                if pending: runs.append(("move", pending)); pending = []
+                if event.get("event") != "move": runs.append(("cluster", [item]))
+        if pending: runs.append(("move", pending))
+        windows = []
+        for kind, items in runs:
+            if kind == "move" and len(items) >= 2:
+                start, end = items[0][0], items[-1][0]
+                windows.append((max(info["shot_start"], start - 1), min(info["shot_end"], end + 1), items))
+            else:
+                start = min(item[0] for item in items)
+                end = max(item[0] for item in items)
+                windows.append((max(info["shot_start"], start - 2), min(info["shot_end"], end + 4), items))
+        merged_windows = []
+        for start, end, items in sorted(windows, key=lambda value: value[0]):
+            if merged_windows and start <= merged_windows[-1][1] + 1:
+                old_start, old_end, old_items = merged_windows[-1]
+                merged_windows[-1] = (old_start, max(old_end, end), old_items + items)
+            else:
+                merged_windows.append((start, end, list(items)))
+        windows = merged_windows
+        for start, end, items in windows:
+            # Merging neighboring runs must not change event order.  In
+            # particular, navigation clicks are followed by a hold, never a
+            # snap back to an earlier cursor position.
+            items = sorted(items, key=lambda item: item[0])
+            rig["windows"].append((start, end, shot["number"]))
+            # A shared rig is hidden outside each owning shot; this also makes
+            # dissolve boundaries single-registration rather than duplicated.
+            for frame in range(start, end + 1):
+                # Holds use the latest event in this merged activity window;
+                # never reset to the first event when a frame has no sample.
+                source = event_for_frame(items, frame)
+                x, z = point(info, source)
+                root.location.x, root.location.z = x, z
+                root.keyframe_insert(data_path="location", frame=frame)
+            for item_frame, event in items:
+                if event.get("event") == "click":
+                    base_x = -1.0 if info["face"] == "back" else 1.0
+                    root.scale = (base_x, 1.0, 1.0)
+                    root.keyframe_insert(data_path="scale", frame=max(1, item_frame - 1))
+                    root.scale = (base_x * 0.82, 0.82, 0.82)
+                    root.keyframe_insert(data_path="scale", frame=item_frame)
+                    root.scale = (base_x, 1.0, 1.0)
+                    root.keyframe_insert(data_path="scale", frame=min(info["shot_end"], item_frame + 3))
+        set_linear(root)
+        # Visibility is keyed once below for the complete physical rig. Do not
+        # seed a per-track hide key at shot_start-1: on adjacent shots that
+        # key can land inside the previous track's final drag frame.
+        set_linear(root)
         count += 1
+        provenance.append({
+            "shot": shot["id"],
+            "number": shot["number"],
+            "source": "{0}:{1}".format(shot["source"]["type"], shot["source"]["id"]),
+            "timeline": os.path.relpath(info["timeline"], paths["repo"]),
+            "sourceFrames": [info["trim_start"], info["trim_end"]],
+            "globalFrames": [info["shot_start"], info["shot_end"]],
+            "eventCount": len(events),
+            "face": info["face"],
+            "activityWindows": [[start, end] for start, end, _ in windows],
+        })
+    for face, rig in rigs.items():
+        merged = []
+        for start, end, number in sorted(rig["windows"], key=lambda value: value[0]):
+            if merged and start <= merged[-1][1] + 1:
+                merged[-1] = (merged[-1][0], max(merged[-1][1], end), number)
+            else:
+                merged.append((start, end, number))
+        for cursor_object in (rig["root"], rig["outer"], rig["inner"]):
+            cursor_object.hide_render = True
+            for start, end, _ in merged:
+                cursor_object.hide_render = False
+                cursor_object.keyframe_insert(data_path="hide_render", frame=start)
+                cursor_object.hide_render = True
+                cursor_object.keyframe_insert(data_path="hide_render", frame=end + 1)
     manifest["cursor_tracks"] = count
+    manifest["cursor_logical_tracks"] = count
+    manifest["cursor_physical_rigs"] = len(rigs)
+    manifest["cursor_physical_objects"] = len(rigs) * 3
+    manifest["cursor_mesh_datablocks"] = 2
+    manifest["cursor_track_provenance"] = provenance
+    manifest["cursor_track_skips"] = skipped
     return count
 
 
@@ -1514,12 +1947,60 @@ def build_camera(scene, total):
     cam.rotation_euler = (math.radians(90.0), 0.0, 0.0)
     scene.camera = cam
 
+    # Explicit neutral keys make a partial edit unable to leak a lens, aim, or
+    # DOF state into the next recipe.  Focus moves add their own guard keys.
+    cam.data.lens = FOCAL_MM
+    cam.keyframe_insert(data_path="rotation_euler", frame=1)
+    cam.keyframe_insert(data_path="rotation_euler", frame=total)
+    cam.data.keyframe_insert(data_path="lens", frame=1)
+    cam.data.keyframe_insert(data_path="lens", frame=total)
+    dof.focus_distance = CAM_Z
+    dof.keyframe_insert(data_path="focus_distance", frame=1)
+    dof.keyframe_insert(data_path="focus_distance", frame=total)
+
     # Slow Z breathing only — the camera never wanders in X/Y.
     for frame in range(1, total + 1, 15):
         t = frame / FPS
         z = CAM_Z + BREATH_AMP * math.sin(2.0 * math.pi * t / BREATH_PERIOD_S)
         cam.location.y = -z
         cam.keyframe_insert(data_path="location", frame=frame)
+
+    # Data-driven, bounded push-ins for the micro-interactions. The target is
+    # moved in screen space while the camera stays on its stable axis; lens
+    # changes are intentionally small enough to preserve the glass silhouette.
+    moves = nested(ENVIRONMENT, ("camera", "focusMoves"), [])
+    for move in moves:
+        start = int(move["start"])
+        end = int(move["end"])
+        ease = max(1, int(move.get("easeFrames", 8)))
+        mid = (start + end) // 2
+        points = [start, min(mid, start + ease), max(mid, end - ease), end]
+        target = move.get("targetOffsetM", [0.0, 0.0])
+        lenses = [float(move.get("lensStartMM", FOCAL_MM)),
+                  float(move.get("lensPeakMM", FOCAL_MM)),
+                  float(move.get("lensPeakMM", FOCAL_MM)),
+                  float(move.get("lensEndMM", FOCAL_MM))]
+        offsets = [(0.0, 0.0), (float(target[0]), float(target[1])),
+                   (float(target[0]), float(target[1])), (0.0, 0.0)]
+        guard_frames = [max(1, start - 1), min(total, end + 1)]
+        for frame in guard_frames:
+            cam.location.y = -CAM_Z
+            cam.rotation_euler = (math.radians(90.0), 0.0, 0.0)
+            cam.data.lens = FOCAL_MM
+            cam.data.dof.focus_distance = CAM_Z
+            cam.keyframe_insert(data_path="rotation_euler", frame=frame)
+            cam.data.keyframe_insert(data_path="lens", frame=frame)
+            cam.data.dof.keyframe_insert(data_path="focus_distance", frame=frame)
+        for frame, (x_offset, z_offset), lens in zip(points, offsets, lenses):
+            cam.location.y = -CAM_Z
+            direction = Vector((x_offset, 0.0, z_offset)) - cam.location
+            cam.rotation_euler = direction.to_track_quat("-Z", "Y").to_euler()
+            cam.data.lens = lens
+            cam.data.dof.focus_distance = math.sqrt(
+                CAM_Z * CAM_Z + x_offset * x_offset + z_offset * z_offset)
+            cam.keyframe_insert(data_path="rotation_euler", frame=frame)
+            cam.data.keyframe_insert(data_path="lens", frame=frame)
+            cam.data.dof.keyframe_insert(data_path="focus_distance", frame=frame)
     return cam
 
 
@@ -1559,6 +2040,87 @@ def build_flips(slab, shotlist, total):
     slab.keyframe_insert(data_path="rotation_euler", frame=total)
 
 
+def set_scene_animation_easing(scene, shotlist):
+    """Normalize every object/data/material animation after all keys exist.
+
+    The global pass is intentionally followed by the small set of animation
+    contracts that are part of the film format.  Keeping those repairs here,
+    after the global pass, prevents a later normalization from silently
+    changing a dissolve or cursor path.
+    """
+    datablocks = list(scene.objects)
+    datablocks += [obj.data for obj in scene.objects if getattr(obj, "data", None)]
+    datablocks += list(bpy.data.materials)
+    for datablock in datablocks:
+        _set_deterministic_easing(getattr(datablock, "animation_data", None))
+        node_tree = getattr(datablock, "node_tree", None)
+        _set_deterministic_easing(getattr(node_tree, "animation_data", None))
+
+    # Specialized interpolation is a post-normalization contract.  Do not
+    # replace this with another broad easing pass: click pulses and editorial
+    # fades must remain BEZIER while only captured movement and dissolves are
+    # linear.
+    for obj in scene.objects:
+        if obj.name.startswith("CursorRig."):
+            curves = list(_iter_action_fcurves(obj.animation_data))
+            # Blender 5.2 can expose a newly-created vector channel through
+            # the channel bag but not through the owner's convenience view;
+            # include the action's bags explicitly so scale Y cannot retain
+            # the pre-contract move easing.
+            action = getattr(getattr(obj, "animation_data", None), "action", None)
+            for layer in list(getattr(action, "layers", []) or []):
+                for strip in list(getattr(layer, "strips", []) or []):
+                    for bag in list(getattr(strip, "channelbags", []) or []):
+                        curves.extend(list(getattr(bag, "fcurves", []) or []))
+            for fcurve in {id(curve): curve for curve in curves}.values():
+                if fcurve.data_path == "location":
+                    for key in fcurve.keyframe_points:
+                        key.interpolation = "LINEAR"
+                elif fcurve.data_path == "scale":
+                    for key in fcurve.keyframe_points:
+                        key.interpolation = "BEZIER"
+                elif fcurve.data_path == "hide_render":
+                    for key in fcurve.keyframe_points:
+                        key.interpolation = "CONSTANT"
+
+    dissolve_materials = set()
+    shots = shotlist.get("shots", [])
+    for index, shot in enumerate(shots):
+        incoming = shot.get("transitionIn", {}).get("type") == "same-face-dissolve"
+        following = shots[index + 1] if index + 1 < len(shots) else None
+        outgoing = bool(following and following.get("transitionIn", {}).get(
+            "type") == "same-face-dissolve")
+        if incoming or outgoing:
+            dissolve_materials.add("UI.mat.S{0:02d}".format(shot["number"]))
+
+    for material in bpy.data.materials:
+        if material.name not in dissolve_materials:
+            continue
+        for fcurve in _iter_action_fcurves(
+                getattr(material.node_tree, "animation_data", None)):
+            if 'nodes["Opacity"]' in fcurve.data_path:
+                for key in fcurve.keyframe_points:
+                    key.interpolation = "LINEAR"
+
+    # hide_render is a visibility state, never a smoothly interpolated value.
+    # This final pass deliberately runs last and covers UI planes, cursor
+    # rigs, and any future generated object/data animation.
+    all_datablocks = list(scene.objects)
+    all_datablocks += [obj.data for obj in scene.objects if getattr(obj, "data", None)]
+    all_datablocks += list(bpy.data.materials)
+    for datablock in all_datablocks:
+        curves = list(_iter_action_fcurves(getattr(datablock, "animation_data", None)))
+        action = getattr(getattr(datablock, "animation_data", None), "action", None)
+        for layer in list(getattr(action, "layers", []) or []):
+            for strip in list(getattr(layer, "strips", []) or []):
+                for bag in list(getattr(strip, "channelbags", []) or []):
+                    curves.extend(list(getattr(bag, "fcurves", []) or []))
+        for fcurve in {id(curve): curve for curve in curves}.values():
+            if fcurve.data_path == "hide_render":
+                for key in fcurve.keyframe_points:
+                    key.interpolation = "CONSTANT"
+
+
 # ---------------------------------------------------------------------------
 # Sound
 # ---------------------------------------------------------------------------
@@ -1579,9 +2141,8 @@ def prepare_ui_frame(sc, frame):
         offset = max(0, min(frame - info["shot_start"],
                             info["trim_end"] - info["trim_start"]))
         cf = info["trim_start"] + offset
-        path = os.path.join(info["directory"], frame_name(cf))
-        if not os.path.isfile(path):
-            continue
+        path = safe_clip_frame(info["directory"], cf,
+                               "clip frame {0}".format(frame_name(cf)))
         tex = next(n for n in
                    info["plane"].data.materials[0].node_tree.nodes
                    if n.type == "TEX_IMAGE")
@@ -1590,6 +2151,8 @@ def prepare_ui_frame(sc, frame):
         try:
             tex.image.filepath = path
             tex.image.reload()
+            tex.image["anything_llm_capture_source"] = os.path.realpath(path)
+            tex.image["anything_llm_capture_sha256"] = sha256_file(path)
         except Exception as exc:
             raise FilmError("cannot load clip frame {0}: {1}".format(path, exc))
 
@@ -1605,6 +2168,10 @@ def build_sound(scene, paths, manifest):
     editor = scene.sequence_editor
     try:
         s = editor.strips.new_sound("Audio.skybao-mix", wav, 120, 1, stream=0)
+        # Keep a small, non-name-based identity on the datablock.  Blender
+        # derives the sound name from the filepath, so a replacement datablock
+        # can otherwise look canonical after its bytes and path are copied.
+        s.sound["anything_llm_audio_identity"] = "builder:skybao-mix"
         s.frame_start = 1
         s.frame_final_end = total + 1
         manifest["sound"] = os.path.basename(wav)
@@ -1652,9 +2219,15 @@ def validate_delivery_dependencies(strip, paths):
             missing.append("{0}: non-relative {1}".format(
                 image.name, image.filepath))
             continue
-        resolved = os.path.normpath(os.path.join(
-            paths["film"], image.filepath[2:]))
-        if not os.path.isfile(resolved):
+        resolved = os.path.realpath(os.path.normpath(os.path.join(
+            paths["film"], image.filepath[2:])))
+        allowed = [os.path.realpath(paths["film"]), os.path.realpath(paths["ui"]),
+                   os.path.realpath(paths["repo"])]
+        try:
+            inside = any(os.path.commonpath((root, resolved)) == root for root in allowed)
+        except ValueError:
+            inside = False
+        if not inside or not os.path.isfile(resolved):
             missing.append("{0}: missing {1}".format(image.name, resolved))
     sound_count = 0
     if strip is not None and getattr(strip, "sound", None):
@@ -1709,13 +2282,31 @@ def write_build_manifest(sc, cfg, paths, catalog, manifest):
     """Record exact inputs/settings so a UI change has an auditable rebuild."""
     input_assets = {}
     for input_id, relative_path in ENVIRONMENT.get("toolInputs", {}).items():
-        if input_id in ("uiCatalog", "shotlist"):
-            continue
-        absolute_path = os.path.join(paths["repo"], relative_path)
-        if os.path.isfile(absolute_path):
-            input_assets[input_id] = {
-                "path": relative_path,
-                "sha256": sha256_file(absolute_path),
+        absolute_path = safe_repo_path(
+            paths["repo"], relative_path,
+            "environment tool input {0}".format(input_id))
+        if not os.path.isfile(absolute_path):
+            raise FilmError("missing declared environment tool input {0}: {1}".format(
+                input_id, relative_path))
+        input_assets[input_id] = {
+            "path": relative_path,
+            "sha256": sha256_file(absolute_path),
+        }
+    # Keep the descriptive builder name stable even for older recipes that
+    # called this consumer input simply "consumer".
+    if "consumer" in input_assets:
+        input_assets["builder"] = dict(input_assets["consumer"])
+    scene_contract = os.path.join(paths["film_dir"], "scene-contract.py")
+    if os.path.isfile(scene_contract):
+        input_assets["sceneContract"] = {
+            "path": os.path.relpath(scene_contract, paths["repo"]),
+            "sha256": sha256_file(scene_contract),
+        }
+    for card in ENVIRONMENT.get("cloudCards", []):
+        if isinstance(card, dict) and card.get("source"):
+            card_path = safe_repo_path(paths["repo"], card["source"], "cloud card source")
+            input_assets["cloudCard-{0}".format(card.get("id"))] = {
+                "path": card["source"], "sha256": sha256_file(card_path),
             }
     catalog_assets = catalog.get("assets", [])
     used_ui_assets = {}
@@ -1743,7 +2334,18 @@ def write_build_manifest(sc, cfg, paths, catalog, manifest):
             "recipeVersion": entry.get("recipeVersion"),
             "recipeSha256": recipe_sha,
             "contentSha256": content_sha,
+            "trimRanges": [],
         }
+        if source.get("type") == "clip":
+            timeline_path = safe_catalog_path(paths["ui"], entry.get("timeline"), "UI timeline")
+            used_ui_assets[key]["timeline"] = entry.get("timeline")
+            used_ui_assets[key]["timelineSha256"] = sha256_file(timeline_path)
+
+    for shot in load_json(paths["shotlist"]).get("shots", []):
+        source = shot.get("source", {})
+        key = "{0}:{1}:{2}".format(source.get("type"), source.get("id"), source.get("framing"))
+        if source.get("type") == "clip" and key in used_ui_assets:
+            used_ui_assets[key]["trimRanges"].append([source.get("startFrame"), source.get("endFrame")])
     payload = {
         "schemaVersion": 2,
         "shotlist": {
@@ -1890,6 +2492,278 @@ def sample_frames_for_shots(shotlist, requested):
     return sorted(frames)
 
 
+def _finite_number(value):
+    return (isinstance(value, (int, float)) and not isinstance(value, bool) and
+            math.isfinite(value))
+
+
+def _integer(value):
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def validate_editorial_and_focus(shotlist, environment):
+    """Validate the two data-driven Blender consumers without touching bpy."""
+    shots = shotlist.get("shots")
+    by_id = {shot.get("id"): shot for shot in shots if isinstance(shot, dict)}
+    flips = shotlist.get("direction", {}).get("flips", [])
+    total = shotlist.get("format", {}).get("frames")
+
+    callouts = shotlist.get("editorialCallouts")
+    if not isinstance(callouts, list) or len(callouts) != 5:
+        raise FilmError("editorialCallouts must be an array of exactly five objects")
+    callout_ids = set()
+    expected_text = {
+        "assistant": "Grounded Answers with Citations",
+        "knowledge": "Unified Knowledge Search",
+        "communications": "Connected Team Context",
+        "work": "Automated Agent Workflows",
+        "admin": "Enterprise Governance",
+    }
+    if shotlist.get("groupOrder") != list(expected_text):
+        raise FilmError("shotlist.groupOrder must contain each expected editorial area exactly once")
+    glass = environment.get("glass") if isinstance(environment, dict) else None
+    if not isinstance(glass, dict):
+        raise FilmError("environment.glass must be an object for editorial validation")
+    width = glass.get("widthM")
+    height = glass.get("heightM")
+    inset = glass.get("uiInsetM")
+    if not all(_finite_number(value) for value in (width, height, inset)):
+        raise FilmError("editorial validation requires finite glass dimensions and uiInsetM")
+    editorial = environment.get("editorial") if isinstance(environment, dict) else None
+    color = editorial.get("textColor") if isinstance(editorial, dict) else None
+    color_ok = ((isinstance(color, str) and len(color) == 7 and color[0] == "#" and
+                 all(char in "0123456789abcdefABCDEF" for char in color[1:])) or
+                (isinstance(color, list) and len(color) == 3 and
+                 all(_finite_number(component) and 0 <= component <= 1 for component in color)))
+    if not color_ok:
+        raise FilmError("environment.editorial.textColor must be #RRGGBB or RGB values in 0..1")
+    if (not isinstance(editorial, dict) or not _finite_number(editorial.get("emissionStrength")) or
+            not 0 <= editorial["emissionStrength"] <= 100):
+        raise FilmError("environment.editorial.emissionStrength must be finite and 0..100")
+    callout_transitions = []
+    for item in shots:
+        transition = item.get("transitionIn") if isinstance(item, dict) else None
+        frames = item.get("frames") if isinstance(item, dict) else None
+        if (isinstance(transition, dict) and transition.get("type") == "same-face-dissolve" and
+                isinstance(frames, dict) and _integer(transition.get("frames"))):
+            callout_transitions.append((frames.get("start"), frames.get("start", 0) + transition["frames"] - 1))
+    group_counts = {group: 0 for group in expected_text}
+    safe_x = max(0.0, width / 2.0 - inset - 0.14)
+    safe_z = max(0.0, height / 2.0 - inset - 0.14)
+    for index, callout in enumerate(callouts):
+        label = "editorialCallouts[{0}]".format(index)
+        if not isinstance(callout, dict):
+            raise FilmError("{0} must be an object".format(label))
+        ident = callout.get("id")
+        if not isinstance(ident, str) or not ident.strip() or ident in callout_ids:
+            raise FilmError("{0}.id must be a unique nonempty string".format(label))
+        callout_ids.add(ident)
+        group = callout.get("group")
+        text = callout.get("text")
+        if group not in expected_text or text != expected_text[group]:
+            raise FilmError("{0} has invalid group or approved text".format(label))
+        group_counts[group] += 1
+        if not isinstance(text, str) or not 2 <= len(text.split()) <= 4:
+            raise FilmError("{0}.text must contain 2–4 words".format(label))
+        shot = by_id.get(callout.get("shotId"))
+        if not isinstance(shot, dict):
+            raise FilmError("{0}.shotId must reference an existing shot".format(label))
+        if callout.get("face") != shot.get("face"):
+            raise FilmError("{0}.face must match its shot".format(label))
+        frames = callout.get("frames")
+        position = callout.get("positionM")
+        if (not isinstance(frames, dict) or not _integer(frames.get("start")) or
+                not _integer(frames.get("end")) or frames["start"] > frames["end"] or
+                frames["start"] < 1 or frames["end"] > total or
+                not isinstance(position, list) or len(position) != 2 or
+                not all(_finite_number(value) for value in position) or
+                not _finite_number(callout.get("fontSizeM")) or
+                not 0.06 <= callout["fontSizeM"] <= 0.18 or
+                not _integer(callout.get("fadeFrames")) or
+                not 4 <= callout["fadeFrames"] <= 12):
+            raise FilmError("{0} has malformed position, font, timing, or fade".format(label))
+        shot_frames = shot.get("frames")
+        if (not isinstance(shot_frames, dict) or frames["start"] < shot_frames.get("start", 0) or
+                frames["end"] > shot_frames.get("end", 0) or
+                frames["start"] - callout["fadeFrames"] < 1 or
+                frames["end"] + callout["fadeFrames"] > total):
+            raise FilmError("{0} frame window is outside its shot or film".format(label))
+        estimated_width = len(text) * callout["fontSizeM"] * 0.62 * 1.05 * 1.12
+        estimated_height = callout["fontSizeM"] * 1.35
+        x, z = position
+        if (x < -safe_x or x + estimated_width > safe_x or
+                z - estimated_height / 2.0 < -safe_z or z + estimated_height / 2.0 > safe_z):
+            raise FilmError("{0} text bounds exceed the panel safe area".format(label))
+        padded = (frames["start"] - callout["fadeFrames"],
+                  frames["end"] + callout["fadeFrames"])
+        if any(padded[0] <= flip.get("end", 0) and padded[1] >= flip.get("start", 0)
+               for flip in flips if isinstance(flip, dict)):
+            raise FilmError("{0} overlaps a face flip".format(label))
+        if any(padded[0] <= end and padded[1] >= start for start, end in callout_transitions):
+            raise FilmError("{0} overlaps a same-face dissolve".format(label))
+    if any(count != 1 for count in group_counts.values()):
+        raise FilmError("editorialCallouts must contain exactly one callout per expected group")
+
+    camera = environment.get("camera")
+    moves = camera.get("focusMoves") if isinstance(camera, dict) else None
+    if not isinstance(camera, dict) or not isinstance(moves, list) or len(moves) < 2:
+        raise FilmError("camera.focusMoves must contain at least two objects")
+    baseline = camera.get("lensMM")
+    sensor = camera.get("sensorWidthMM")
+    distance = camera.get("distanceM")
+    panel_width = width
+    panel_height = height
+    if not all(_finite_number(value) for value in (baseline, sensor, distance)):
+        raise FilmError("camera baseline, sensor, and distance must be finite")
+    previous_start = 0
+    windows = []
+    ids = set()
+    transitions = []
+    for shot in shots:
+        transition = shot.get("transitionIn") if isinstance(shot, dict) else None
+        shot_frames = shot.get("frames") if isinstance(shot, dict) else None
+        if (isinstance(transition, dict) and transition.get("type") == "same-face-dissolve" and
+                isinstance(shot_frames, dict)):
+            if not _integer(transition.get("frames")):
+                raise FilmError("shot transition dissolve frames must be an integer")
+            transitions.append((shot_frames.get("start"),
+                                shot_frames.get("start", 0) + transition.get("frames", 0) - 1))
+    for index, move in enumerate(moves):
+        label = "camera.focusMoves[{0}]".format(index)
+        if not isinstance(move, dict):
+            raise FilmError("{0} must be an object".format(label))
+        ident = move.get("id")
+        if not isinstance(ident, str) or not ident.strip() or ident in ids:
+            raise FilmError("{0}.id must be a unique nonempty string".format(label))
+        ids.add(ident)
+        shot = by_id.get(move.get("shotId"))
+        start, end, ease = move.get("start"), move.get("end"), move.get("easeFrames")
+        if not isinstance(shot, dict) or not _integer(start) or not _integer(end) or not _integer(ease):
+            raise FilmError("{0} has malformed shot or frame window".format(label))
+        if (start < shot.get("frames", {}).get("start", 0) or
+                end > shot.get("frames", {}).get("end", 0) or start < 1 or end > total or
+                end <= start or ease < 4 or ease > 12 or ease * 2 > end - start or
+                start < previous_start):
+            raise FilmError("{0} has unordered or bounded frames/ease".format(label))
+        previous_start = start
+        target = move.get("targetOffsetM")
+        if not isinstance(target, list) or len(target) != 2 or not all(_finite_number(v) for v in target):
+            raise FilmError("{0}.targetOffsetM must contain finite x/z offsets".format(label))
+        lenses = [move.get("lensStartMM"), move.get("lensPeakMM"), move.get("lensEndMM")]
+        if (not all(_finite_number(v) and 48 <= v <= 58 for v in lenses) or
+                move["lensPeakMM"] < max(move["lensStartMM"], move["lensEndMM"]) or
+                move["lensStartMM"] != baseline or move["lensEndMM"] != baseline):
+            raise FilmError("{0} has invalid lens baseline or peak".format(label))
+        window = (start, end)
+        if any(window[0] <= other[1] and window[1] >= other[0]
+               for other in windows + [(f.get("start"), f.get("end")) for f in flips if isinstance(f, dict)] + transitions):
+            raise FilmError("{0} overlaps a flip, transition, or another move".format(label))
+        max_lens = max(lenses)
+        view_w = distance * math.tan(2.0 * math.atan(sensor / (2.0 * max_lens)) / 2.0)
+        view_h = view_w / (16.0 / 9.0)
+        if (panel_width / 2.0 + 0.06 + abs(target[0]) > view_w or
+                panel_height / 2.0 + 0.06 + abs(target[1]) > view_h):
+            raise FilmError("{0} lens/offset leaves the panel frustum".format(label))
+        windows.append(window)
+
+
+def validate_film_contract(shotlist):
+    """Validate hostile direct-builder input before any data-driven loops."""
+    fmt = shotlist.get("format")
+    if (not isinstance(fmt, dict) or fmt.get("fps") != FPS or
+            fmt.get("frames") != FILM_TOTAL or fmt.get("durationSeconds") != 40 or
+            fmt.get("width") != 1920 or fmt.get("height") != 1080):
+        raise FilmError("film format must be exactly 1200 frames at 30fps")
+    total = fmt["frames"]
+    targeted = shotlist.get("targetedReviewFrames")
+    if (not isinstance(targeted, list) or not targeted or
+            len(set(targeted)) != len(targeted) or
+            any(not _integer(frame) or frame < 1 or frame > total for frame in targeted)):
+        raise FilmError("shotlist.targetedReviewFrames must be unique bounded integer frames")
+    shots = shotlist.get("shots")
+    if not isinstance(shots, list) or len(shots) != FILM_SHOT_COUNT or len(shots) > MAX_SHOTS:
+        raise FilmError("film must contain exactly 19 shots")
+    if not isinstance(shotlist.get("shotCount"), int) or shotlist["shotCount"] != FILM_SHOT_COUNT:
+        raise FilmError("shotlist.shotCount must be exactly 19")
+    expected_start = 1
+    for index, shot in enumerate(shots):
+        if not isinstance(shot, dict):
+            raise FilmError("shot {0} must be an object".format(index + 1))
+        frames = shot.get("frames") if isinstance(shot, dict) else None
+        if not isinstance(frames, dict):
+            raise FilmError("shot {0} frames must be an object".format(index + 1))
+        bounded_frame_range(frames.get("start"), frames.get("end"),
+                            "shot {0} frame range".format(index + 1), total)
+        if shot.get("number") != index + 1 or frames.get("start") != expected_start:
+            raise FilmError("shots must be numbered and contiguous from frame 1")
+        if frames.get("count") != frames["end"] - frames["start"] + 1:
+            raise FilmError("shot {0} frame count does not match its range".format(index + 1))
+        source = shot.get("source")
+        if not isinstance(source, dict):
+            raise FilmError("shot {0} source must be an object".format(index + 1))
+        source_type = source.get("type")
+        source_id = source.get("id")
+        if source_type not in ("clip", "still"):
+            raise FilmError("shot {0} source.type must be clip or still".format(index + 1))
+        if not isinstance(source_id, str) or not source_id.strip():
+            raise FilmError("shot {0} source.id must be a nonempty string".format(index + 1))
+        if source_type == "clip":
+            if ("startFrame" not in source or "endFrame" not in source):
+                raise FilmError("shot {0} source trim must include startFrame and endFrame".format(index + 1))
+            bounded_frame_range(source.get("startFrame"), source.get("endFrame"),
+                                "shot {0} source frame range".format(index + 1))
+            trim_length = source["endFrame"] - source["startFrame"] + 1
+            if trim_length != frames["count"]:
+                raise FilmError("shot {0}: source trim length {1} != shot duration {2}".format(
+                    index + 1, trim_length, frames["count"]))
+        expected_start = frames["end"] + 1
+    if expected_start != total + 1:
+        raise FilmError("shotlist must cover frames 1..1200")
+    flips = shotlist.get("direction", {}).get("flips") if isinstance(
+        shotlist.get("direction"), dict) else None
+    expected = EXPECTED_FLIPS
+    if (shotlist.get("direction", {}).get("rotationDirection") !=
+            "continuous clockwise"):
+        raise FilmError("direction.rotationDirection must be continuous clockwise")
+    if (shotlist.get("direction", {}).get("rotationFrames") != ROT_FRAMES or
+            not isinstance(flips, list) or len(flips) != len(expected)):
+        raise FilmError("film must contain exactly four flips")
+    if shotlist.get("direction", {}).get("sameFaceDissolveFrames") != DISSOLVE_FRAMES:
+        raise FilmError("same-face dissolves must be six frames")
+    if shotlist.get("direction", {}).get("sameFaceDissolveWindow") != (
+            "incoming and outgoing opacity keys share S..S+5; complementary linear easing"):
+        raise FilmError("same-face dissolve window must be documented as S..S+5 linear")
+    for index, flip in enumerate(flips):
+        if not isinstance(flip, dict):
+            raise FilmError("flip {0} must be an object".format(index + 1))
+        start, end, edge = (flip.get("start"), flip.get("end"), flip.get("edgeOn"))
+        if any(isinstance(value, bool) or not isinstance(value, int)
+               for value in (start, end, edge)):
+            raise FilmError("flip {0} range must use integer frames".format(index + 1))
+        if ((flip.get("from"), flip.get("to"), start, end, edge) != expected[index] or
+                not (start < edge < end)):
+            raise FilmError("flip {0} must be {1}..{2} with edgeOn {3}".format(
+                index + 1, expected[index][2], expected[index][3], expected[index][4]))
+
+
+def validate_data_paths(environment, paths):
+    """Resolve every environment-controlled path immediately before consumers."""
+    inputs = environment.get("toolInputs", {})
+    if not isinstance(inputs, dict):
+        raise FilmError("environment.toolInputs must be an object")
+    for name, value in inputs.items():
+        safe_repo_path(paths["repo"], value, "environment tool input {0}".format(name))
+    cards = environment.get("cloudCards", [])
+    if not isinstance(cards, list):
+        raise FilmError("environment.cloudCards must be an array")
+    for index, card in enumerate(cards):
+        if not isinstance(card, dict):
+            raise FilmError("environment cloudCards[{0}] must be an object".format(index))
+        if "source" in card:
+            safe_repo_path(paths["repo"], card["source"],
+                           "environment cloudCards[{0}].source".format(index))
+
+
 # ---------------------------------------------------------------------------
 # Main build
 # ---------------------------------------------------------------------------
@@ -1898,6 +2772,9 @@ def build(args):
     shotlist = load_json(paths["shotlist"])
     environment = load_json(paths["environment"])
     catalog = load_json(paths["catalog"])
+    validate_film_contract(shotlist)
+    validate_editorial_and_focus(shotlist, environment)
+    validate_data_paths(environment, paths)
     apply_environment_config(environment, shotlist)
     FILM_CLIP_INFO.clear()
     random.seed(int(environment.get("seed", 0)))
@@ -1919,7 +2796,7 @@ def build(args):
     if shots[-1]["frames"]["end"] != expected:
         raise FilmError("shotlist does not end at frame {0}".format(expected))
 
-    catalog_index = build_catalog_index(catalog)
+    catalog_index = build_catalog_index(catalog, paths["ui"])
     profile = (args.get("profile") or
                ("final" if args.get("quality") == "final" else "preview"))
     sc = ensure_scene("skybao-film", cfg, args.get("device", "auto"), profile)
@@ -1956,9 +2833,11 @@ def build(args):
     build_clear_covers(sc, slab, materials["cover"])
     camera = build_camera(sc, cfg["total"])
 
-    # Motivated rack focus only at the four meaningful area flips.
+    # Motivated rack focus only at the four meaningful area flips, when the
+    # recipe explicitly enables it.
     dof = camera.data.dof
-    for flip in shotlist.get("direction", {}).get("flips", []):
+    if bool(nested(environment, ("camera", "rackFocusAtAreaFlips"), False)):
+      for flip in shotlist.get("direction", {}).get("flips", []):
         a = int(flip["start"])
         mid = int(flip["edgeOn"])
         b = int(flip["end"])
@@ -1967,7 +2846,7 @@ def build(args):
             dof.keyframe_insert(data_path="focus_distance", frame=frame)
 
     manifest = dict(shotlist_path=paths["shotlist"], shots=[], ui_planes=0,
-                    cursor_tracks=0, sound="none",
+                    editorial_callouts=0, cursor_tracks=0, sound="none",
                     area_flips=len(shotlist.get("direction", {}).get(
                         "flips", [])), environment=environment.get("id"))
     for shot in shots:
@@ -1983,8 +2862,10 @@ def build(args):
         })
 
     build_ui_planes(sc, slab, shotlist, catalog_index, paths, manifest)
-    build_cursor_tracks(sc, slab, paths, materials, manifest)
+    build_editorial_callouts(sc, slab, shotlist, manifest)
+    build_cursor_tracks(sc, slab, catalog_index, paths, materials, manifest)
     build_flips(slab, shotlist, cfg["total"])
+    set_scene_animation_easing(sc, shotlist)
     sound_strip = build_sound(sc, paths, manifest)
 
     write_manifest(cfg, paths, manifest)
@@ -2015,7 +2896,11 @@ def build(args):
 
 
 def main(argv):
-    args = parse_argv(argv)
+    try:
+        args = parse_argv(argv)
+    except FilmError as exc:
+        print("error: {0}".format(exc), file=sys.stderr)
+        return 2
     if args["device_probe"]:
         if not _HAS_BPY:
             print("error: bpy not importable — --probe-device must run inside Blender")
@@ -2029,21 +2914,32 @@ def main(argv):
                 bpy.context.scene, args["device"]), indent=2, sort_keys=True))
             return 0
         except FilmError as exc:
-            print("error: {0}".format(exc))
+            print("error: {0}".format(exc), file=sys.stderr)
             return 1
     if args["build_only"]:
-        print("build-only: python syntax OK, no Blender touched")
-        return 0
+        try:
+            paths = resolve_paths(args)
+            shotlist = load_json(paths["shotlist"])
+            environment = load_json(paths["environment"])
+            catalog = load_json(paths["catalog"])
+            validate_film_contract(shotlist)
+            validate_editorial_and_focus(shotlist, environment)
+            validate_data_paths(environment, paths)
+            build_catalog_index(catalog, paths["ui"])
+            print("build-only: input contract and python syntax OK, no Blender touched")
+            return 0
+        except FilmError as exc:
+            print("error: {0}".format(exc), file=sys.stderr)
+            return 1
     if not _HAS_BPY:
         print("error: bpy not importable — run inside Blender, or use "
-              "--build-only for a syntax check")
+              "--build-only for a syntax check", file=sys.stderr)
         return 2
     try:
         build(args)
         return 0
     except FilmError as exc:
-        print("error: {0}".format(exc))
-        traceback.print_exc()
+        print("error: {0}".format(exc), file=sys.stderr)
         return 1
     except Exception as exc:  # pragma: no cover
         print("unexpected error: {0}".format(exc))
