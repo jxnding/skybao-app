@@ -110,11 +110,10 @@ yarn video:assets --only=work-board-drag,area-nav-work-admin
 # 2. Refuse a film build if any used capture is stale or a film contract broke.
 yarn video:film --check
 
-# 3. Current revision review: build/check, then render only the targeted review.
-yarn video:film --build-only
+# 3. Current revision review: render the immutable targeted package.
 yarn video:film --samples=targeted
 
-# The old full deliverables remain deferred/excluded from this review handoff.
+# Full preview/final builds may be deferred; they cannot replace this package.
 yarn video:film:handoff --review-only
 
 ```
@@ -137,13 +136,17 @@ manifests, render reports, and the poster under `deliverables/`.
 Preview and final reports reference their immutable
 `skybao-film-preview.blend` and `skybao-film-final.blend` projects; the shorter
 `skybao-film.blend` path remains the most recently generated editable scene.
+The targeted approval is separate and immutable: `skybao-film-review.blend`,
+`provenance/targeted-review-build-manifest.json`,
+`provenance/targeted-review-receipt.json`, `audio/targeted-review-mix.wav`, and
+`review/targeted/frame-*.png`. Preview, final, and build-only never replace these paths.
 `video:film:handoff` derives its selections from `shotlist.json`, validates each
 generated image/video, and promotes the handoff set atomically. Render commands
 do not invoke handoff automatically; run it after both current renders.
 
 When changing `environment.json`, use the same sequence: `--check` to verify
 the Cycles contract/device, `--samples=<frame indices>` for a fast visual
-checkpoint, then `--build-only`, preview, and finally the approved final. The
+checkpoint, then `--samples=targeted`, preview, and finally the approved final. The
 `--samples` values are global film frame indices, not seconds or clip-relative
 frames.
 
@@ -161,7 +164,7 @@ are already current. Intentional targeted rebuilds are not blocked.
 
 ## Revision artifact state
 
-The canonical `skybao-film.blend`, targeted review frames, build manifest, and
+The dedicated targeted review blend, manifest, receipt, and frames
 checksums represent this revision. Profile-specific preview/final blends and
 MP4 deliverables remain the previously approved render until a full
 preview/final render is explicitly approved. The old master does not contain
@@ -205,8 +208,9 @@ only `--samples=targeted` claims canonical coverage:
 
 ```bash
 BLENDER_BIN=/Applications/Blender.app/Contents/MacOS/Blender \
-  yarn video:film:scene-contract --repo . --blend artifacts/skybao-film/skybao-film.blend \
-  --manifest artifacts/skybao-film/build-manifest.json
+  yarn video:film:scene-contract --repo . --blend artifacts/skybao-film/skybao-film-review.blend \
+  --manifest artifacts/skybao-film/provenance/targeted-review-build-manifest.json \
+  --audio artifacts/skybao-film/audio/targeted-review-mix.wav
 ```
 
 Render staging runs this same read-only check before promotion. It verifies the

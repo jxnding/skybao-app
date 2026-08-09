@@ -15,8 +15,11 @@ if (!fs.existsSync(repo)) throw new Error(`repository does not exist: ${repo}`);
 const here = path.join(repo, "frontend", "scripts", "video", "film");
 const artifactRoot = path.join(repo, "artifacts", "skybao-film");
 const deliverableRoot = path.join(artifactRoot, "deliverables");
-const reviewRoot = path.join(artifactRoot, "review");
+const reviewRoot = path.join(artifactRoot, "review", "targeted");
 const receiptPath = path.join(artifactRoot, "provenance", "targeted-review-receipt.json");
+const reviewBlendPath = path.join(artifactRoot, "skybao-film-review.blend");
+const reviewManifestPath = path.join(artifactRoot, "provenance", "targeted-review-build-manifest.json");
+const reviewAudioPath = path.join(artifactRoot, "audio", "targeted-review-mix.wav");
 const stagingRoot = path.join(repo, "artifacts", ".skybao-film-staging");
 const masterPath = path.join(deliverableRoot, "skybao-40s-master.mp4");
 const previewPath = path.join(deliverableRoot, "skybao-40s-preview.mp4");
@@ -102,18 +105,17 @@ function checkUsedCaptures() {
 function requireCanonicalReview() {
   if (!Array.isArray(canonicalFrames) || !canonicalFrames.length) throw new Error("shotlist has no canonical targeted review set");
   if (!fs.existsSync(receiptPath)) throw new Error("canonical targeted review receipt is required");
-  const canonicalBlend = path.join(artifactRoot, "skybao-film.blend");
-  if (!fs.existsSync(canonicalBlend)) throw new Error("canonical skybao-film.blend is required");
+   if (!fs.existsSync(reviewBlendPath)) throw new Error("dedicated targeted review blend is required");
   for (const file of [
-    path.join(artifactRoot, "audio", "skybao-mix.wav"),
+     reviewAudioPath,
     path.join(artifactRoot, "cursor", "cursor.png"),
-    path.join(artifactRoot, "build-manifest.json"),
+     reviewManifestPath,
   ]) {
     if (!fs.existsSync(file)) throw new Error(`required review artifact is missing: ${path.relative(repo, file)}`);
   }
   let receipt; try { receipt = JSON.parse(fs.readFileSync(receiptPath, "utf8")); } catch { throw new Error("canonical targeted review receipt is invalid"); }
   const frames = [...canonicalFrames].sort((a, b) => a - b);
-  if (JSON.stringify(receipt.frames) !== JSON.stringify(frames)) throw new Error("canonical targeted review receipt frame set is stale");
+   if (JSON.stringify(Object.keys(receipt.frames || {}).map(Number).sort((a, b) => a - b)) !== JSON.stringify(frames)) throw new Error("canonical targeted review receipt frame set is stale");
   if (!fs.existsSync(reviewRoot)) throw new Error("canonical targeted review directory is required");
   const names = fs.readdirSync(reviewRoot).filter((name) => /^frame-\d{4}\.png$/.test(name)).sort();
   const expected = frames.map((frame) => `frame-${String(frame).padStart(4, "0")}.png`).sort();
@@ -121,22 +123,25 @@ function requireCanonicalReview() {
   for (const frame of frames) {
     const file = path.join(reviewRoot, `frame-${String(frame).padStart(4, "0")}.png`);
     if (receipt.hashes?.[String(frame)] !== sha256(file)) throw new Error(`canonical targeted review hash mismatch at frame ${frame}`);
+    const expectedPath = `artifacts/skybao-film/review/targeted/frame-${String(frame).padStart(4, "0")}.png`;
+    if (receipt.frames?.[String(frame)]?.path !== expectedPath || receipt.frames[String(frame)].sha256 !== sha256(file)) throw new Error(`canonical targeted review receipt frame binding is stale at frame ${frame}`);
   }
   const sources = {
     shotlist: sha256(path.join(here, "shotlist.json")),
     environment: sha256(path.join(here, "environment.json")),
     catalog: sha256(path.join(repo, "artifacts", "skybao-ui", "catalog.json")),
-    scene: sha256Json(JSON.parse(fs.readFileSync(path.join(artifactRoot, "build-manifest.json"), "utf8")).scene),
+     scene: sha256Json(JSON.parse(fs.readFileSync(reviewManifestPath, "utf8")).scene),
   };
   if (JSON.stringify(receipt.provenance) !== JSON.stringify(sources)) throw new Error("canonical targeted review receipt provenance is stale");
-  const manifest = JSON.parse(fs.readFileSync(path.join(artifactRoot, "build-manifest.json"), "utf8"));
-  assertManifestInputsCurrent(manifest, { repo });
+   const manifest = JSON.parse(fs.readFileSync(reviewManifestPath, "utf8"));
+   assertManifestInputsCurrent(manifest, { repo, audioFile: reviewAudioPath });
   if (receipt.inputFingerprint !== inputFingerprint(manifest)) throw new Error("canonical targeted review receipt input fingerprint is stale");
-  const canonicalArtifacts = receipt.canonicalArtifacts;
+   const canonicalArtifacts = receipt.reviewArtifacts;
   const expectedArtifacts = {
-    blend: "artifacts/skybao-film/skybao-film.blend",
+     blend: "artifacts/skybao-film/skybao-film-review.blend",
+     manifest: "artifacts/skybao-film/provenance/targeted-review-build-manifest.json",
     cursor: "artifacts/skybao-film/cursor/cursor.png",
-    audio: "artifacts/skybao-film/audio/skybao-mix.wav",
+     audio: "artifacts/skybao-film/audio/targeted-review-mix.wav",
   };
   for (const [name, relative] of Object.entries(expectedArtifacts)) {
     const entry = canonicalArtifacts?.[name];
@@ -276,8 +281,8 @@ checkUsedCaptures();
 const receipt = requireCanonicalReview();
 run(
   blender,
-  ["--background", path.join(artifactRoot, "skybao-film.blend"), "--python", path.join(here, "scene-contract.py"), "--",
-    "--repo", repo, "--manifest", path.join(artifactRoot, "build-manifest.json")],
+   ["--background", reviewBlendPath, "--python", path.join(here, "scene-contract.py"), "--",
+     "--repo", repo, "--manifest", reviewManifestPath, "--audio", reviewAudioPath],
   "canonical saved scene contract"
 );
 if (!reviewOnly) {
@@ -479,8 +484,8 @@ if (
 }
 
 const checksumRelativePaths = [
-  "audio/skybao-mix.wav",
-  "build-manifest.json",
+   "audio/targeted-review-mix.wav",
+   "provenance/targeted-review-build-manifest.json",
   "cursor/cursor.png",
   ...(reviewOnly ? [] : [
     "deliverables/build-manifest-final.json", "deliverables/build-manifest-preview.json",
@@ -489,8 +494,8 @@ const checksumRelativePaths = [
   ]),
   "provenance/targeted-review-receipt.json",
   ...stagedByTarget.keys(),
-  ...canonicalFrames.map((frame) => path.join("review", `frame-${String(frame).padStart(4, "0")}.png`)),
-  "skybao-film.blend",
+   ...canonicalFrames.map((frame) => path.join("review", "targeted", `frame-${String(frame).padStart(4, "0")}.png`)),
+   "skybao-film-review.blend",
   ...(reviewOnly ? [] : ["skybao-film-final.blend", "skybao-film-preview.blend"]),
 ]
   .filter((relative, index, all) => all.indexOf(relative) === index)
