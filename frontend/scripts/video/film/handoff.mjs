@@ -5,7 +5,7 @@ import fs from "fs";
 import path from "path";
 import { spawnSync } from "child_process";
 import { fileURLToPath } from "url";
-import { assertCurrentProfileManifest, assertCurrentRenderReport, assertManifestInputsCurrent, assertTargetedReviewReceipt, inputFingerprint, sha256, sha256Json } from "./provenance.mjs";
+import { assertCurrentProfileManifest, assertCurrentRenderReport, assertManifestInputsCurrent, assertReviewPackageReceipt, assertTargetedReviewReceipt, inputFingerprint, sha256, sha256Json } from "./provenance.mjs";
 
 const executingHere = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
@@ -17,6 +17,9 @@ const artifactRoot = path.join(repo, "artifacts", "skybao-film");
 const deliverableRoot = path.join(artifactRoot, "deliverables");
 const reviewRoot = path.join(artifactRoot, "review", "targeted");
 const receiptPath = path.join(artifactRoot, "provenance", "targeted-review-receipt.json");
+const packageReceiptPath = path.join(artifactRoot, "provenance", "review-package-receipt.json");
+const reviewReelPath = path.join(artifactRoot, "review", "skybao-targeted-review-reel.mp4");
+const reviewContactSheetPath = path.join(artifactRoot, "review", "skybao-targeted-review-contact-sheet.png");
 const reviewBlendPath = path.join(artifactRoot, "skybao-film-review.blend");
 const reviewManifestPath = path.join(artifactRoot, "provenance", "targeted-review-build-manifest.json");
 const reviewAudioPath = path.join(artifactRoot, "audio", "targeted-review-mix.wav");
@@ -24,10 +27,12 @@ const stagingRoot = path.join(repo, "artifacts", ".skybao-film-staging");
 const masterPath = path.join(deliverableRoot, "skybao-40s-master.mp4");
 const previewPath = path.join(deliverableRoot, "skybao-40s-preview.mp4");
 const reviewOnly = args.includes("--review-only");
+const baseReview = args.includes("--base-review");
 const unknown = args.filter((arg, index) =>
-  arg !== "--review-only" && arg !== "--repo" && index !== repoIndex + 1
+  arg !== "--review-only" && arg !== "--base-review" && arg !== "--repo" && index !== repoIndex + 1
 );
 if (unknown.length) throw new Error(`unknown handoff option: ${unknown.join(", ")}`);
+if (baseReview && !reviewOnly) throw new Error("--base-review is only valid for review-only handoff");
 const shotlist = JSON.parse(
   fs.readFileSync(path.join(here, "shotlist.json"), "utf8")
 );
@@ -193,8 +198,9 @@ function probe(file) {
     [
       "-v",
       "error",
+      "-count_frames",
       "-show_entries",
-      "format=duration:stream=codec_type,codec_name,width,height,color_space,color_transfer,color_primaries",
+      "format=duration:stream=codec_type,codec_name,width,height,color_space,color_transfer,color_primaries,pix_fmt,r_frame_rate,nb_read_frames",
       "-of",
       "json",
       file,
@@ -203,6 +209,24 @@ function probe(file) {
     true
   );
   return JSON.parse(result.stdout);
+}
+
+function reviewPackageReceipt() {
+  if (!fs.existsSync(packageReceiptPath)) throw new Error("review package receipt is missing");
+  let value;
+  try { value = JSON.parse(fs.readFileSync(packageReceiptPath, "utf8")); } catch { throw new Error("review package receipt is invalid"); }
+  try { assertReviewPackageReceipt(value); } catch (error) { throw new Error(`review package receipt is invalid: ${error.message}`); }
+  if (value.targetedReviewReceipt.sha256 !== sha256(receiptPath) || value.targetedReviewReceipt.inputFingerprint !== receipt.inputFingerprint)
+    throw new Error("review package receipt is not bound to the current targeted receipt");
+  for (const [name, file] of [["reel", reviewReelPath], ["contactSheet", reviewContactSheetPath]]) {
+    const artifact = value.artifacts[name];
+    if (artifact.path !== path.relative(repo, file) || !fs.existsSync(file) || artifact.sha256 !== sha256(file)) throw new Error(`review package ${name} is missing or hash-mismatched`);
+    const metadata = probe(file);
+    const stream = metadata.streams?.find((entry) => entry.codec_type === "video");
+    if (!stream || stream.width !== artifact.metadata.width || stream.height !== artifact.metadata.height) throw new Error(`review package ${name} metadata is stale`);
+    if (name === "reel" && (stream.codec_name !== artifact.metadata.codec || stream.pix_fmt !== artifact.metadata.pixFmt || stream.r_frame_rate !== "30/1" || Number(stream.nb_read_frames) !== artifact.metadata.frameCount || Math.abs(Number(metadata.format.duration) - artifact.metadata.duration) > 0.01)) throw new Error("review package reel metadata is stale");
+  }
+  return value;
 }
 
 function assertImage(file, width, height) {
@@ -281,6 +305,7 @@ function promoteWithRollback(items, stage) {
 // from a catalog whose referenced PNGs changed underneath it.
 checkUsedCaptures();
 const receipt = requireCanonicalReview();
+if (!reviewOnly) reviewPackageReceipt();
 run(
   blender,
    ["--background", reviewBlendPath, "--python", path.join(here, "scene-contract.py"), "--",
@@ -338,6 +363,7 @@ let poster = null;
 let reviewReel = null;
 if (reviewOnly) {
   reviewReel = staged("review/skybao-targeted-review-reel.mp4");
+  const reviewSheet = staged("review/skybao-targeted-review-contact-sheet.png");
   const concatList = path.join(stage, "targeted-review-reel.txt");
   const entries = canonicalFrames.map((frame) => {
     const file = path.join(reviewRoot, `frame-${String(frame).padStart(4, "0")}.png`);
@@ -352,6 +378,21 @@ if (reviewOnly) {
   const reelVideo = probe(reviewReel.source).streams.find((stream) => stream.codec_type === "video");
   if (!reelVideo || reelVideo.width !== 1920 || reelVideo.height !== 1080)
     throw new Error("targeted checkpoint reel metadata is invalid");
+  run(ffmpeg, ["-v", "error", "-y", "-i", reviewReel.source, "-vf", "fps=2,scale=480:270:flags=lanczos,tile=4x4:nb_frames=15", "-frames:v", "1", reviewSheet.source], "generate targeted contact sheet");
+  assertImage(reviewSheet.source, 1920, 1080);
+  const reelMetadata = probe(reviewReel.source);
+  const reelStream = reelMetadata.streams.find((stream) => stream.codec_type === "video");
+  const sheetMetadata = probe(reviewSheet.source);
+  const sheetStream = sheetMetadata.streams.find((stream) => stream.codec_type === "video");
+  const packageReceipt = staged("provenance/review-package-receipt.json");
+  fs.writeFileSync(packageReceipt.source, JSON.stringify({
+    schemaVersion: 1,
+    targetedReviewReceipt: { path: path.relative(repo, receiptPath), sha256: sha256(receiptPath), inputFingerprint: receipt.inputFingerprint },
+    artifacts: {
+      reel: { path: path.relative(repo, reviewReel.target), sha256: sha256(reviewReel.source), metadata: { width: reelStream.width, height: reelStream.height, codec: reelStream.codec_name, pixFmt: reelStream.pix_fmt, fps: 30, duration: Number(reelMetadata.format.duration), frameCount: Number(reelStream.nb_read_frames) } },
+      contactSheet: { path: path.relative(repo, reviewSheet.target), sha256: sha256(reviewSheet.source), metadata: { width: sheetStream.width, height: sheetStream.height } },
+    },
+  }, null, 2) + "\n");
 }
 if (!reviewOnly) {
 const posterShot = shotlist.shots.find((shot) => shot.id === "work-board-drag");
@@ -512,11 +553,12 @@ const checksumRelativePaths = [
     "deliverables/render-report-final.json", "deliverables/render-report-preview.json",
     "deliverables/skybao-40s-master.mp4", "deliverables/skybao-40s-preview.mp4",
   ]),
-   "provenance/targeted-review-receipt.json",
+    "provenance/targeted-review-receipt.json",
+    "provenance/review-package-receipt.json",
   ...stagedByTarget.keys(),
    ...canonicalFrames.map((frame) => path.join("review", "targeted", `frame-${String(frame).padStart(4, "0")}.png`)),
    "skybao-film-review.blend",
-   ...(reviewOnly ? ["review/skybao-targeted-review-reel.mp4"] : []),
+    "review/skybao-targeted-review-reel.mp4", "review/skybao-targeted-review-contact-sheet.png",
   ...(reviewOnly ? [] : ["skybao-film-final.blend", "skybao-film-preview.blend"]),
 ]
   .filter((relative, index, all) => all.indexOf(relative) === index)

@@ -76,6 +76,30 @@ export function assertTargetedReviewReceipt(receipt, { schemaVersion = 2 } = {})
   return receipt;
 }
 
+const reviewPackageKeys = ["schemaVersion", "targetedReviewReceipt", "artifacts"];
+const reviewPackageArtifactKeys = ["path", "sha256", "metadata"];
+
+export function assertReviewPackageReceipt(receipt, { schemaVersion = 1 } = {}) {
+  exactKeys(receipt, reviewPackageKeys, "review package receipt");
+  if (receipt.schemaVersion !== schemaVersion) throw new Error(`review package receipt schemaVersion must be ${schemaVersion}`);
+  exactKeys(receipt.targetedReviewReceipt, ["path", "sha256", "inputFingerprint"], "review package targeted receipt");
+  if (receipt.targetedReviewReceipt.path !== "artifacts/skybao-film/provenance/targeted-review-receipt.json") throw new Error("review package targeted receipt path is not canonical");
+  receiptHash(receipt.targetedReviewReceipt.sha256, "review package targeted receipt sha256");
+  receiptHash(receipt.targetedReviewReceipt.inputFingerprint, "review package inputFingerprint");
+  exactKeys(receipt.artifacts, ["reel", "contactSheet"], "review package artifacts");
+  for (const [name, artifact] of Object.entries(receipt.artifacts)) {
+    exactKeys(artifact, reviewPackageArtifactKeys, `review package ${name}`);
+    if (typeof artifact.path !== "string" || path.isAbsolute(artifact.path)) throw new Error(`review package ${name}.path must be relative`);
+    receiptHash(artifact.sha256, `review package ${name}.sha256`);
+    if (!artifact.metadata || typeof artifact.metadata !== "object" || Array.isArray(artifact.metadata)) throw new Error(`review package ${name}.metadata must be an object`);
+  }
+  const reel = receipt.artifacts.reel.metadata;
+  if (reel.width !== 1920 || reel.height !== 1080 || reel.codec !== "h264" || reel.pixFmt !== "yuv420p" || reel.fps !== 30 || !Number.isInteger(reel.frameCount) || reel.frameCount <= 0 || typeof reel.duration !== "number" || !Number.isFinite(reel.duration)) throw new Error("review package reel metadata is invalid");
+  const sheet = receipt.artifacts.contactSheet.metadata;
+  if (sheet.width !== 1920 || sheet.height !== 1080) throw new Error("review package contact sheet metadata is invalid");
+  return receipt;
+}
+
 export function assertManifestInputsCurrent(manifest, { repo, environment, audioFile, configuredInputs } = {}) {
   if (!manifest || typeof manifest !== "object") throw new Error("manifest is invalid");
   const root = path.resolve(repo || ".");

@@ -510,8 +510,8 @@ def check_audio(repo, manifest_path, allow_staged=False, audio_path=None):
     manifest = read_json(manifest_path)
     audio = manifest.get("audio")
     if not isinstance(audio, dict) or not isinstance(audio.get("sha256"), str): die("manifest audio provenance is missing")
-    targeted = ("targeted-review-mix.wav" in str(audio.get("path", "")) or
-                "targeted-review-mix.wav" in str(audio_path or ""))
+    profile = (manifest.get("render") or manifest.get("cycles") or {}).get("profile", manifest.get("profile"))
+    targeted = profile == "targeted"
     canonical = os.path.realpath(os.path.join(repo, "artifacts/skybao-film/audio",
                                                "targeted-review-mix.wav" if targeted else "skybao-mix.wav"))
     selected = os.path.realpath(audio_path) if allow_staged and audio_path else canonical

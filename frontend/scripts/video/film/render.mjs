@@ -6,7 +6,7 @@ import fs from "fs";
 import path from "path";
 import { spawnSync } from "child_process";
 import { fileURLToPath } from "url";
-import { assertManifestInputsCurrent, assertTargetedReviewReceipt, bindManifest, inputFingerprint, sha256, sha256Json } from "./provenance.mjs";
+import { assertManifestInputsCurrent, assertReviewPackageReceipt, assertTargetedReviewReceipt, bindManifest, inputFingerprint, sha256, sha256Json } from "./provenance.mjs";
 
 const executingHere = path.dirname(fileURLToPath(import.meta.url));
 const scriptArgs = process.argv.slice(2);
@@ -26,6 +26,9 @@ const reviewBlendPath = path.join(artifactRoot, "skybao-film-review.blend");
 const reviewManifestPath = path.join(artifactRoot, "provenance", "targeted-review-build-manifest.json");
 const reviewAudioPath = path.join(artifactRoot, "audio", "targeted-review-mix.wav");
 const reviewRoot = path.join(artifactRoot, "review", "targeted");
+const reviewPackagePath = path.join(artifactRoot, "provenance", "review-package-receipt.json");
+const reviewReelPath = path.join(artifactRoot, "review", "skybao-targeted-review-reel.mp4");
+const reviewContactSheetPath = path.join(artifactRoot, "review", "skybao-targeted-review-contact-sheet.png");
 // Kept beside, rather than inside, the committed film artifact directory. The
 // private .gitignore makes interrupted render work invisible to Git while
 // leaving it available for diagnosis or manual cleanup.
@@ -172,7 +175,7 @@ const ffmpeg = ["build-only", "review", "check", "check-artifacts"].includes(mod
       ["/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg", "ffmpeg"],
       "FFMPEG_BIN"
     );
-const ffprobe = ["build-only", "review", "check", "check-artifacts"].includes(mode)
+const ffprobe = ["build-only", "review", "check"].includes(mode)
   ? null
   : commandFrom(
       ["/opt/homebrew/bin/ffprobe", "/usr/local/bin/ffprobe", "ffprobe"],
@@ -244,6 +247,22 @@ function reviewReceipt() {
       throw new Error(`targeted review receipt frame binding is stale at frame ${frame}`);
   }
   return receipt;
+}
+
+function reviewPackageReceipt() {
+  if (!exists(reviewPackagePath) || !exists(reviewReelPath) || !exists(reviewContactSheetPath)) throw new Error("review package receipt, reel, and contact sheet are required");
+  let receipt;
+  try { receipt = JSON.parse(fs.readFileSync(reviewPackagePath, "utf8")); } catch { throw new Error("review package receipt is invalid"); }
+  assertReviewPackageReceipt(receipt);
+  if (receipt.targetedReviewReceipt.sha256 !== sha256(targetedReceiptPath) || receipt.targetedReviewReceipt.inputFingerprint !== JSON.parse(fs.readFileSync(targetedReceiptPath, "utf8")).inputFingerprint) throw new Error("review package receipt is not bound to the current targeted receipt");
+  for (const [name, file] of [["reel", reviewReelPath], ["contactSheet", reviewContactSheetPath]]) {
+    const artifact = receipt.artifacts[name];
+    if (artifact.path !== path.relative(repo, file) || artifact.sha256 !== sha256(file)) throw new Error(`review package ${name} path or hash is stale`);
+    const result = run(ffprobe, ["-v", "error", "-count_frames", "-show_entries", "format=duration:stream=codec_type,codec_name,width,height,pix_fmt,r_frame_rate,nb_read_frames", "-of", "json", file], `probe ${name}`, { capture: true });
+    const metadata = JSON.parse(result.stdout); const stream = metadata.streams?.find((entry) => entry.codec_type === "video");
+    if (!stream || stream.width !== artifact.metadata.width || stream.height !== artifact.metadata.height) throw new Error(`review package ${name} metadata is stale`);
+    if (name === "reel" && (stream.codec_name !== artifact.metadata.codec || stream.pix_fmt !== artifact.metadata.pixFmt || stream.r_frame_rate !== "30/1" || Number(stream.nb_read_frames) !== artifact.metadata.frameCount || Math.abs(Number(metadata.format.duration) - artifact.metadata.duration) > 0.01)) throw new Error("review package reel metadata is stale");
+  }
 }
 
 function createStage(mode) {
@@ -426,6 +445,7 @@ if (mode === "check") {
 
 if (mode === "check-artifacts") {
   reviewReceipt();
+  reviewPackageReceipt();
   run(
     blender,
     ["--background", reviewBlendPath, "--python", path.join(here, "scene-contract.py"), "--",
@@ -525,7 +545,6 @@ run(
     "--audio",
     stagedAudioPath,
     "--strict-provenance",
-    ...(canonicalTargeted ? ["--targeted-review"] : []),
   ],
   "staged provenance validation"
 );

@@ -14,10 +14,9 @@ let repoArgIndex = -1;
 let manifestPathArg = null;
 let audioPathArg = null;
 let strictProvenance = false;
-let targetedReview = false;
 const valueOptions = new Set();
 for (let index = 0; index < cliArgs.length; index += 1) {
-   if (!["--repo", "--manifest", "--audio"].includes(cliArgs[index]) && !["--strict-provenance", "--targeted-review"].includes(cliArgs[index])) {
+   if (!["--repo", "--manifest", "--audio"].includes(cliArgs[index]) && cliArgs[index] !== "--strict-provenance") {
     console.error(`error: unknown option: ${cliArgs[index]}`);
     process.exit(2);
   }
@@ -25,7 +24,6 @@ for (let index = 0; index < cliArgs.length; index += 1) {
     strictProvenance = true;
     continue;
    }
-   if (cliArgs[index] === "--targeted-review") { targetedReview = true; continue; }
   if (valueOptions.has(cliArgs[index]) || !cliArgs[index + 1] || cliArgs[index + 1].startsWith("-")) {
     console.error(`error: missing value for ${cliArgs[index]}`);
     process.exit(2);
@@ -65,9 +63,6 @@ const environmentPath = path.join(selectedFilmDir, "environment.json");
 const catalogFilePath = path.join(repo, "artifacts", "skybao-ui", "catalog.json");
 const uiRoot = path.join(repo, "artifacts", "skybao-ui");
 const filmRoot = path.join(repo, "artifacts", "skybao-film");
-const canonicalAudioRelative = (targetedReview || manifestPathArg?.includes("targeted-review") || audioPathArg?.includes("targeted-review-mix"))
-  ? "artifacts/skybao-film/audio/targeted-review-mix.wav"
-  : "artifacts/skybao-film/audio/skybao-mix.wav";
 const buildManifestPath = manifestPathArg
   ? path.resolve(manifestPathArg)
   : path.join(filmRoot, "build-manifest.json");
@@ -846,6 +841,10 @@ function validateManifestProvenance() {
   try { manifest = JSON.parse(fs.readFileSync(buildManifestPath, "utf8")); }
   catch { return; }
   if (!object(manifest)) return;
+  const manifestProfile = manifest.render?.profile || manifest.cycles?.profile || manifest.profile;
+  const canonicalAudioRelative = manifestProfile === "targeted"
+    ? "artifacts/skybao-film/audio/targeted-review-mix.wav"
+    : "artifacts/skybao-film/audio/skybao-mix.wav";
   const declared = new Map();
   const issue = (message) => strictProvenance ? fail(message) : warnings.push(message);
   if (manifest.inputFingerprint && manifest.inputFingerprint !== inputFingerprint(manifest))
@@ -880,7 +879,7 @@ function validateManifestProvenance() {
     if (strictProvenance && inputAssets[name]?.path !== relative) fail(`input ${name} path is not recipe-derived`);
   }
   for (const name of Object.keys(inputAssets)) if (!configured.has(name)) issue(`input ${name} is not recipe-configured`);
-  const audioFile = audioPathArg ? path.resolve(audioPathArg) : path.join(filmRoot, "audio", "skybao-mix.wav");
+  const audioFile = audioPathArg ? path.resolve(audioPathArg) : path.join(repo, canonicalAudioRelative);
   if (strictProvenance && (!manifest.audio || !isSha256(manifest.audio.sha256))) fail("audio provenance is required");
   if (strictProvenance && manifest.audio?.path !== canonicalAudioRelative)
     fail(`audio provenance path must be exactly ${canonicalAudioRelative}`);
