@@ -110,19 +110,21 @@ yarn video:assets --only=work-board-drag,area-nav-work-admin
 # 2. Refuse a film build if any used capture is stale or a film contract broke.
 yarn video:film --check
 
-# 3. Build an editable Blender scene, then make the review render.
+# 3. Current revision review: build/check, then render only the targeted review.
 yarn video:film --build-only
-yarn video:film
+yarn video:film --samples=targeted
 
-# 4. Produce the 1080p delivery master only after the review is approved.
-yarn video:film --final
-
-# Refresh only the editable/review revision and current-revision checksums after both current preview and final renders.
-# Previously approved v3 MP4s/reports/blends remain deferred and are excluded.
+# The old full deliverables remain deferred/excluded from this review handoff.
 yarn video:film:handoff --review-only
 
-# Full handoff is intentionally stricter: every profile blend, report, manifest,
-# and MP4 must carry the exact current targeted-review input fingerprint.
+```
+
+For a future approved delivery, render the current preview and final, then run
+the full handoff without `--review-only`:
+
+```bash
+yarn video:film
+yarn video:film --final
 yarn video:film:handoff
 ```
 
@@ -145,12 +147,17 @@ checkpoint, then `--build-only`, preview, and finally the approved final. The
 `--samples` values are global film frame indices, not seconds or clip-relative
 frames.
 
-Every film command first performs a read-only freshness check of the exact 19
+Every film command and both handoff modes first perform a read-only freshness check of the exact 19
 capture owners referenced by the shotlist. The generated `build-manifest.json`
 locks each used owner's recipe and content SHA-256 alongside the shotlist,
 environment, cloud texture, builder, and UI catalog hashes. If the React UI or
 capture recipe changes, the film refuses to render until those owners are
 recaptured.
+
+Capture/source-owner freshness always blocks. A stale prior generated manifest
+after intentional recipe or builder edits warns in rebuild mode because the
+render regenerates it; `--strict-provenance` asserts that existing artifacts
+are already current. Intentional targeted rebuilds are not blocked.
 
 ## Revision artifact state
 

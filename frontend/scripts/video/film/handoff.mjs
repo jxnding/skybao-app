@@ -7,8 +7,12 @@ import { spawnSync } from "child_process";
 import { fileURLToPath } from "url";
 import { assertCurrentProfileManifest, assertCurrentRenderReport, assertManifestInputsCurrent, inputFingerprint, sha256, sha256Json } from "./provenance.mjs";
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const repo = path.resolve(here, "../../../..");
+const executingHere = path.dirname(fileURLToPath(import.meta.url));
+const args = process.argv.slice(2);
+const repoIndex = args.indexOf("--repo");
+const repo = path.resolve(repoIndex >= 0 ? args[repoIndex + 1] || "" : path.resolve(executingHere, "../../../.."));
+if (!fs.existsSync(repo)) throw new Error(`repository does not exist: ${repo}`);
+const here = path.join(repo, "frontend", "scripts", "video", "film");
 const artifactRoot = path.join(repo, "artifacts", "skybao-film");
 const deliverableRoot = path.join(artifactRoot, "deliverables");
 const reviewRoot = path.join(artifactRoot, "review");
@@ -16,8 +20,11 @@ const receiptPath = path.join(artifactRoot, "provenance", "targeted-review-recei
 const stagingRoot = path.join(repo, "artifacts", ".skybao-film-staging");
 const masterPath = path.join(deliverableRoot, "skybao-40s-master.mp4");
 const previewPath = path.join(deliverableRoot, "skybao-40s-preview.mp4");
-const reviewOnly = process.argv.includes("--review-only");
-if (process.argv.slice(2).some((arg) => arg !== "--review-only")) throw new Error("unknown handoff option");
+const reviewOnly = args.includes("--review-only");
+const unknown = args.filter((arg, index) =>
+  arg !== "--review-only" && arg !== "--repo" && index !== repoIndex + 1
+);
+if (unknown.length) throw new Error(`unknown handoff option: ${unknown.join(", ")}`);
 const shotlist = JSON.parse(
   fs.readFileSync(path.join(here, "shotlist.json"), "utf8")
 );
@@ -61,6 +68,22 @@ function run(command, args, label, capture = false) {
     throw new Error(`${label} failed with exit ${result.status}${details}`);
   }
   return result;
+}
+
+function checkUsedCaptures() {
+  const ids = [...new Set(shotlist.shots.map((shot) => shot.source?.id).filter(Boolean))];
+  if (ids.length !== 19) throw new Error(`shotlist must reference 19 capture owners (found ${ids.length})`);
+  const captureScript = path.join(repo, "frontend", "scripts", "video", "capture-skybao-assets.mjs");
+  const result = spawnSync(process.execPath, [captureScript, "--check", `--only=${ids.join(",")}`], {
+    cwd: repo,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    const details = (result.stderr || result.stdout || "").trim().split("\n").pop();
+    throw new Error(`handoff rejected: used capture freshness check failed${details ? ` (${details})` : ""}`);
+  }
 }
 
 function requireCanonicalReview() {
@@ -210,6 +233,9 @@ function promoteWithRollback(items, stage) {
   fs.rmSync(rollbackRoot, { recursive: true, force: true });
 }
 
+// Handoff is a consumer boundary too: never issue a receipt or promote checksums
+// from a catalog whose referenced PNGs changed underneath it.
+checkUsedCaptures();
 const receipt = requireCanonicalReview();
 if (!reviewOnly) {
   if (!fs.existsSync(masterPath) || !fs.existsSync(previewPath)) throw new Error("full handoff requires both current final and preview MP4s");

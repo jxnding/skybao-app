@@ -95,14 +95,16 @@ Artifact mode exposes `window.__SKYBAO_CAPTURE__` with `ready`, `setFrame(frame)
 
 ## Automated 40-second edit
 
-The repository now also contains a reviewed Blender VSE edit, deterministic music/SFX generator, and H.264 delivery runner. Once the complete asset library exists, generate a review or final master with:
+The repository now also contains a reviewed Blender VSE edit, deterministic music/SFX generator, and H.264 delivery runner. Once the complete asset library exists, review the current revision with:
 
 ```bash
-yarn video:film
-yarn video:film --final
 yarn video:film --check
-yarn video:film --samples=30,241,481,721,961,1180
+yarn video:film --samples=targeted
+yarn video:film:handoff --review-only
 ```
+
+After approval, render the current preview and final, then create full
+deliverables with `yarn video:film:handoff` without `--review-only`.
 
 The film commands refuse to run when any shot-owned capture is stale and write
 per-owner recipe/content hashes into the Blender build manifest.
