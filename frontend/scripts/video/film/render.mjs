@@ -385,6 +385,28 @@ function canonicalManifestIsCurrent() {
   });
 }
 
+function assertCanonicalArtifactBinding() {
+  if (!fs.existsSync(targetedReceiptPath) && !fs.existsSync(buildManifestPath)) return;
+  if (!fs.existsSync(blendPath))
+    throw new Error("canonical artifact integrity failed: required canonical skybao-film.blend is missing");
+  let receipt;
+  try { receipt = JSON.parse(fs.readFileSync(targetedReceiptPath, "utf8")); }
+  catch { throw new Error("canonical artifact integrity failed: targeted review receipt is invalid"); }
+  const entries = receipt.canonicalArtifacts;
+  if (!entries || typeof entries !== "object")
+    throw new Error("canonical artifact integrity failed: targeted receipt has no canonical artifact hashes");
+  for (const [name, relative] of Object.entries({
+    blend: "artifacts/skybao-film/skybao-film.blend",
+    cursor: "artifacts/skybao-film/cursor/cursor.png",
+    audio: "artifacts/skybao-film/audio/skybao-mix.wav",
+  })) {
+    const entry = entries[name];
+    const file = path.resolve(repo, relative);
+    if (!entry || entry.path !== relative || !fs.existsSync(file) || sha256(file) !== entry.sha256)
+      throw new Error(`canonical artifact integrity failed: ${relative} is missing or hash-mismatched`);
+  }
+}
+
 run(
   process.execPath,
   [captureScript, "--check", `--only=${filmAssetIds().join(",")}`],
@@ -393,6 +415,7 @@ run(
 
 if (mode === "check") {
   run(process.execPath, [path.join(here, "validate.mjs"), ...(strictProvenance ? ["--strict-provenance"] : [])], "source validation");
+  assertCanonicalArtifactBinding();
   if (fs.existsSync(blendPath) && fs.existsSync(buildManifestPath)) {
     if (canonicalManifestIsCurrent()) {
       run(
@@ -540,8 +563,8 @@ if (mode === "review") {
     const expected = canonicalFrames.map((frame) => `frame-${String(frame).padStart(4, "0")}.png`).sort();
     if (actual.length !== expected.length || actual.some((name, index) => name !== expected[index]))
       throw new Error(`canonical targeted review must contain exactly ${expected.length} staged PNGs (found ${actual.length})`);
-    const receipt = {
-      schemaVersion: 1,
+      const receipt = {
+        schemaVersion: 1,
       frames: [...canonicalFrames].sort((a, b) => a - b),
       hashes: Object.fromEntries(canonicalFrames.map((frame) => [String(frame), sha256(path.join(stagedReviewRoot, `frame-${String(frame).padStart(4, "0")}.png`))])),
       provenance: {
@@ -549,9 +572,14 @@ if (mode === "review") {
         environment: sha256(path.join(here, "environment.json")),
         catalog: sha256(path.join(repo, "artifacts", "skybao-ui", "catalog.json")),
         scene: sha256Json(JSON.parse(fs.readFileSync(stagedManifestPath, "utf8")).scene),
-      },
-      inputFingerprint: inputFingerprint(JSON.parse(fs.readFileSync(stagedManifestPath, "utf8"))),
-    };
+        },
+        inputFingerprint: inputFingerprint(JSON.parse(fs.readFileSync(stagedManifestPath, "utf8"))),
+        canonicalArtifacts: {
+          blend: { path: "artifacts/skybao-film/skybao-film.blend", sha256: sha256(stagedBlendPath) },
+          cursor: { path: "artifacts/skybao-film/cursor/cursor.png", sha256: sha256(path.join(artifactRoot, "cursor", "cursor.png")) },
+          audio: { path: "artifacts/skybao-film/audio/skybao-mix.wav", sha256: sha256(stagedAudioPath) },
+        },
+      };
     const stagedReceiptPath = path.join(stage, "targeted-review-receipt.json");
     fs.mkdirSync(path.dirname(stagedReceiptPath), { recursive: true });
     fs.writeFileSync(stagedReceiptPath, `${JSON.stringify(receipt, null, 2)}\n`);

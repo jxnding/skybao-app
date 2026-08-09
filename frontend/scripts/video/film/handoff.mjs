@@ -53,6 +53,10 @@ const ffprobe = commandFrom(
   ["/opt/homebrew/bin/ffprobe", "/usr/local/bin/ffprobe", "ffprobe"],
   "FFPROBE_BIN"
 );
+const blender = commandFrom(
+  ["/Applications/Blender.app/Contents/MacOS/Blender", "blender"],
+  "BLENDER_BIN"
+);
 
 function run(command, args, label, capture = false) {
   const result = spawnSync(command, args, {
@@ -128,6 +132,20 @@ function requireCanonicalReview() {
   const manifest = JSON.parse(fs.readFileSync(path.join(artifactRoot, "build-manifest.json"), "utf8"));
   assertManifestInputsCurrent(manifest, { repo });
   if (receipt.inputFingerprint !== inputFingerprint(manifest)) throw new Error("canonical targeted review receipt input fingerprint is stale");
+  const canonicalArtifacts = receipt.canonicalArtifacts;
+  const expectedArtifacts = {
+    blend: "artifacts/skybao-film/skybao-film.blend",
+    cursor: "artifacts/skybao-film/cursor/cursor.png",
+    audio: "artifacts/skybao-film/audio/skybao-mix.wav",
+  };
+  for (const [name, relative] of Object.entries(expectedArtifacts)) {
+    const entry = canonicalArtifacts?.[name];
+    const file = path.resolve(repo, relative);
+    if (!entry || entry.path !== relative || !fs.existsSync(file) || sha256(file) !== entry.sha256)
+      throw new Error(`canonical artifact integrity failed: ${relative} is missing or hash-mismatched`);
+  }
+  if (canonicalArtifacts.audio.sha256 !== manifest.audio?.sha256)
+    throw new Error("canonical artifact integrity failed: receipt audio hash is not bound to the build manifest");
   return receipt;
 }
 
@@ -256,6 +274,12 @@ function promoteWithRollback(items, stage) {
 // from a catalog whose referenced PNGs changed underneath it.
 checkUsedCaptures();
 const receipt = requireCanonicalReview();
+run(
+  blender,
+  ["--background", path.join(artifactRoot, "skybao-film.blend"), "--python", path.join(here, "scene-contract.py"), "--",
+    "--repo", repo, "--manifest", path.join(artifactRoot, "build-manifest.json")],
+  "canonical saved scene contract"
+);
 if (!reviewOnly) {
   if (!fs.existsSync(masterPath) || !fs.existsSync(previewPath)) throw new Error("full handoff requires both current final and preview MP4s");
   const fingerprint = receipt.inputFingerprint;
