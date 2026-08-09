@@ -148,6 +148,13 @@ runs that approval check.
 `video:film:handoff` derives its selections from `shotlist.json`, validates each
 generated image/video, and promotes the handoff set atomically. Render commands
 do not invoke handoff automatically; run it after both current renders.
+`video:film:handoff --review-only` is the bootstrap path when the package receipt
+is absent: it validates the targeted receipt, creates the deterministic 16-frame
+4x4 contact sheet and 8-second/240-frame 30fps H.264 reel, then writes and
+validates `provenance/review-package-receipt.json`. Full handoff additionally
+requires that completed package. The package receipt binds the exact source
+frame order and media/grid metadata; `checksums.sha256` is the validated union
+of still-existing review and full-handoff entries.
 
 When changing `environment.json`, use the same sequence: `--check` to verify
 the Cycles contract/device, `--samples=<frame indices>` for a fast visual

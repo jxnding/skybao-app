@@ -627,7 +627,11 @@ if (mode === "review") {
          { source: stagedReviewBlendPath, target: reviewBlendPath },
          { source: stagedReviewManifestPath, target: reviewManifestPath },
          { source: stagedReviewAudioPath, target: reviewAudioPath },
-         { source: stagedReviewRootDedicated, target: reviewRoot }] : []),
+          { source: stagedReviewRootDedicated, target: reviewRoot },
+          // A targeted rerender invalidates approval derivatives, but leaves
+          // unrelated reel/contact/full-review collateral untouched.
+          { remove: true, target: reviewPackagePath },
+          { remove: true, target: path.join(artifactRoot, "checksums.sha256") }] : []),
     ],
     stage
   );

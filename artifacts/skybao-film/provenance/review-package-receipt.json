@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 2,
+  "targetedReviewReceipt": {
+    "path": "artifacts/skybao-film/provenance/targeted-review-receipt.json",
+    "sha256": "0ea5e403fbcc752326855af504d82881a01443a2b74472b23d610d8865a1fbdb",
+    "inputFingerprint": "213b38dc18ab3c339d6679c4cdf6c5f15ff1bdcf16de87870d0073e98ebef0bd"
+  },
+  "sourceFrames": {
+    "count": 16,
+    "order": [
+      45,
+      94,
+      223,
+      241,
+      296,
+      370,
+      481,
+      535,
+      721,
+      775,
+      800,
+      856,
+      961,
+      1015,
+      1085,
+      1180
+    ],
+    "orderDigest": "fbd1001e03fabd12afbbe044cbdc3d7d2420a62772052c2f12a28d910e84351e"
+  },
+  "artifacts": {
+    "reel": {
+      "path": "artifacts/skybao-film/review/skybao-targeted-review-reel.mp4",
+      "sha256": "7ef0b329bc28deaf0fb4083226dd20b25a65d96a7112d22257dac404be91610c",
+      "metadata": {
+        "width": 1920,
+        "height": 1080,
+        "codec": "h264",
+        "pixFmt": "yuv420p",
+        "fps": 30,
+        "frameCount": 240,
+        "duration": 8
+      }
+    },
+    "contactSheet": {
+      "path": "artifacts/skybao-film/review/skybao-targeted-review-contact-sheet.png",
+      "sha256": "5d1bd5356d94a889bf20736d122735cf392af47ef306c71ea9dfc626b1d15494",
+      "metadata": {
+        "width": 1920,
+        "height": 1080,
+        "columns": 4,
+        "rows": 4,
+        "frameCount": 16
+      }
+    }
+  }
+}

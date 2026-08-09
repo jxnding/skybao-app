@@ -76,16 +76,22 @@ export function assertTargetedReviewReceipt(receipt, { schemaVersion = 2 } = {})
   return receipt;
 }
 
-const reviewPackageKeys = ["schemaVersion", "targetedReviewReceipt", "artifacts"];
+const reviewPackageKeys = ["schemaVersion", "targetedReviewReceipt", "sourceFrames", "artifacts"];
 const reviewPackageArtifactKeys = ["path", "sha256", "metadata"];
+const reviewPackageFrames = [45, 94, 223, 241, 296, 370, 481, 535, 721, 775, 800, 856, 961, 1015, 1085, 1180];
 
-export function assertReviewPackageReceipt(receipt, { schemaVersion = 1 } = {}) {
+export function assertReviewPackageReceipt(receipt, { schemaVersion = 2, expectedFrames = reviewPackageFrames } = {}) {
   exactKeys(receipt, reviewPackageKeys, "review package receipt");
   if (receipt.schemaVersion !== schemaVersion) throw new Error(`review package receipt schemaVersion must be ${schemaVersion}`);
   exactKeys(receipt.targetedReviewReceipt, ["path", "sha256", "inputFingerprint"], "review package targeted receipt");
   if (receipt.targetedReviewReceipt.path !== "artifacts/skybao-film/provenance/targeted-review-receipt.json") throw new Error("review package targeted receipt path is not canonical");
   receiptHash(receipt.targetedReviewReceipt.sha256, "review package targeted receipt sha256");
   receiptHash(receipt.targetedReviewReceipt.inputFingerprint, "review package inputFingerprint");
+  exactKeys(receipt.sourceFrames, ["count", "order", "orderDigest"], "review package sourceFrames");
+  if (receipt.sourceFrames.count !== expectedFrames.length ||
+      JSON.stringify(receipt.sourceFrames.order) !== JSON.stringify(expectedFrames) ||
+      receipt.sourceFrames.orderDigest !== sha256Json(expectedFrames))
+    throw new Error("review package source frame order is not the canonical 16-frame set");
   exactKeys(receipt.artifacts, ["reel", "contactSheet"], "review package artifacts");
   for (const [name, artifact] of Object.entries(receipt.artifacts)) {
     exactKeys(artifact, reviewPackageArtifactKeys, `review package ${name}`);
@@ -94,9 +100,11 @@ export function assertReviewPackageReceipt(receipt, { schemaVersion = 1 } = {}) 
     if (!artifact.metadata || typeof artifact.metadata !== "object" || Array.isArray(artifact.metadata)) throw new Error(`review package ${name}.metadata must be an object`);
   }
   const reel = receipt.artifacts.reel.metadata;
-  if (reel.width !== 1920 || reel.height !== 1080 || reel.codec !== "h264" || reel.pixFmt !== "yuv420p" || reel.fps !== 30 || !Number.isInteger(reel.frameCount) || reel.frameCount <= 0 || typeof reel.duration !== "number" || !Number.isFinite(reel.duration)) throw new Error("review package reel metadata is invalid");
+  exactKeys(reel, ["width", "height", "codec", "pixFmt", "fps", "frameCount", "duration"], "review package reel metadata");
+  if (reel.width !== 1920 || reel.height !== 1080 || reel.codec !== "h264" || reel.pixFmt !== "yuv420p" || reel.fps !== 30 || reel.frameCount !== 240 || reel.duration !== 8) throw new Error("review package reel metadata must be exactly 1920x1080 H.264 yuv420p 30fps 240 frames 8 seconds");
   const sheet = receipt.artifacts.contactSheet.metadata;
-  if (sheet.width !== 1920 || sheet.height !== 1080) throw new Error("review package contact sheet metadata is invalid");
+  exactKeys(sheet, ["width", "height", "columns", "rows", "frameCount"], "review package contact sheet metadata");
+  if (sheet.width !== 1920 || sheet.height !== 1080 || sheet.columns !== 4 || sheet.rows !== 4 || sheet.frameCount !== 16) throw new Error("review package contact sheet metadata must be an exact 4x4 grid of 16 frames");
   return receipt;
 }
 
