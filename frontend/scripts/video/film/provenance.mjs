@@ -108,6 +108,24 @@ export function assertReviewPackageReceipt(receipt, { schemaVersion = 2, expecte
   return receipt;
 }
 
+const fullPackageKeys = ["schemaVersion", "inputFingerprint", "reviewReceipt", "artifacts"];
+
+export function assertFullPackageReceipt(receipt, { schemaVersion = 1 } = {}) {
+  exactKeys(receipt, fullPackageKeys, "full package receipt");
+  if (receipt.schemaVersion !== schemaVersion) throw new Error(`full package receipt schemaVersion must be ${schemaVersion}`);
+  receiptHash(receipt.inputFingerprint, "full package receipt inputFingerprint");
+  exactKeys(receipt.reviewReceipt, ["path", "inputFingerprint"], "full package receipt reviewReceipt");
+  if (receipt.reviewReceipt.path !== "artifacts/skybao-film/provenance/targeted-review-receipt.json") throw new Error("full package receipt reviewReceipt path is not canonical");
+  receiptHash(receipt.reviewReceipt.inputFingerprint, "full package receipt reviewReceipt.inputFingerprint");
+  if (receipt.reviewReceipt.inputFingerprint !== receipt.inputFingerprint) throw new Error("full package receipt fingerprint binding is inconsistent");
+  if (!receipt.artifacts || typeof receipt.artifacts !== "object" || Array.isArray(receipt.artifacts)) throw new Error("full package receipt artifacts must be an object");
+  for (const [relative, digest] of Object.entries(receipt.artifacts)) {
+    if (!relative || path.isAbsolute(relative) || relative.includes("..")) throw new Error(`full package receipt artifact path is invalid: ${relative}`);
+    receiptHash(digest, `full package receipt artifact ${relative}`);
+  }
+  return receipt;
+}
+
 export function assertManifestInputsCurrent(manifest, { repo, environment, audioFile, configuredInputs } = {}) {
   if (!manifest || typeof manifest !== "object") throw new Error("manifest is invalid");
   const root = path.resolve(repo || ".");

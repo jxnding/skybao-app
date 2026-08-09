@@ -149,14 +149,17 @@ runs that approval check.
 generated image/video, and promotes the handoff set atomically. Render commands
 do not invoke handoff automatically; run it after both current renders.
 `video:film:handoff --review-only` is the bootstrap path when the package receipt
-is absent: it validates the targeted receipt, creates the deterministic 16-frame
+is absent (or stale): it validates the targeted receipt, creates the deterministic 16-frame
 4x4 contact sheet and 8-second/240-frame 30fps H.264 reel, then writes and
 validates `provenance/review-package-receipt.json`. Full handoff additionally
 requires that completed package. The package receipt binds the exact source
 frame order and media/grid metadata. `checksums-review.sha256` owns the
 targeted package, reel, contact sheet, and current review artifacts;
 `checksums-full.sha256` owns validated preview/final/profile/full-review
-artifacts. `checksums.sha256` is their validated union. A targeted refresh
+artifacts and is authenticated by the exact-set
+`provenance/full-package-receipt.json`, including its receipt entry and current
+targeted-review/input fingerprint. `checksums.sha256` is only the union of
+independently validated review and full ledgers. A targeted refresh
 preserves the rest of `review/` and invalidates only review-package and
 review-checksum approval metadata; preserved checksum entries are retained
 only after their old digest and file are revalidated.

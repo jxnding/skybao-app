@@ -558,9 +558,14 @@ run(
 if (mode === "build-only") {
   promoteWithRollback(
     [
-      { source: stagedBlendPath, target: blendPath },
-      { source: stagedManifestPath, target: buildManifestPath },
-      { source: stagedAudioPath, target: audioPath },
+       ...(mode === "review" ? [] : [
+         { source: stagedBlendPath, target: blendPath },
+         { source: stagedManifestPath, target: buildManifestPath },
+         { source: stagedAudioPath, target: audioPath },
+       ]),
+       { remove: true, target: path.join(artifactRoot, "provenance", "full-package-receipt.json") },
+       { remove: true, target: path.join(artifactRoot, "checksums-full.sha256") },
+       { remove: true, target: path.join(artifactRoot, "checksums.sha256") },
     ],
     stage
   );
@@ -628,12 +633,14 @@ if (mode === "review") {
    } else {
      fs.cpSync(stagedReviewRoot, mergedReviewRoot, { recursive: true, force: true });
    }
-  promoteWithRollback(
-    [
-      { source: stagedBlendPath, target: blendPath },
-      { source: stagedManifestPath, target: buildManifestPath },
-      { source: stagedAudioPath, target: audioPath },
-      { source: mergedReviewRoot, target: reviewTarget },
+   promoteWithRollback(
+     [
+       ...(mode === "review" ? [] : [
+         { source: stagedBlendPath, target: blendPath },
+         { source: stagedManifestPath, target: buildManifestPath },
+         { source: stagedAudioPath, target: audioPath },
+       ]),
+       { source: mergedReviewRoot, target: reviewTarget },
        ...(canonicalTargeted ? [targetedReceiptPromotion,
          { source: stagedReviewBlendPath, target: reviewBlendPath },
          { source: stagedReviewManifestPath, target: reviewManifestPath },
@@ -641,9 +648,12 @@ if (mode === "review") {
           { source: stagedReviewRootDedicated, target: reviewRoot },
            // A targeted rerender invalidates only approval metadata whose
            // receipt/checksum binds the replaced frame set.
-           { remove: true, target: reviewPackagePath },
-           { remove: true, target: path.join(artifactRoot, "checksums-review.sha256") },
-           { remove: true, target: path.join(artifactRoot, "checksums.sha256") }] : []),
+            { remove: true, target: reviewPackagePath },
+            { remove: true, target: path.join(artifactRoot, "checksums-review.sha256") },
+            { remove: true, target: path.join(artifactRoot, "checksums.sha256") }] : [
+          { remove: true, target: path.join(artifactRoot, "provenance", "review-package-receipt.json") },
+          { remove: true, target: path.join(artifactRoot, "checksums-review.sha256") },
+          { remove: true, target: path.join(artifactRoot, "checksums.sha256") }]),
     ],
     stage
   );
@@ -882,6 +892,9 @@ const promotions = [
   { source: stagedOutputPath, target: outputPath },
   { source: stagedReportPath, target: reportPath },
   { source: stagedAudioPath, target: audioPath },
+  { remove: true, target: path.join(artifactRoot, "provenance", "full-package-receipt.json") },
+  { remove: true, target: path.join(artifactRoot, "checksums-full.sha256") },
+  { remove: true, target: path.join(artifactRoot, "checksums.sha256") },
 ];
 if (keepFrames)
   promotions.push({

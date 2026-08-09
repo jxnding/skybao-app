@@ -5,7 +5,7 @@ import fs from "fs";
 import path from "path";
 import { spawnSync } from "child_process";
 import { fileURLToPath } from "url";
-import { assertCurrentProfileManifest, assertCurrentRenderReport, assertManifestInputsCurrent, assertReviewPackageReceipt, assertTargetedReviewReceipt, inputFingerprint, sha256, sha256Json } from "./provenance.mjs";
+import { assertCurrentProfileManifest, assertCurrentRenderReport, assertFullPackageReceipt, assertManifestInputsCurrent, assertReviewPackageReceipt, assertTargetedReviewReceipt, inputFingerprint, sha256, sha256Json } from "./provenance.mjs";
 
 const executingHere = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
@@ -18,6 +18,7 @@ const deliverableRoot = path.join(artifactRoot, "deliverables");
 const reviewRoot = path.join(artifactRoot, "review", "targeted");
 const receiptPath = path.join(artifactRoot, "provenance", "targeted-review-receipt.json");
 const packageReceiptPath = path.join(artifactRoot, "provenance", "review-package-receipt.json");
+const fullReceiptPath = path.join(artifactRoot, "provenance", "full-package-receipt.json");
 const reviewReelPath = path.join(artifactRoot, "review", "skybao-targeted-review-reel.mp4");
 const reviewContactSheetPath = path.join(artifactRoot, "review", "skybao-targeted-review-contact-sheet.png");
 const reviewBlendPath = path.join(artifactRoot, "skybao-film-review.blend");
@@ -556,6 +557,7 @@ const parseChecksums = (file, label) => {
     if (!line.trim()) continue;
     const match = line.match(/^([a-f0-9]{64})  (.+)$/);
     if (!match) throw new Error(`${label} contains an invalid checksum line`);
+    if (entries.has(match[2])) throw new Error(`${label} contains a duplicate checksum path`);
     entries.set(match[2], match[1]);
   }
   return entries;
@@ -571,11 +573,27 @@ const reviewChecksumPath = path.join(artifactRoot, "checksums-review.sha256");
 const fullChecksumPath = path.join(artifactRoot, "checksums-full.sha256");
 const oldReview = parseChecksums(reviewChecksumPath, "checksums-review.sha256");
 const oldFull = parseChecksums(fullChecksumPath, "checksums-full.sha256");
-// Preserved mode state is evidence, not a source of new digests.  Validate it
-// before merging so review-only cannot silently re-bless a changed full file,
-// and full handoff cannot silently re-bless changed review collateral.
-requireUnchanged(oldReview, "checksums-review.sha256");
-if (reviewOnly) requireUnchanged(oldFull, "checksums-full.sha256");
+// A review-package rebuild is deliberately independent of the old review
+// ledger.  In particular, a stale entry must not prevent receipt bootstrap.
+// Full state, when present, is a separate authenticated package and is never
+// rebuilt from an incomplete checksum file.
+if (!reviewOnly) requireUnchanged(oldReview, "checksums-review.sha256");
+
+function validateFullState() {
+  if (!fs.existsSync(fullReceiptPath) || !fs.existsSync(fullChecksumPath)) return null;
+  let fullReceipt;
+  try { fullReceipt = JSON.parse(fs.readFileSync(fullReceiptPath, "utf8")); assertFullPackageReceipt(fullReceipt); }
+  catch (error) { throw new Error(`checksums-full package receipt is invalid: ${error.message}`); }
+  if (fullReceipt.inputFingerprint !== receipt.inputFingerprint || !fullReceipt.reviewReceipt || fullReceipt.reviewReceipt.inputFingerprint !== receipt.inputFingerprint)
+    throw new Error("checksums-full package receipt fingerprint binding is invalid");
+  const expected = new Map(Object.entries(fullReceipt.artifacts));
+  expected.set("provenance/full-package-receipt.json", sha256(fullReceiptPath));
+  const actual = parseChecksums(fullChecksumPath, "checksums-full.sha256");
+  if (actual.size !== expected.size || [...expected].some(([name, digest]) => actual.get(name) !== digest))
+    throw new Error("checksums-full.sha256 does not exactly match the authenticated full package receipt");
+  requireUnchanged(actual, "checksums-full.sha256");
+  return actual;
+}
 
 const reviewRelativePaths = [
   "audio/targeted-review-mix.wav", "provenance/targeted-review-build-manifest.json",
@@ -604,18 +622,40 @@ function checksumMap(paths, old, label) {
   }
   return result;
 }
-const reviewChecksums = checksumMap(reviewRelativePaths, oldReview, "review");
-const fullChecksums = reviewOnly ? oldFull : checksumMap(fullRelativePaths, new Map(), "full");
+const reviewChecksums = checksumMap(reviewRelativePaths, reviewOnly ? new Map() : oldReview, "review");
+let fullChecksums = null;
+if (!reviewOnly) {
+  const receiptArtifacts = new Map();
+  for (const relative of fullRelativePaths) {
+    const file = stagedByTarget.get(relative) || path.join(artifactRoot, relative);
+    if (!fs.existsSync(file)) throw new Error(`full artifact is missing: ${relative}`);
+    receiptArtifacts.set(relative, sha256(file));
+  }
+  const fullReceipt = {
+    schemaVersion: 1,
+    inputFingerprint: receipt.inputFingerprint,
+    reviewReceipt: { path: "artifacts/skybao-film/provenance/targeted-review-receipt.json", inputFingerprint: receipt.inputFingerprint },
+    artifacts: Object.fromEntries([...receiptArtifacts].sort(([a], [b]) => a.localeCompare(b))),
+  };
+  assertFullPackageReceipt(fullReceipt);
+  const fullReceiptFile = staged("provenance/full-package-receipt.json");
+  fs.writeFileSync(fullReceiptFile.source, `${JSON.stringify(fullReceipt, null, 2)}\n`);
+  stagedByTarget.set("provenance/full-package-receipt.json", fullReceiptFile.source);
+  receiptArtifacts.set("provenance/full-package-receipt.json", sha256(fullReceiptFile.source));
+  fullChecksums = receiptArtifacts;
+} else {
+  fullChecksums = validateFullState();
+}
 const writeChecksum = (relative, entries) => {
   const output = staged(relative);
   fs.writeFileSync(output.source, `${[...entries].sort(([a], [b]) => a.localeCompare(b)).map(([name, digest]) => `${digest}  ${name}`).join("\n")}\n`);
   return output;
 };
 const reviewChecksumsFile = writeChecksum("checksums-review.sha256", reviewChecksums);
-const fullChecksumsFile = (!reviewOnly || oldFull.size || fs.existsSync(fullChecksumPath))
-  ? writeChecksum("checksums-full.sha256", fullChecksums)
-  : null;
-const aggregate = new Map([...fullChecksums, ...reviewChecksums]);
+const fullChecksumsFile = fullChecksums
+   ? writeChecksum("checksums-full.sha256", fullChecksums)
+   : null;
+const aggregate = new Map([...(fullChecksums || []), ...reviewChecksums]);
 const aggregateFile = writeChecksum("checksums.sha256", aggregate);
 
 function verifyChecksumSet(file, expected, label) {
