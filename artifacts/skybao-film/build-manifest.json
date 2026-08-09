@@ -1,6 +1,6 @@
 {
   "audio": {
-    "path": "artifacts/skybao-film/audio/skybao-mix.wav",
+    "path": "artifacts/skybao-film/audio/targeted-review-mix.wav",
     "sha256": "ff4c45fa4973e7c71936ec4cdb93e3d4f9283aa5de4aa699e6a7ed22197f2833"
   },
   "blender": {
@@ -12,7 +12,7 @@
     "id": "skybao-glass-atmosphere",
     "path": "frontend/scripts/video/film/environment.json",
     "seed": 830194,
-    "sha256": "0efec9f3450aa7a434c2468cea085e21ded62cfb3ab01371c4421af1c480d24b"
+    "sha256": "c78468645dd5d8bd67f224f2c4fd76f46cdc08c3b0b9906cc64b6ece006755ac"
   },
   "format": {
     "fps": 30,
@@ -23,7 +23,7 @@
   "inputAssets": {
     "builder": {
       "path": "frontend/scripts/video/film/build-blender.py",
-      "sha256": "a051550e928d42da1348f82b68cf3d0ae92674d84ffa9498858d4900e12807d9"
+      "sha256": "af477e3e17193091dfd5cb7841b1c84e78c901a11c1efe308431e36a6b470b15"
     },
     "cloudCard-far": {
       "path": "frontend/public/clouds-dark.webp",
@@ -43,7 +43,7 @@
     },
     "consumer": {
       "path": "frontend/scripts/video/film/build-blender.py",
-      "sha256": "a051550e928d42da1348f82b68cf3d0ae92674d84ffa9498858d4900e12807d9"
+      "sha256": "af477e3e17193091dfd5cb7841b1c84e78c901a11c1efe308431e36a6b470b15"
     },
     "cursorHelper": {
       "path": "frontend/scripts/video/film/cursor_window.py",
@@ -51,7 +51,7 @@
     },
     "sceneContract": {
       "path": "frontend/scripts/video/film/scene-contract.py",
-      "sha256": "9554b5d08318cf419674002becdb863f488144382508351b18a1ee1ea1dea99d"
+      "sha256": "375178619cb8c04af92ae4206a7847eace0cb3344e4ce13daf1dd4725af7d5ce"
     },
     "shotlist": {
       "path": "frontend/scripts/video/film/shotlist.json",
@@ -66,7 +66,7 @@
     "activeDeviceIds": [
       "METAL_Apple M1 Max (GPU - 32 cores)"
     ],
-    "adaptiveThreshold": 0.029999999329447746,
+    "adaptiveThreshold": 0.03999999910593033,
     "animatedSeed": false,
     "bounces": {
       "causticsReflective": false,
@@ -87,7 +87,7 @@
       "useGpu": true
     },
     "deviceFallback": null,
-    "deviceRequested": "auto",
+    "deviceRequested": "metal",
     "deviceResolved": "metal",
     "devices": [
       {
@@ -103,13 +103,13 @@
         "use": true
       }
     ],
-    "elapsedRenderSeconds": 32.943215417006286,
+    "elapsedRenderSeconds": 65.95022795800469,
     "engine": "CYCLES",
     "metalRT": "AUTO",
     "persistentData": true,
-    "profile": "preview",
-    "resolutionPercentage": 50,
-    "samples": 32,
+    "profile": "targeted",
+    "resolutionPercentage": 100,
+    "samples": 16,
     "seed": 830194
   },
   "scene": {
@@ -1068,6 +1068,6 @@
       "type": "still"
     }
   ],
-  "inputFingerprint": "4800e90528e8082ddfd0515e8a1c288b5bb38e39830ba66a078010b376d825c0",
-  "profileFingerprint": "77cedcb2962e0a85b1b845ab6bcc3479c3dc88ddb3b355ce3fc56c5f697728d0"
+  "inputFingerprint": "213b38dc18ab3c339d6679c4cdf6c5f15ff1bdcf16de87870d0073e98ebef0bd",
+  "profileFingerprint": "a47c81a71b38c7576774838ba5764bda3e8ab24187975c09d12414af3d79638d"
 }

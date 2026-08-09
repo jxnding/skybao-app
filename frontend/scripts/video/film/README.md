@@ -140,6 +140,11 @@ The targeted approval is separate and immutable: `skybao-film-review.blend`,
 `provenance/targeted-review-build-manifest.json`,
 `provenance/targeted-review-receipt.json`, `audio/targeted-review-mix.wav`, and
 `review/targeted/frame-*.png`. Preview, final, and build-only never replace these paths.
+The dedicated review manifest is self-contained: its audio is always
+`audio/targeted-review-mix.wav`. `yarn video:film --check` is source/capture/
+recipe/device preflight and may warn that review artifacts need regeneration.
+Use `yarn video:film --check-artifacts` for strict approval; handoff always
+runs that approval check.
 `video:film:handoff` derives its selections from `shotlist.json`, validates each
 generated image/video, and promotes the handoff set atomically. Render commands
 do not invoke handoff automatically; run it after both current renders.
@@ -201,6 +206,12 @@ and renders only those review frames:
 ```bash
   yarn video:film --samples=targeted
 ```
+
+Canonical targeted frames are rendered at 1920×1080 using the dedicated
+`targetedReview` profile (economical samples with denoising); normal preview
+remains 960×540. Review-only handoff creates
+`review/skybao-targeted-review-reel.mp4`, a checkpoint reel—not the full
+40-second master or motion/final delivery.
 
 The saved Blender scene contract can also be checked without writing the blend. The
 explicit `--samples=<frames>` form remains available for noncanonical review, but

@@ -185,10 +185,11 @@ yarn video:assets --only=assistant-answer-typing,work-board-drag
 # 2. Verify the complete capture library without writing it.
 yarn video:assets:check
 
-# 3. Validate the shot recipe, capture freshness, and Cycles device.
+# 3. Source/capture/recipe/device preflight (may warn that review artifacts
+#    need regeneration).
 yarn video:film --check --cycles-device=metal
 
-# 4. Render the recipe-owned canonical targeted review set.
+# 4. Render the recipe-owned canonical targeted review set at 1920x1080.
 yarn video:film --samples=targeted
 # Ad-hoc samples are allowed for noncanonical visual checks.
 yarn video:film --samples=60,150,241
@@ -197,7 +198,11 @@ yarn video:film --samples=60,150,241
 yarn video:film:scene-contract --repo . --blend artifacts/skybao-film/skybao-film.blend \
   --manifest artifacts/skybao-film/build-manifest.json
 
-# 5. Build the editable scene and render the 960x540 review.
+# 5. Strictly approve and hand off the dedicated review package.
+yarn video:film --check-artifacts
+yarn video:film:handoff --review-only
+
+# 6. Full render remains an explicit future delivery step.
 yarn video:film --build-only
 yarn video:film
 

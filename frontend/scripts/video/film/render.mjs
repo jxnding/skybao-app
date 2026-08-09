@@ -6,7 +6,7 @@ import fs from "fs";
 import path from "path";
 import { spawnSync } from "child_process";
 import { fileURLToPath } from "url";
-import { assertManifestInputsCurrent, bindManifest, inputFingerprint, sha256, sha256Json } from "./provenance.mjs";
+import { assertManifestInputsCurrent, assertTargetedReviewReceipt, bindManifest, inputFingerprint, sha256, sha256Json } from "./provenance.mjs";
 
 const executingHere = path.dirname(fileURLToPath(import.meta.url));
 const scriptArgs = process.argv.slice(2);
@@ -55,7 +55,8 @@ Usage:
   yarn video:film --samples=targeted Render canonical recipe review frames
   yarn video:film --samples=30,241 Render ad-hoc review frames
   yarn video:film --shots=assistant-research,work-board-drag
-  yarn video:film --check          Validate manifests, inputs, and Cycles device without writing
+  yarn video:film --check          Source/capture/recipe/device preflight only
+  yarn video:film --check-artifacts Validate the approved targeted review package
 
 Options:
   --cycles-device=auto|metal|cpu   Cycles render device (default: auto)
@@ -105,7 +106,7 @@ if (canonicalTargeted && (!Array.isArray(canonicalFrames) || canonicalFrames.len
   canonicalFrames.some((frame) => !Number.isInteger(frame) || frame < 1 || frame > (recipe.format?.frames || 1200)) ||
   new Set(canonicalFrames).size !== canonicalFrames.length))
   throw new Error("shotlist.targetedReviewFrames must be unique bounded integer frames");
-const modeFlags = ["--preview", "--final", "--build-only", "--check"].filter(
+const modeFlags = ["--preview", "--final", "--build-only", "--check", "--check-artifacts"].filter(
   has
 );
 if (modeFlags.length > 1) {
@@ -113,8 +114,10 @@ if (modeFlags.length > 1) {
 }
 if (targetedReview && modeFlags.length)
   throw new Error("--samples/--shots cannot be combined with a render mode");
-const mode = has("--check")
-  ? "check"
+const mode = has("--check-artifacts")
+  ? "check-artifacts"
+  : has("--check")
+    ? "check"
   : targetedReview
     ? "review"
     : has("--final")
@@ -131,6 +134,7 @@ const unknown = scriptArgs.filter(
       "--final",
       "--build-only",
       "--check",
+      "--check-artifacts",
       "--keep-frames",
       "--strict-provenance",
       "--repo",
@@ -162,13 +166,13 @@ const blender = commandFrom(
   ["/Applications/Blender.app/Contents/MacOS/Blender", "blender"],
   "BLENDER_BIN"
 );
-const ffmpeg = ["build-only", "review", "check"].includes(mode)
+const ffmpeg = ["build-only", "review", "check", "check-artifacts"].includes(mode)
   ? null
   : commandFrom(
       ["/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg", "ffmpeg"],
       "FFMPEG_BIN"
     );
-const ffprobe = ["build-only", "review", "check"].includes(mode)
+const ffprobe = ["build-only", "review", "check", "check-artifacts"].includes(mode)
   ? null
   : commandFrom(
       ["/opt/homebrew/bin/ffprobe", "/usr/local/bin/ffprobe", "ffprobe"],
@@ -200,6 +204,7 @@ function reviewReceipt() {
   if (!exists(targetedReceiptPath)) throw new Error("canonical targeted review receipt is missing; run --samples=targeted first");
   let receipt;
   try { receipt = JSON.parse(fs.readFileSync(targetedReceiptPath, "utf8")); } catch { throw new Error("canonical targeted review receipt is invalid"); }
+  assertTargetedReviewReceipt(receipt);
   const expected = [...canonicalFrames].sort((a, b) => a - b);
   if (JSON.stringify(Object.keys(receipt.frames || {}).map(Number).sort((a, b) => a - b)) !== JSON.stringify(expected)) throw new Error("canonical targeted review receipt frame set is stale");
   if (!exists(reviewBlendPath) || !exists(reviewManifestPath) || !exists(reviewAudioPath))
@@ -212,6 +217,8 @@ function reviewReceipt() {
     if (receipt.hashes?.[String(frame)] !== sha256(file)) throw new Error(`canonical targeted review hash mismatch at frame ${frame}`);
   }
   const manifest = JSON.parse(fs.readFileSync(reviewManifestPath, "utf8"));
+  if (manifest.audio?.path !== "artifacts/skybao-film/audio/targeted-review-mix.wav")
+    throw new Error("targeted review manifest audio path is not canonical");
   assertManifestInputsCurrent(manifest, { repo, audioFile: reviewAudioPath });
   const sources = {
     shotlist: sha256(shotlistPath),
@@ -393,18 +400,10 @@ run(
 
 if (mode === "check") {
   run(process.execPath, [path.join(here, "validate.mjs"), ...(strictProvenance ? ["--strict-provenance"] : [])], "source validation");
-  // The approved package is intentionally independent of mutable profile artifacts.
-  if (fs.existsSync(reviewBlendPath) && fs.existsSync(reviewManifestPath)) {
-    try {
-      run(
-        blender,
-        ["--background", reviewBlendPath, "--python", path.join(here, "scene-contract.py"), "--",
-          "--repo", repo, "--manifest", reviewManifestPath, "--audio", reviewAudioPath],
-        "targeted review scene contract"
-      );
-      reviewReceipt();
-    } catch (error) { throw new Error(`targeted review package is stale: ${error.message}`); }
-  } else throw new Error("approved targeted review package is missing; run --samples=targeted");
+  if (fs.existsSync(targetedReceiptPath)) {
+    try { reviewReceipt(); console.warn("warning: approved review artifacts are current; regenerate them after any source/recipe drift"); }
+    catch (error) { console.warn(`warning: approved review artifacts need regeneration (${error.message})`); }
+  } else console.warn("warning: approved review artifacts are missing; run --samples=targeted");
   run(
     blender,
     [
@@ -422,6 +421,18 @@ if (mode === "check") {
     `Cycles ${cyclesDevice} device probe`
   );
   console.log("\nSkyBao film inputs are valid");
+  process.exit(0);
+}
+
+if (mode === "check-artifacts") {
+  reviewReceipt();
+  run(
+    blender,
+    ["--background", reviewBlendPath, "--python", path.join(here, "scene-contract.py"), "--",
+      "--repo", repo, "--manifest", reviewManifestPath, "--audio", reviewAudioPath],
+    "targeted review scene contract"
+  );
+  console.log("\nSkyBao targeted review artifacts are approved and current");
   process.exit(0);
 }
 
@@ -463,7 +474,7 @@ const blenderArgs = [
   "--audio",
   stagedAudioPath,
   "--audio-canonical",
-  audioPath,
+  mode === "review" && canonicalTargeted ? reviewAudioPath : audioPath,
   "--device",
   cyclesDevice,
 ];
@@ -476,6 +487,7 @@ if (["preview", "final"].includes(mode)) {
   blenderArgs.push("--receipt", targetedReceiptPath);
 }
 if (mode === "review") blenderArgs.push("--frames-out", stagedReviewRoot);
+if (mode === "review" && canonicalTargeted) blenderArgs.push("--profile", "targeted");
 if (canonicalTargeted) blenderArgs.push("--samples", canonicalFrames.join(","));
 else if (sampleFrames) blenderArgs.push("--samples", sampleFrames.join(","));
 if (shotsArg) blenderArgs.push("--shots", shotsArg.split("=", 2)[1]);
@@ -513,6 +525,7 @@ run(
     "--audio",
     stagedAudioPath,
     "--strict-provenance",
+    ...(canonicalTargeted ? ["--targeted-review"] : []),
   ],
   "staged provenance validation"
 );
@@ -549,7 +562,7 @@ if (mode === "review") {
        fs.copyFileSync(stagedManifestPath, stagedReviewManifestPath);
        fs.copyFileSync(stagedBlendPath, stagedReviewBlendPath);
        const receipt = {
-        schemaVersion: 1,
+         schemaVersion: 2,
       frames: [...canonicalFrames].sort((a, b) => a - b),
       hashes: Object.fromEntries(canonicalFrames.map((frame) => [String(frame), sha256(path.join(stagedReviewRoot, `frame-${String(frame).padStart(4, "0")}.png`))])),
       provenance: {

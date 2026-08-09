@@ -100,8 +100,14 @@ The repository now also contains a reviewed Blender VSE edit, deterministic musi
 ```bash
 yarn video:film --check
 yarn video:film --samples=targeted
+yarn video:film --check-artifacts
 yarn video:film:handoff --review-only
 ```
+
+`--check` is source/capture/recipe/device preflight and may warn that review
+artifacts need regeneration. `--check-artifacts` is the strict approval gate;
+handoff always performs it. The review-only reel is a checkpoint, not the
+40-second master.
 
 After approval, render the current preview and final, then create full
 deliverables with `yarn video:film:handoff` without `--review-only`.

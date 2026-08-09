@@ -141,6 +141,11 @@
       "adaptiveThreshold": 0.03,
       "resolutionPercentage": 50
     },
+    "targetedReview": {
+      "samples": 16,
+      "adaptiveThreshold": 0.04,
+      "resolutionPercentage": 100
+    },
     "final": {
       "samples": 128,
       "adaptiveThreshold": 0.01,

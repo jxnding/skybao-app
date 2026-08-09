@@ -15,7 +15,9 @@ export function sha256Json(value) {
 export function inputFingerprint(manifest) {
   return sha256Json({
     inputAssets: manifest.inputAssets,
-    audio: manifest.audio,
+    // The checkout-relative audio path is profile-specific; bind the shared
+    // source fingerprint to the bytes, not to the artifact's role/path.
+    audio: manifest.audio ? { sha256: manifest.audio.sha256 } : null,
     usedUiAssets: manifest.usedUiAssets,
     shotlist: manifest.shotlist,
     environment: manifest.environment,
@@ -25,6 +27,53 @@ export function inputFingerprint(manifest) {
     blender: manifest.blender,
     toolInputs: manifest.toolInputs,
   });
+}
+
+const receiptKeys = {
+  root: ["schemaVersion", "frames", "hashes", "provenance", "inputFingerprint", "reviewArtifacts"],
+  frame: ["path", "sha256"],
+  artifact: ["path", "sha256"],
+  provenance: ["shotlist", "environment", "catalog", "scene"],
+};
+
+function exactKeys(value, allowed, label) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${label} must be an object`);
+  const actual = Object.keys(value).sort();
+  const expected = [...allowed].sort();
+  if (actual.length !== expected.length || actual.some((key, index) => key !== expected[index]))
+    throw new Error(`${label} has unknown or missing keys`);
+}
+
+function receiptHash(value, label) {
+  if (typeof value !== "string" || !/^[a-f0-9]{64}$/.test(value)) throw new Error(`${label} must be a SHA-256 hex digest`);
+}
+
+export function assertTargetedReviewReceipt(receipt, { schemaVersion = 2 } = {}) {
+  exactKeys(receipt, receiptKeys.root, "targeted review receipt");
+  if (receipt.schemaVersion !== schemaVersion) throw new Error(`targeted review receipt schemaVersion must be ${schemaVersion}`);
+  exactKeys(receipt.frames, Object.keys(receipt.frames), "receipt.frames");
+  exactKeys(receipt.hashes, Object.keys(receipt.hashes), "receipt.hashes");
+  exactKeys(receipt.provenance, receiptKeys.provenance, "receipt.provenance");
+  exactKeys(receipt.reviewArtifacts, ["blend", "manifest", "cursor", "audio"], "receipt.reviewArtifacts");
+  receiptHash(receipt.inputFingerprint, "receipt.inputFingerprint");
+  for (const [frame, entry] of Object.entries(receipt.frames)) {
+    if (!/^\d+$/.test(frame)) throw new Error(`receipt frame key is invalid: ${frame}`);
+    exactKeys(entry, receiptKeys.frame, `receipt.frames.${frame}`);
+    receiptHash(entry.sha256, `receipt.frames.${frame}.sha256`);
+    if (typeof entry.path !== "string" || path.isAbsolute(entry.path)) throw new Error(`receipt.frames.${frame}.path must be relative`);
+  }
+  exactKeys(receipt.hashes, Object.keys(receipt.frames), "receipt.hashes");
+  for (const [frame, hash] of Object.entries(receipt.hashes)) receiptHash(hash, `receipt.hashes.${frame}`);
+  for (const [name, value] of Object.entries(receipt.provenance)) receiptHash(value, `receipt.provenance.${name}`);
+  for (const [name, entry] of Object.entries(receipt.reviewArtifacts)) {
+    exactKeys(entry, receiptKeys.artifact, `receipt.reviewArtifacts.${name}`);
+    receiptHash(entry.sha256, `receipt.reviewArtifacts.${name}.sha256`);
+    if (typeof entry.path !== "string" || path.isAbsolute(entry.path)) throw new Error(`receipt.reviewArtifacts.${name}.path must be relative`);
+  }
+  for (const [frame, entry] of Object.entries(receipt.frames)) {
+    if (receipt.hashes[frame] !== entry.sha256) throw new Error(`receipt frame/hash mismatch at ${frame}`);
+  }
+  return receipt;
 }
 
 export function assertManifestInputsCurrent(manifest, { repo, environment, audioFile, configuredInputs } = {}) {

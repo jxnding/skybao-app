@@ -238,9 +238,9 @@ def parse_argv(argv):
     if args["quality"] not in (None, "preview", "final"):
         raise FilmError(
             "--quality must be preview or final, got {0!r}".format(args["quality"]))
-    if args["profile"] not in (None, "preview", "final"):
+    if args["profile"] not in (None, "preview", "final", "targeted"):
         raise FilmError(
-            "--profile must be preview or final, got {0!r}".format(
+            "--profile must be preview, final, or targeted, got {0!r}".format(
                 args["profile"]))
     if args["device"] not in ("auto", "metal", "cpu"):
         raise FilmError("--cycles-device must be auto, metal, or cpu")
@@ -645,8 +645,8 @@ def probe_cycles_device(scene, requested):
 def apply_cycles_profile(scene, profile):
     """Apply deterministic quality, bounce, and OIDN settings for one render mode."""
     render_cfg = ENVIRONMENT.get("render", {})
-    profile_name = "final" if profile == "final" else "preview"
-    profile_cfg = render_cfg.get(profile_name, {})
+    profile_name = profile if profile in ("final", "targeted") else "preview"
+    profile_cfg = render_cfg.get("targetedReview" if profile_name == "targeted" else profile_name, {})
     seed_cfg = render_cfg.get("seed", ENVIRONMENT.get("seed", 0))
     if isinstance(seed_cfg, dict):
         seed_value = int(seed_cfg.get("value", ENVIRONMENT.get("seed", 0)))
@@ -2423,7 +2423,7 @@ def save_blend(sc, paths):
 
 def _prepare_render(scene, quality, out_dir):
     scene_render = scene.render
-    profile = "final" if quality == "final" else "preview"
+    profile = quality if quality in ("final", "targeted") else "preview"
     apply_cycles_profile(scene, profile)
     scene_render.image_settings.file_format = "PNG"
     scene_render.image_settings.color_mode = "RGBA"
@@ -2451,10 +2451,10 @@ def render_frames(sc, cfg, quality, paths):
 
 
 def render_samples(sc, cfg, frames, paths):
-    """Render selected half-resolution review frames without a full export."""
+    """Render selected targeted frames at full resolution without a full export."""
     out_dir = paths.get("frames_out") or os.path.join(paths["film"], "review")
     os.makedirs(out_dir, exist_ok=True)
-    _prepare_render(sc, "sample", out_dir)
+    _prepare_render(sc, "targeted", out_dir)
     scene_render = sc.render
     for frame in frames:
         if frame < 1 or frame > cfg["total"]:

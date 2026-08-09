@@ -5,7 +5,7 @@ import fs from "fs";
 import path from "path";
 import { spawnSync } from "child_process";
 import { fileURLToPath } from "url";
-import { assertCurrentProfileManifest, assertCurrentRenderReport, assertManifestInputsCurrent, inputFingerprint, sha256, sha256Json } from "./provenance.mjs";
+import { assertCurrentProfileManifest, assertCurrentRenderReport, assertManifestInputsCurrent, assertTargetedReviewReceipt, inputFingerprint, sha256, sha256Json } from "./provenance.mjs";
 
 const executingHere = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
@@ -114,6 +114,7 @@ function requireCanonicalReview() {
     if (!fs.existsSync(file)) throw new Error(`required review artifact is missing: ${path.relative(repo, file)}`);
   }
   let receipt; try { receipt = JSON.parse(fs.readFileSync(receiptPath, "utf8")); } catch { throw new Error("canonical targeted review receipt is invalid"); }
+  try { assertTargetedReviewReceipt(receipt); } catch (error) { throw new Error(`canonical targeted review receipt is invalid: ${error.message}`); }
   const frames = [...canonicalFrames].sort((a, b) => a - b);
    if (JSON.stringify(Object.keys(receipt.frames || {}).map(Number).sort((a, b) => a - b)) !== JSON.stringify(frames)) throw new Error("canonical targeted review receipt frame set is stale");
   if (!fs.existsSync(reviewRoot)) throw new Error("canonical targeted review directory is required");
@@ -134,6 +135,7 @@ function requireCanonicalReview() {
   };
   if (JSON.stringify(receipt.provenance) !== JSON.stringify(sources)) throw new Error("canonical targeted review receipt provenance is stale");
    const manifest = JSON.parse(fs.readFileSync(reviewManifestPath, "utf8"));
+   if (manifest.audio?.path !== "artifacts/skybao-film/audio/targeted-review-mix.wav") throw new Error("canonical review manifest audio path is not self-contained");
    assertManifestInputsCurrent(manifest, { repo, audioFile: reviewAudioPath });
   if (receipt.inputFingerprint !== inputFingerprint(manifest)) throw new Error("canonical targeted review receipt input fingerprint is stale");
    const canonicalArtifacts = receipt.reviewArtifacts;
@@ -333,6 +335,24 @@ function staged(relative) {
 }
 
 let poster = null;
+let reviewReel = null;
+if (reviewOnly) {
+  reviewReel = staged("review/skybao-targeted-review-reel.mp4");
+  const concatList = path.join(stage, "targeted-review-reel.txt");
+  const entries = canonicalFrames.map((frame) => {
+    const file = path.join(reviewRoot, `frame-${String(frame).padStart(4, "0")}.png`);
+    return `file '${file.replaceAll("'", "'\\''")}'\nduration 0.5`;
+  });
+  entries.push(entries.at(-1).split("\nduration")[0]);
+  fs.writeFileSync(concatList, `${entries.join("\n")}\n`);
+  run(ffmpeg, ["-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", concatList,
+    "-r", String(fps), "-c:v", "libx264", "-crf", "18", "-preset", "medium",
+    "-pix_fmt", "yuv420p", "-movflags", "+faststart", reviewReel.source],
+  "generate targeted checkpoint reel");
+  const reelVideo = probe(reviewReel.source).streams.find((stream) => stream.codec_type === "video");
+  if (!reelVideo || reelVideo.width !== 1920 || reelVideo.height !== 1080)
+    throw new Error("targeted checkpoint reel metadata is invalid");
+}
 if (!reviewOnly) {
 const posterShot = shotlist.shots.find((shot) => shot.id === "work-board-drag");
 if (!posterShot) throw new Error("shotlist is missing work-board-drag");
@@ -492,10 +512,11 @@ const checksumRelativePaths = [
     "deliverables/render-report-final.json", "deliverables/render-report-preview.json",
     "deliverables/skybao-40s-master.mp4", "deliverables/skybao-40s-preview.mp4",
   ]),
-  "provenance/targeted-review-receipt.json",
+   "provenance/targeted-review-receipt.json",
   ...stagedByTarget.keys(),
    ...canonicalFrames.map((frame) => path.join("review", "targeted", `frame-${String(frame).padStart(4, "0")}.png`)),
    "skybao-film-review.blend",
+   ...(reviewOnly ? ["review/skybao-targeted-review-reel.mp4"] : []),
   ...(reviewOnly ? [] : ["skybao-film-final.blend", "skybao-film-preview.blend"]),
 ]
   .filter((relative, index, all) => all.indexOf(relative) === index)

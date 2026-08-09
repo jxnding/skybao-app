@@ -510,7 +510,10 @@ def check_audio(repo, manifest_path, allow_staged=False, audio_path=None):
     manifest = read_json(manifest_path)
     audio = manifest.get("audio")
     if not isinstance(audio, dict) or not isinstance(audio.get("sha256"), str): die("manifest audio provenance is missing")
-    canonical = os.path.realpath(os.path.join(repo, "artifacts/skybao-film/audio/skybao-mix.wav"))
+    targeted = ("targeted-review-mix.wav" in str(audio.get("path", "")) or
+                "targeted-review-mix.wav" in str(audio_path or ""))
+    canonical = os.path.realpath(os.path.join(repo, "artifacts/skybao-film/audio",
+                                               "targeted-review-mix.wav" if targeted else "skybao-mix.wav"))
     selected = os.path.realpath(audio_path) if allow_staged and audio_path else canonical
     if allow_staged and not audio_path: die("--allow-staged requires --audio")
     if not os.path.isfile(selected): die("manifest audio file is missing")
@@ -524,6 +527,9 @@ def check_audio(repo, manifest_path, allow_staged=False, audio_path=None):
         getattr(editor, "sequences", []) if editor else [])
     if len(all_strips) != 1: die("saved scene must contain exactly one sequence strip")
     strip = all_strips[0]
+    if "targeted-review-mix.wav" in str(getattr(getattr(strip, "sound", None), "filepath", "")):
+        targeted = True
+        canonical = os.path.realpath(os.path.join(repo, "artifacts/skybao-film/audio/targeted-review-mix.wav"))
     if (getattr(strip, "type", None) != "SOUND" or
             strip.name != "Audio.skybao-mix" or strip.channel != 120):
         die("audio strip identity is not canonical")
@@ -531,12 +537,16 @@ def check_audio(repo, manifest_path, allow_staged=False, audio_path=None):
     sounds = list(bpy.data.sounds)
     if len(sounds) != 1 or sounds[0] is not strip.sound:
         die("saved scene must contain exactly one sound datablock linked by identity")
-    expected_sound_name = os.path.basename(canonical)
-    expected_sound_path = "//audio/" + expected_sound_name
+    # The datablock identity remains the builder's stable mix name even when
+    # the dedicated review package binds the bytes to its own canonical path.
+    expected_sound_name = "skybao-mix.wav"
+    expected_sound_path = "//audio/" + os.path.basename(canonical)
     if (strip.sound.name != expected_sound_name or
             strip.sound.filepath != expected_sound_path or
             strip.sound.get("anything_llm_audio_identity") != "builder:skybao-mix"):
-        die("sound filepath or name semantics are not canonical")
+        die("sound filepath or name semantics are not canonical: name=%s path=%s expected=%s identity=%s" %
+            (strip.sound.name, strip.sound.filepath, expected_sound_path,
+             strip.sound.get("anything_llm_audio_identity")))
     actual = os.path.realpath(os.path.join(repo, "artifacts/skybao-film",
                                             strip.sound.filepath[2:]))
     repo_root = os.path.realpath(repo)
@@ -545,7 +555,8 @@ def check_audio(repo, manifest_path, allow_staged=False, audio_path=None):
     actual_digest = hashlib.sha256(open(selected, "rb").read()).hexdigest() if os.path.isfile(selected) else None
     if actual != canonical or actual_digest != audio["sha256"]:
         die("audio strip is external or not the canonical manifest audio")
-    if audio.get("path") != "artifacts/skybao-film/audio/skybao-mix.wav":
+    expected_audio_path = "artifacts/skybao-film/audio/targeted-review-mix.wav" if targeted else "artifacts/skybao-film/audio/skybao-mix.wav"
+    if audio.get("path") != expected_audio_path:
         die("manifest audio path is not canonical")
     if (strip.frame_start != 1 or strip.frame_final_start != 1 or
             strip.frame_final_end != 1201):

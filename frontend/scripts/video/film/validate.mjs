@@ -14,16 +14,18 @@ let repoArgIndex = -1;
 let manifestPathArg = null;
 let audioPathArg = null;
 let strictProvenance = false;
+let targetedReview = false;
 const valueOptions = new Set();
 for (let index = 0; index < cliArgs.length; index += 1) {
-  if (!["--repo", "--manifest", "--audio"].includes(cliArgs[index]) && cliArgs[index] !== "--strict-provenance") {
+   if (!["--repo", "--manifest", "--audio"].includes(cliArgs[index]) && !["--strict-provenance", "--targeted-review"].includes(cliArgs[index])) {
     console.error(`error: unknown option: ${cliArgs[index]}`);
     process.exit(2);
   }
-  if (cliArgs[index] === "--strict-provenance") {
+   if (cliArgs[index] === "--strict-provenance") {
     strictProvenance = true;
     continue;
-  }
+   }
+   if (cliArgs[index] === "--targeted-review") { targetedReview = true; continue; }
   if (valueOptions.has(cliArgs[index]) || !cliArgs[index + 1] || cliArgs[index + 1].startsWith("-")) {
     console.error(`error: missing value for ${cliArgs[index]}`);
     process.exit(2);
@@ -63,7 +65,9 @@ const environmentPath = path.join(selectedFilmDir, "environment.json");
 const catalogFilePath = path.join(repo, "artifacts", "skybao-ui", "catalog.json");
 const uiRoot = path.join(repo, "artifacts", "skybao-ui");
 const filmRoot = path.join(repo, "artifacts", "skybao-film");
-const canonicalAudioRelative = "artifacts/skybao-film/audio/skybao-mix.wav";
+const canonicalAudioRelative = (targetedReview || manifestPathArg?.includes("targeted-review") || audioPathArg?.includes("targeted-review-mix"))
+  ? "artifacts/skybao-film/audio/targeted-review-mix.wav"
+  : "artifacts/skybao-film/audio/skybao-mix.wav";
 const buildManifestPath = manifestPathArg
   ? path.resolve(manifestPathArg)
   : path.join(filmRoot, "build-manifest.json");
