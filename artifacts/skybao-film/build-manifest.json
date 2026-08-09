@@ -51,7 +51,7 @@
     },
     "sceneContract": {
       "path": "frontend/scripts/video/film/scene-contract.py",
-      "sha256": "375178619cb8c04af92ae4206a7847eace0cb3344e4ce13daf1dd4725af7d5ce"
+      "sha256": "81b406c197b4bdce146c33232a5b2460ff9bde5cf284be62bb0646e4b28b80d3"
     },
     "shotlist": {
       "path": "frontend/scripts/video/film/shotlist.json",
@@ -87,7 +87,7 @@
       "useGpu": true
     },
     "deviceFallback": null,
-    "deviceRequested": "metal",
+    "deviceRequested": "auto",
     "deviceResolved": "metal",
     "devices": [
       {
@@ -103,7 +103,7 @@
         "use": true
       }
     ],
-    "elapsedRenderSeconds": 65.95022795800469,
+    "elapsedRenderSeconds": 72.41635454099742,
     "engine": "CYCLES",
     "metalRT": "AUTO",
     "persistentData": true,
@@ -1068,6 +1068,6 @@
       "type": "still"
     }
   ],
-  "inputFingerprint": "213b38dc18ab3c339d6679c4cdf6c5f15ff1bdcf16de87870d0073e98ebef0bd",
-  "profileFingerprint": "a47c81a71b38c7576774838ba5764bda3e8ab24187975c09d12414af3d79638d"
+  "inputFingerprint": "8191fc100bd71f126906707aef1c0a045405fe5a7f66bab1eef5d37d2d6f1920",
+  "profileFingerprint": "533178cf9b068eb8f3d5d14afb83003e1f4b12842d85bf51472322ec5b40dc22"
 }

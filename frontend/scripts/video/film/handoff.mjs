@@ -549,52 +549,81 @@ if (
   throw new Error("assistant-to-knowledge boundary metadata is invalid");
 }
 
-const checksumRelativePaths = [
-   "audio/targeted-review-mix.wav",
-   "provenance/targeted-review-build-manifest.json",
-  "cursor/cursor.png",
-  ...(reviewOnly ? [] : [
-    "deliverables/build-manifest-final.json", "deliverables/build-manifest-preview.json",
-    "deliverables/render-report-final.json", "deliverables/render-report-preview.json",
-    "deliverables/skybao-40s-master.mp4", "deliverables/skybao-40s-preview.mp4",
-  ]),
-    "provenance/targeted-review-receipt.json",
-    "provenance/review-package-receipt.json",
-  ...stagedByTarget.keys(),
-   ...canonicalFrames.map((frame) => path.join("review", "targeted", `frame-${String(frame).padStart(4, "0")}.png`)),
-   "skybao-film-review.blend",
-    "review/skybao-targeted-review-reel.mp4", "review/skybao-targeted-review-contact-sheet.png",
-  ...(reviewOnly ? [] : ["skybao-film-final.blend", "skybao-film-preview.blend"]),
-]
-  .filter((relative, index, all) => all.indexOf(relative) === index)
-  .sort();
-// Review-only handoff is additive: preserve valid entries for an existing
-// full handoff, while explicitly classifying entries whose files disappeared.
-const checksumEntries = new Map();
-const checksumPath = path.join(artifactRoot, "checksums.sha256");
-if (fs.existsSync(checksumPath)) {
-  for (const line of fs.readFileSync(checksumPath, "utf8").split("\n")) {
+const parseChecksums = (file, label) => {
+  const entries = new Map();
+  if (!fs.existsSync(file)) return entries;
+  for (const line of fs.readFileSync(file, "utf8").split("\n")) {
+    if (!line.trim()) continue;
     const match = line.match(/^([a-f0-9]{64})  (.+)$/);
-    if (match) checksumEntries.set(match[2], match[1]);
+    if (!match) throw new Error(`${label} contains an invalid checksum line`);
+    entries.set(match[2], match[1]);
   }
+  return entries;
+};
+const requireUnchanged = (entries, label) => {
+  for (const [relative, digest] of entries) {
+    const file = path.join(artifactRoot, relative);
+    if (!fs.existsSync(file) || sha256(file) !== digest)
+      throw new Error(`${label} entry is missing or modified: ${relative}`);
+  }
+};
+const reviewChecksumPath = path.join(artifactRoot, "checksums-review.sha256");
+const fullChecksumPath = path.join(artifactRoot, "checksums-full.sha256");
+const oldReview = parseChecksums(reviewChecksumPath, "checksums-review.sha256");
+const oldFull = parseChecksums(fullChecksumPath, "checksums-full.sha256");
+// Preserved mode state is evidence, not a source of new digests.  Validate it
+// before merging so review-only cannot silently re-bless a changed full file,
+// and full handoff cannot silently re-bless changed review collateral.
+requireUnchanged(oldReview, "checksums-review.sha256");
+if (reviewOnly) requireUnchanged(oldFull, "checksums-full.sha256");
+
+const reviewRelativePaths = [
+  "audio/targeted-review-mix.wav", "provenance/targeted-review-build-manifest.json",
+  "provenance/targeted-review-receipt.json", "provenance/review-package-receipt.json",
+  "cursor/cursor.png", "skybao-film-review.blend",
+  "review/skybao-targeted-review-reel.mp4", "review/skybao-targeted-review-contact-sheet.png",
+  ...canonicalFrames.flatMap((frame) => [
+    path.join("review", "targeted", `frame-${String(frame).padStart(4, "0")}.png`),
+    path.join("review", `frame-${String(frame).padStart(4, "0")}.png`),
+  ]),
+].filter((relative, index, all) => all.indexOf(relative) === index).sort();
+const fullRelativePaths = [
+  "audio/skybao-mix.wav", "deliverables/build-manifest-final.json", "deliverables/build-manifest-preview.json",
+  "deliverables/render-report-final.json", "deliverables/render-report-preview.json",
+  "deliverables/skybao-40s-master.mp4", "deliverables/skybao-40s-preview.mp4",
+  "skybao-film-final.blend", "skybao-film-preview.blend",
+  ...[...stagedByTarget.keys()].filter((relative) => !reviewRelativePaths.includes(relative)),
+].filter((relative, index, all) => all.indexOf(relative) === index).sort();
+
+function checksumMap(paths, old, label) {
+  const result = new Map(old);
+  for (const relative of paths) {
+    const file = stagedByTarget.get(relative) || path.join(artifactRoot, relative);
+    if (!fs.existsSync(file)) throw new Error(`${label} artifact is missing: ${relative}`);
+    result.set(relative, sha256(file));
+  }
+  return result;
 }
-for (const name of fs.existsSync(path.join(artifactRoot, "review")) ? fs.readdirSync(path.join(artifactRoot, "review")) : [])
-  if (/^frame-\d{4}\.png$/.test(name)) checksumRelativePaths.push(path.join("review", name));
-for (const relative of checksumRelativePaths) checksumEntries.set(relative, null);
-const checksumPaths = [...checksumEntries.keys()].sort();
-for (const relative of checksumPaths) {
-  const file = stagedByTarget.get(relative) || path.join(artifactRoot, relative);
-  if (!fs.existsSync(file) && checksumRelativePaths.includes(relative)) throw new Error(`required handoff artifact is missing: ${relative}`);
+const reviewChecksums = checksumMap(reviewRelativePaths, oldReview, "review");
+const fullChecksums = reviewOnly ? oldFull : checksumMap(fullRelativePaths, new Map(), "full");
+const writeChecksum = (relative, entries) => {
+  const output = staged(relative);
+  fs.writeFileSync(output.source, `${[...entries].sort(([a], [b]) => a.localeCompare(b)).map(([name, digest]) => `${digest}  ${name}`).join("\n")}\n`);
+  return output;
+};
+const reviewChecksumsFile = writeChecksum("checksums-review.sha256", reviewChecksums);
+const fullChecksumsFile = (!reviewOnly || oldFull.size || fs.existsSync(fullChecksumPath))
+  ? writeChecksum("checksums-full.sha256", fullChecksums)
+  : null;
+const aggregate = new Map([...fullChecksums, ...reviewChecksums]);
+const aggregateFile = writeChecksum("checksums.sha256", aggregate);
+
+function verifyChecksumSet(file, expected, label) {
+  const actual = parseChecksums(file, label);
+  if (actual.size !== expected.size || [...expected].some(([name, digest]) => actual.get(name) !== digest))
+    throw new Error(`${label} does not match the generated mode-specific set`);
+  requireUnchanged(actual, label);
 }
-const checksums = staged("checksums.sha256");
-const checksumBody = checksumPaths
-  .map((relative) => {
-    const file =
-      stagedByTarget.get(relative) || path.join(artifactRoot, relative);
-    return fs.existsSync(file) ? `${sha256(file)}  ${relative}` : `# stale-quarantined ${checksumEntries.get(relative)}  ${relative}`;
-  })
-  .join("\n");
-fs.writeFileSync(checksums.source, `${checksumBody}\n`);
 
 promoteWithRollback(
   [...stagedByTarget.entries()].map(([relative, source]) => ({
@@ -605,9 +634,17 @@ promoteWithRollback(
 );
 fs.rmSync(stage, { recursive: true, force: true });
 
+// Bootstrap intentionally permits an absent package receipt.  Once the reel,
+// sheet, and receipt have been promoted, run the same completed-package gate
+// used by full handoff rather than trusting staged JSON alone.
+if (reviewOnly) reviewPackageReceipt();
+verifyChecksumSet(reviewChecksumPath, reviewChecksums, "checksums-review.sha256");
+if (fullChecksumsFile) verifyChecksumSet(fullChecksumPath, fullChecksums, "checksums-full.sha256");
+verifyChecksumSet(path.join(artifactRoot, "checksums.sha256"), aggregate, "checksums.sha256");
+
 console.log(reviewOnly ? "SkyBao review-only handoff ready (old v3 deliverables deferred)" : "SkyBao final handoff ready");
 if (!reviewOnly) {
   console.log(`  poster:    ${path.relative(repo, poster.target)}`);
   console.log(`  contacts:  ${path.relative(repo, reviewRoot)}`);
 }
-console.log(`  checksums: ${path.relative(repo, checksums.target)}`);
+console.log(`  checksums: ${path.relative(repo, aggregateFile.target)}`);

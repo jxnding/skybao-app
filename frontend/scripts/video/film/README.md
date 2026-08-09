@@ -153,8 +153,13 @@ is absent: it validates the targeted receipt, creates the deterministic 16-frame
 4x4 contact sheet and 8-second/240-frame 30fps H.264 reel, then writes and
 validates `provenance/review-package-receipt.json`. Full handoff additionally
 requires that completed package. The package receipt binds the exact source
-frame order and media/grid metadata; `checksums.sha256` is the validated union
-of still-existing review and full-handoff entries.
+frame order and media/grid metadata. `checksums-review.sha256` owns the
+targeted package, reel, contact sheet, and current review artifacts;
+`checksums-full.sha256` owns validated preview/final/profile/full-review
+artifacts. `checksums.sha256` is their validated union. A targeted refresh
+preserves the rest of `review/` and invalidates only review-package and
+review-checksum approval metadata; preserved checksum entries are retained
+only after their old digest and file are revalidated.
 
 When changing `environment.json`, use the same sequence: `--check` to verify
 the Cycles contract/device, `--samples=<frame indices>` for a fast visual

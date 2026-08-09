@@ -608,15 +608,26 @@ if (mode === "review") {
     // Receipt is promoted atomically with the exact scene and PNG set.
     var targetedReceiptPromotion = { source: stagedReceiptPath, target: targetedReceiptPath };
   }
-  const reviewTarget = path.join(artifactRoot, "review");
-  const mergedReviewRoot = path.join(stage, "review-merged");
-  if (exists(reviewTarget) && !canonicalTargeted)
-    fs.cpSync(reviewTarget, mergedReviewRoot, { recursive: true });
-  else fs.mkdirSync(mergedReviewRoot, { recursive: true });
-  fs.cpSync(stagedReviewRoot, mergedReviewRoot, {
-    recursive: true,
-    force: true,
-  });
+   const reviewTarget = path.join(artifactRoot, "review");
+   const mergedReviewRoot = path.join(stage, "review-merged");
+   // A targeted render is a surgical refresh.  Seed from the complete
+   // canonical review tree first, then replace only the targeted frame set;
+   // reel/contact sheets and future review collateral must survive.
+   if (exists(reviewTarget)) fs.cpSync(reviewTarget, mergedReviewRoot, { recursive: true });
+   else fs.mkdirSync(mergedReviewRoot, { recursive: true });
+   if (canonicalTargeted) {
+     const mergedTargeted = path.join(mergedReviewRoot, "targeted");
+     fs.rmSync(mergedTargeted, { recursive: true, force: true });
+     fs.mkdirSync(mergedTargeted, { recursive: true });
+     fs.cpSync(stagedReviewRoot, mergedTargeted, { recursive: true, force: true });
+     // Older packages also exposed the canonical frames directly below
+     // review/. Replace those exact files, without touching other collateral.
+     for (const name of fs.readdirSync(stagedReviewRoot)) {
+       if (/^frame-\d{4}\.png$/.test(name)) fs.copyFileSync(path.join(stagedReviewRoot, name), path.join(mergedReviewRoot, name));
+     }
+   } else {
+     fs.cpSync(stagedReviewRoot, mergedReviewRoot, { recursive: true, force: true });
+   }
   promoteWithRollback(
     [
       { source: stagedBlendPath, target: blendPath },
@@ -628,10 +639,11 @@ if (mode === "review") {
          { source: stagedReviewManifestPath, target: reviewManifestPath },
          { source: stagedReviewAudioPath, target: reviewAudioPath },
           { source: stagedReviewRootDedicated, target: reviewRoot },
-          // A targeted rerender invalidates approval derivatives, but leaves
-          // unrelated reel/contact/full-review collateral untouched.
-          { remove: true, target: reviewPackagePath },
-          { remove: true, target: path.join(artifactRoot, "checksums.sha256") }] : []),
+           // A targeted rerender invalidates only approval metadata whose
+           // receipt/checksum binds the replaced frame set.
+           { remove: true, target: reviewPackagePath },
+           { remove: true, target: path.join(artifactRoot, "checksums-review.sha256") },
+           { remove: true, target: path.join(artifactRoot, "checksums.sha256") }] : []),
     ],
     stage
   );

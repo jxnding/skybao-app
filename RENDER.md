@@ -137,7 +137,9 @@ Generated film output lives under `artifacts/skybao-film/`:
 - `deliverables/skybao-40s-preview.mp4`
 - `deliverables/skybao-40s-master.mp4`
 - build manifests, render reports, poster, review sheets, provenance, and
-  checksums
+  checksums (`checksums-review.sha256` for targeted review state,
+  `checksums-full.sha256` for validated profile/full-review state, and
+  `checksums.sha256` for their validated union)
 
 ### Current revision artifact state
 
