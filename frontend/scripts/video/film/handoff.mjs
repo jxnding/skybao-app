@@ -81,7 +81,16 @@ function checkUsedCaptures() {
   });
   if (result.error) throw result.error;
   if (result.status !== 0) {
-    const details = (result.stderr || result.stdout || "").trim().split("\n").pop();
+    const output = `${result.stderr || ""}\n${result.stdout || ""}`;
+    const summary = output
+      .split("\n")
+      .map((line) => line.trim())
+      .find((line) => /Stale capture recipe or content|Error summary|Error:/.test(line) && !/^at /.test(line));
+    const details = summary || output
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith("at "))
+      .join(" ");
     throw new Error(`handoff rejected: used capture freshness check failed${details ? ` (${details})` : ""}`);
   }
 }
@@ -89,9 +98,19 @@ function checkUsedCaptures() {
 function requireCanonicalReview() {
   if (!Array.isArray(canonicalFrames) || !canonicalFrames.length) throw new Error("shotlist has no canonical targeted review set");
   if (!fs.existsSync(receiptPath)) throw new Error("canonical targeted review receipt is required");
+  const canonicalBlend = path.join(artifactRoot, "skybao-film.blend");
+  if (!fs.existsSync(canonicalBlend)) throw new Error("canonical skybao-film.blend is required");
+  for (const file of [
+    path.join(artifactRoot, "audio", "skybao-mix.wav"),
+    path.join(artifactRoot, "cursor", "cursor.png"),
+    path.join(artifactRoot, "build-manifest.json"),
+  ]) {
+    if (!fs.existsSync(file)) throw new Error(`required review artifact is missing: ${path.relative(repo, file)}`);
+  }
   let receipt; try { receipt = JSON.parse(fs.readFileSync(receiptPath, "utf8")); } catch { throw new Error("canonical targeted review receipt is invalid"); }
   const frames = [...canonicalFrames].sort((a, b) => a - b);
   if (JSON.stringify(receipt.frames) !== JSON.stringify(frames)) throw new Error("canonical targeted review receipt frame set is stale");
+  if (!fs.existsSync(reviewRoot)) throw new Error("canonical targeted review directory is required");
   const names = fs.readdirSync(reviewRoot).filter((name) => /^frame-\d{4}\.png$/.test(name)).sort();
   const expected = frames.map((frame) => `frame-${String(frame).padStart(4, "0")}.png`).sort();
   if (JSON.stringify(names) !== JSON.stringify(expected)) throw new Error("canonical targeted review set is incomplete or contains extras");
@@ -451,12 +470,11 @@ const checksumRelativePaths = [
   ...(reviewOnly ? [] : ["skybao-film-final.blend", "skybao-film-preview.blend"]),
 ]
   .filter((relative, index, all) => all.indexOf(relative) === index)
-  .filter((relative) =>
-    fs.existsSync(
-      stagedByTarget.get(relative) || path.join(artifactRoot, relative)
-    )
-  )
   .sort();
+for (const relative of checksumRelativePaths) {
+  const file = stagedByTarget.get(relative) || path.join(artifactRoot, relative);
+  if (!fs.existsSync(file)) throw new Error(`required handoff artifact is missing: ${relative}`);
+}
 const checksums = staged("checksums.sha256");
 const checksumBody = checksumRelativePaths
   .map((relative) => {

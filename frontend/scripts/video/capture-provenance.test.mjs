@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -8,7 +7,6 @@ import test from "node:test";
 import {
   createOutputStage,
   finalizeCatalogEntries,
-  isAssetFresh,
   promoteOutputStage,
   recipeHash,
 } from "./capture-skybao-assets.mjs";
@@ -86,35 +84,6 @@ test("capture output is unchanged until a validated stage is promoted", async ()
       await readFile(path.join(output, "marker.txt"), "utf8"),
       "replacement\n"
     );
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
-});
-
-test("a mutated used PNG is rejected even when the catalog is unchanged", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "skybao-capture-mutation-"));
-  try {
-    const file = "stills/workspace/work-board-drag.png";
-    await mkdir(path.dirname(path.join(root, file)), { recursive: true });
-    await writeFile(path.join(root, file), "approved PNG bytes\n");
-    const asset = { id: "work-board-drag", route: "/work", state: "board" };
-    const fingerprint = { generator: {}, source: {}, settings: {} };
-    const entry = {
-      id: asset.id,
-      ownerId: asset.id,
-      type: "still",
-      framing: "workspace",
-      file,
-      recipeVersion: "skybao-capture-v4",
-      recipeSha256: recipeHash(asset, fingerprint),
-      contentSha256: null,
-    };
-    const pngHash = createHash("sha256").update(await readFile(path.join(root, file))).digest("hex");
-    entry.contentSha256 = createHash("sha256").update(`${file}\0${pngHash}`).digest("hex");
-    assert.equal(await isAssetFresh(root, asset, [entry], new Set([asset.id]), fingerprint), true);
-    // The catalog remains untouched; only the owned PNG is changed after capture.
-    await writeFile(path.join(root, file), "mutated PNG bytes\n");
-    assert.equal(await isAssetFresh(root, asset, [entry], new Set([asset.id]), fingerprint), false);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

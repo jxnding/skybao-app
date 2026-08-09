@@ -1470,7 +1470,6 @@ if (
 export {
   createOutputStage,
   finalizeCatalogEntries,
-  isAssetFresh,
   promoteOutputStage,
   recipeHash,
 };
