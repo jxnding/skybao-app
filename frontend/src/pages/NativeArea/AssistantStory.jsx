@@ -16,6 +16,7 @@ import {
   X,
 } from "@phosphor-icons/react";
 import WorkspaceFrame, { WorkspaceSurface } from "@/components/WorkspaceFrame";
+import designLanguage from "@/skybao-design-language.json";
 import { ACME_STORY_PROMPT } from "./storyData";
 import { useCapture } from "./capture";
 import CaptureNavigationDrawer from "./CaptureNavigationDrawer";
@@ -218,6 +219,20 @@ export default function AssistantStory() {
   };
 
   const isWorking = phase === "research" || phase === "typing";
+  const designLanguageStyle = {
+    "--sb-hero-primary": designLanguage.themes.dark.hero.primary,
+    "--sb-hero-secondary": designLanguage.themes.dark.hero.secondary,
+    "--sb-status-complete": designLanguage.themes.dark.status.complete,
+    "--sb-floating-padding": `${designLanguage.floatingElement.paddingPx}px`,
+    "--sb-floating-extrusion": `${designLanguage.floatingElement.extrusionM}m`,
+    "--sb-floating-bevel": `${designLanguage.floatingElement.bevelM}m`,
+    "--sb-floating-lift": `${designLanguage.floatingElement.liftM}m`,
+    "--sb-floating-max-scale": designLanguage.floatingElement.maxScale,
+    "--sb-floating-fresnel": designLanguage.floatingElement.fresnelPower,
+    "--sb-floating-rim": designLanguage.floatingElement.rimStrength,
+    "--sb-floating-halo": designLanguage.floatingElement.haloStrength,
+    "--sb-floating-duration": `${designLanguage.floatingElement.durationFrames}ms`,
+  };
 
   return (
     <WorkspaceFrame className="min-w-0 flex-1 overflow-hidden">
@@ -227,6 +242,7 @@ export default function AssistantStory() {
       >
         <main
           data-capture-id="assistant-root"
+          style={designLanguageStyle}
           className={`sb-shell sb-native-area sb-assistant-story ${
             transparent ? "sb-capture-transparent" : ""
           }`}
@@ -304,6 +320,7 @@ export default function AssistantStory() {
                         {RESEARCH_STEPS.map(([title, meta], index) => (
                           <div
                             className={index < visibleSteps ? "complete" : ""}
+                            data-capture-id={`assistant-research-card-${index}`}
                             key={title}
                           >
                             {index < visibleSteps ? (

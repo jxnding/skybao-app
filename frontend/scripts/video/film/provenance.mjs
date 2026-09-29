@@ -78,9 +78,19 @@ export function assertTargetedReviewReceipt(receipt, { schemaVersion = 2 } = {})
 
 const reviewPackageKeys = ["schemaVersion", "targetedReviewReceipt", "sourceFrames", "artifacts"];
 const reviewPackageArtifactKeys = ["path", "sha256", "metadata"];
-const reviewPackageFrames = [45, 94, 223, 241, 296, 370, 481, 535, 721, 775, 800, 856, 961, 1015, 1085, 1180];
+export function reviewPackageSpec(expectedFrames) {
+  if (!Array.isArray(expectedFrames) || expectedFrames.length === 0) throw new Error("review package expectedFrames must be a nonempty array");
+  const secondsPerFrame = 0.25;
+  const duration = Number((expectedFrames.length * secondsPerFrame).toFixed(3));
+  const frameCount = Math.round(duration * 30);
+  const columns = 8;
+  const rows = Math.ceil(expectedFrames.length / columns);
+  const padTop = Math.floor((1080 - rows * 135) / 2);
+  return { secondsPerFrame, duration, frameCount, columns, rows, width: 1920, height: 1080, tileWidth: 240, tileHeight: 135, padTop };
+}
 
-export function assertReviewPackageReceipt(receipt, { schemaVersion = 2, expectedFrames = reviewPackageFrames } = {}) {
+export function assertReviewPackageReceipt(receipt, { schemaVersion = 2, expectedFrames } = {}) {
+  const spec = reviewPackageSpec(expectedFrames);
   exactKeys(receipt, reviewPackageKeys, "review package receipt");
   if (receipt.schemaVersion !== schemaVersion) throw new Error(`review package receipt schemaVersion must be ${schemaVersion}`);
   exactKeys(receipt.targetedReviewReceipt, ["path", "sha256", "inputFingerprint"], "review package targeted receipt");
@@ -91,7 +101,7 @@ export function assertReviewPackageReceipt(receipt, { schemaVersion = 2, expecte
   if (receipt.sourceFrames.count !== expectedFrames.length ||
       JSON.stringify(receipt.sourceFrames.order) !== JSON.stringify(expectedFrames) ||
       receipt.sourceFrames.orderDigest !== sha256Json(expectedFrames))
-    throw new Error("review package source frame order is not the canonical 16-frame set");
+    throw new Error("review package source frame order is not the current shotlist set");
   exactKeys(receipt.artifacts, ["reel", "contactSheet"], "review package artifacts");
   for (const [name, artifact] of Object.entries(receipt.artifacts)) {
     exactKeys(artifact, reviewPackageArtifactKeys, `review package ${name}`);
@@ -101,23 +111,43 @@ export function assertReviewPackageReceipt(receipt, { schemaVersion = 2, expecte
   }
   const reel = receipt.artifacts.reel.metadata;
   exactKeys(reel, ["width", "height", "codec", "pixFmt", "fps", "frameCount", "duration"], "review package reel metadata");
-  if (reel.width !== 1920 || reel.height !== 1080 || reel.codec !== "h264" || reel.pixFmt !== "yuv420p" || reel.fps !== 30 || reel.frameCount !== 240 || reel.duration !== 8) throw new Error("review package reel metadata must be exactly 1920x1080 H.264 yuv420p 30fps 240 frames 8 seconds");
+  if (reel.width !== spec.width || reel.height !== spec.height || reel.codec !== "h264" || reel.pixFmt !== "yuv420p" || reel.fps !== 30 || reel.frameCount !== spec.frameCount || reel.duration !== spec.duration) throw new Error("review package reel metadata does not match the current frame-count duration spec");
   const sheet = receipt.artifacts.contactSheet.metadata;
-  exactKeys(sheet, ["width", "height", "columns", "rows", "frameCount"], "review package contact sheet metadata");
-  if (sheet.width !== 1920 || sheet.height !== 1080 || sheet.columns !== 4 || sheet.rows !== 4 || sheet.frameCount !== 16) throw new Error("review package contact sheet metadata must be an exact 4x4 grid of 16 frames");
+  exactKeys(sheet, ["width", "height", "columns", "rows", "frameCount", "offsetY"], "review package contact sheet metadata");
+  if (sheet.width !== spec.width || sheet.height !== spec.height || sheet.columns !== spec.columns || sheet.rows !== spec.rows || sheet.frameCount !== expectedFrames.length || sheet.offsetY !== spec.padTop) throw new Error("review package contact sheet metadata does not match the current centered frame grid");
   return receipt;
 }
 
-const fullPackageKeys = ["schemaVersion", "inputFingerprint", "reviewReceipt", "artifacts"];
+const fullPackageKeys = ["schemaVersion", "inputFingerprint", "reviewReceipt", "reviewPackageReceipt", "artifacts"];
 
-export function assertFullPackageReceipt(receipt, { schemaVersion = 1 } = {}) {
+export function assertFullPackageReceipt(receipt, {
+  schemaVersion = 2,
+  expectedReviewReceiptSha256,
+  expectedReviewPackageReceiptSha256,
+} = {}) {
   exactKeys(receipt, fullPackageKeys, "full package receipt");
   if (receipt.schemaVersion !== schemaVersion) throw new Error(`full package receipt schemaVersion must be ${schemaVersion}`);
   receiptHash(receipt.inputFingerprint, "full package receipt inputFingerprint");
-  exactKeys(receipt.reviewReceipt, ["path", "inputFingerprint"], "full package receipt reviewReceipt");
+  exactKeys(receipt.reviewReceipt, ["path", "sha256", "inputFingerprint"], "full package receipt reviewReceipt");
   if (receipt.reviewReceipt.path !== "artifacts/skybao-film/provenance/targeted-review-receipt.json") throw new Error("full package receipt reviewReceipt path is not canonical");
+  receiptHash(receipt.reviewReceipt.sha256, "full package receipt reviewReceipt.sha256");
   receiptHash(receipt.reviewReceipt.inputFingerprint, "full package receipt reviewReceipt.inputFingerprint");
   if (receipt.reviewReceipt.inputFingerprint !== receipt.inputFingerprint) throw new Error("full package receipt fingerprint binding is inconsistent");
+  exactKeys(receipt.reviewPackageReceipt, ["path", "sha256", "inputFingerprint"], "full package receipt reviewPackageReceipt");
+  if (receipt.reviewPackageReceipt.path !== "artifacts/skybao-film/provenance/review-package-receipt.json") throw new Error("full package receipt reviewPackageReceipt path is not canonical");
+  receiptHash(receipt.reviewPackageReceipt.sha256, "full package receipt reviewPackageReceipt.sha256");
+  receiptHash(receipt.reviewPackageReceipt.inputFingerprint, "full package receipt reviewPackageReceipt.inputFingerprint");
+  if (receipt.reviewPackageReceipt.inputFingerprint !== receipt.inputFingerprint) throw new Error("full package receipt review package fingerprint binding is inconsistent");
+  if (expectedReviewReceiptSha256 !== undefined) {
+    receiptHash(expectedReviewReceiptSha256, "expected full package review receipt sha256");
+    if (receipt.reviewReceipt.sha256 !== expectedReviewReceiptSha256)
+      throw new Error("full package receipt reviewReceipt sha256 does not match the current receipt");
+  }
+  if (expectedReviewPackageReceiptSha256 !== undefined) {
+    receiptHash(expectedReviewPackageReceiptSha256, "expected full package review package receipt sha256");
+    if (receipt.reviewPackageReceipt.sha256 !== expectedReviewPackageReceiptSha256)
+      throw new Error("full package receipt reviewPackageReceipt sha256 does not match the current package receipt");
+  }
   if (!receipt.artifacts || typeof receipt.artifacts !== "object" || Array.isArray(receipt.artifacts)) throw new Error("full package receipt artifacts must be an object");
   for (const [relative, digest] of Object.entries(receipt.artifacts)) {
     if (!relative || path.isAbsolute(relative) || relative.includes("..")) throw new Error(`full package receipt artifact path is invalid: ${relative}`);

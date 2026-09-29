@@ -5,7 +5,7 @@ import fs from "fs";
 import path from "path";
 import { spawnSync } from "child_process";
 import { fileURLToPath } from "url";
-import { assertCurrentProfileManifest, assertCurrentRenderReport, assertFullPackageReceipt, assertManifestInputsCurrent, assertReviewPackageReceipt, assertTargetedReviewReceipt, inputFingerprint, sha256, sha256Json } from "./provenance.mjs";
+import { assertCurrentProfileManifest, assertCurrentRenderReport, assertFullPackageReceipt, assertManifestInputsCurrent, assertReviewPackageReceipt, assertTargetedReviewReceipt, inputFingerprint, reviewPackageSpec, sha256, sha256Json } from "./provenance.mjs";
 
 const executingHere = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
@@ -13,6 +13,13 @@ const repoIndex = args.indexOf("--repo");
 const repo = path.resolve(repoIndex >= 0 ? args[repoIndex + 1] || "" : path.resolve(executingHere, "../../../.."));
 if (!fs.existsSync(repo)) throw new Error(`repository does not exist: ${repo}`);
 const here = path.join(repo, "frontend", "scripts", "video", "film");
+const environment = JSON.parse(fs.readFileSync(path.join(here, "environment.json"), "utf8"));
+const catalogRelative = environment.toolInputs?.uiCatalog;
+if (typeof catalogRelative !== "string" || path.isAbsolute(catalogRelative) || catalogRelative.includes(".."))
+  throw new Error("environment.toolInputs.uiCatalog must be a safe relative path");
+const catalogPath = path.resolve(repo, catalogRelative);
+const catalogRecipe = JSON.parse(fs.readFileSync(catalogPath, "utf8"));
+const captureProfile = catalogRecipe.profile === "zoom150" ? "zoom150" : null;
 const artifactRoot = path.join(repo, "artifacts", "skybao-film");
 const deliverableRoot = path.join(artifactRoot, "deliverables");
 const reviewRoot = path.join(artifactRoot, "review", "targeted");
@@ -38,6 +45,7 @@ const shotlist = JSON.parse(
 const fps = shotlist.format?.fps || 30;
 const totalFrames = shotlist.format?.frames || 1200;
 const canonicalFrames = shotlist.targetedReviewFrames;
+const reviewSpec = reviewPackageSpec(canonicalFrames);
 
 function commandFrom(candidates, envName) {
   if (process.env[envName]) return process.env[envName];
@@ -89,6 +97,9 @@ function checkUsedCaptures() {
     cwd: repo,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
+    env: captureProfile
+      ? { ...process.env, SKYBAO_CAPTURE_PROFILE: captureProfile }
+      : process.env,
   });
   if (result.error) throw result.error;
   if (result.status !== 0) {
@@ -134,7 +145,7 @@ function requireCanonicalReview() {
   const sources = {
     shotlist: sha256(path.join(here, "shotlist.json")),
     environment: sha256(path.join(here, "environment.json")),
-    catalog: sha256(path.join(repo, "artifacts", "skybao-ui", "catalog.json")),
+    catalog: sha256(catalogPath),
      scene: sha256Json(JSON.parse(fs.readFileSync(reviewManifestPath, "utf8")).scene),
   };
   if (JSON.stringify(receipt.provenance) !== JSON.stringify(sources)) throw new Error("canonical targeted review receipt provenance is stale");
@@ -270,7 +281,7 @@ function promoteWithRollback(items, stage) {
   const moved = [];
   try {
     for (const item of items) {
-      if (!fs.existsSync(item.source))
+      if (!item.remove && !fs.existsSync(item.source))
         throw new Error(`missing staged handoff asset ${item.source}`);
       fs.mkdirSync(path.dirname(item.target), { recursive: true });
       const backup = path.join(
@@ -281,17 +292,19 @@ function promoteWithRollback(items, stage) {
         fs.mkdirSync(rollbackRoot, { recursive: true });
         fs.renameSync(item.target, backup);
       }
-      try {
-        fs.renameSync(item.source, item.target);
-      } catch (error) {
-        if (fs.existsSync(backup)) fs.renameSync(backup, item.target);
-        throw error;
+      if (!item.remove) {
+        try {
+          fs.renameSync(item.source, item.target);
+        } catch (error) {
+          if (fs.existsSync(backup)) fs.renameSync(backup, item.target);
+          throw error;
+        }
       }
       moved.push({ ...item, backup: fs.existsSync(backup) ? backup : null });
     }
   } catch (error) {
     for (const item of moved.reverse()) {
-      if (fs.existsSync(item.target)) fs.rmSync(item.target, { force: true });
+      if (fs.existsSync(item.target)) fs.rmSync(item.target, { recursive: true, force: true });
       if (item.backup && fs.existsSync(item.backup))
         fs.renameSync(item.backup, item.target);
     }
@@ -360,28 +373,42 @@ function staged(relative) {
 
 let poster = null;
 let reviewReel = null;
+let generatedReviewPackageSha = null;
 if (reviewOnly) {
   reviewReel = staged("review/skybao-targeted-review-reel.mp4");
   const reviewSheet = staged("review/skybao-targeted-review-contact-sheet.png");
   const concatList = path.join(stage, "targeted-review-reel.txt");
   const entries = canonicalFrames.map((frame) => {
     const file = path.join(reviewRoot, `frame-${String(frame).padStart(4, "0")}.png`);
-    return `file '${file.replaceAll("'", "'\\''")}'\nduration 0.5`;
+    return `file '${file.replaceAll("'", "'\\''")}'\nduration ${reviewSpec.secondsPerFrame}`;
   });
   entries.push(entries.at(-1).split("\nduration")[0]);
   fs.writeFileSync(concatList, `${entries.join("\n")}\n`);
   run(ffmpeg, ["-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", concatList,
-    "-t", "8", "-frames:v", "240", "-r", String(fps), "-c:v", "libx264", "-crf", "18", "-preset", "medium",
+    "-t", String(reviewSpec.duration), "-frames:v", String(reviewSpec.frameCount), "-vf", `fps=${fps}`, "-c:v", "libx264", "-crf", "18", "-preset", "medium",
     "-pix_fmt", "yuv420p", "-movflags", "+faststart", reviewReel.source],
   "generate targeted checkpoint reel");
   const reelVideo = probe(reviewReel.source).streams.find((stream) => stream.codec_type === "video");
   const reelProbe = probe(reviewReel.source);
-  if (!reelVideo || reelVideo.width !== 1920 || reelVideo.height !== 1080 ||
-      reelVideo.codec_name !== "h264" || reelVideo.pix_fmt !== "yuv420p" ||
-      reelVideo.r_frame_rate !== "30/1" || Number(reelVideo.nb_read_frames) !== 240 ||
-      Math.abs(Number(reelProbe.format.duration) - 8) > 0.001)
-    throw new Error("targeted checkpoint reel metadata is invalid");
-  run(ffmpeg, ["-v", "error", "-y", "-i", reviewReel.source, "-vf", "fps=2,scale=480:270:flags=lanczos,tile=4x4:nb_frames=16", "-frames:v", "1", reviewSheet.source], "generate targeted contact sheet");
+  const reelActual = {
+    width: reelVideo?.width ?? null,
+    height: reelVideo?.height ?? null,
+    codec: reelVideo?.codec_name ?? null,
+    pixFmt: reelVideo?.pix_fmt ?? null,
+    frameRate: reelVideo?.r_frame_rate ?? null,
+    frameCount: Number(reelVideo?.nb_read_frames),
+    duration: Number(reelProbe.format?.duration),
+  };
+  const reelExpected = {
+    width: 1920, height: 1080, codec: "h264", pixFmt: "yuv420p",
+    frameRate: "30/1", frameCount: reviewSpec.frameCount, duration: reviewSpec.duration,
+  };
+  if (reelActual.width !== reelExpected.width || reelActual.height !== reelExpected.height ||
+      reelActual.codec !== reelExpected.codec || reelActual.pixFmt !== reelExpected.pixFmt ||
+      reelActual.frameRate !== reelExpected.frameRate || reelActual.frameCount !== reelExpected.frameCount ||
+      Math.abs(reelActual.duration - reelExpected.duration) > 0.001)
+    throw new Error(`targeted checkpoint reel metadata is invalid: got ${JSON.stringify(reelActual)}, expected ${JSON.stringify(reelExpected)}`);
+  run(ffmpeg, ["-v", "error", "-y", "-i", reviewReel.source, "-vf", `fps=${1 / reviewSpec.secondsPerFrame},scale=${reviewSpec.tileWidth}:${reviewSpec.tileHeight}:flags=lanczos,tile=${reviewSpec.columns}x${reviewSpec.rows}:nb_frames=${canonicalFrames.length},pad=${reviewSpec.width}:${reviewSpec.height}:(ow-iw)/2:(oh-ih)/2:black`, "-frames:v", "1", reviewSheet.source], "generate targeted contact sheet");
   assertImage(reviewSheet.source, 1920, 1080);
   const reelMetadata = probe(reviewReel.source);
   const reelStream = reelMetadata.streams.find((stream) => stream.codec_type === "video");
@@ -393,12 +420,13 @@ if (reviewOnly) {
       targetedReviewReceipt: { path: path.relative(repo, receiptPath), sha256: sha256(receiptPath), inputFingerprint: receipt.inputFingerprint },
       sourceFrames: { count: canonicalFrames.length, order: canonicalFrames, orderDigest: sha256Json(canonicalFrames) },
       artifacts: {
-       reel: { path: path.relative(repo, reviewReel.target), sha256: sha256(reviewReel.source), metadata: { width: reelStream.width, height: reelStream.height, codec: reelStream.codec_name, pixFmt: reelStream.pix_fmt, fps: 30, duration: 8, frameCount: 240 } },
-       contactSheet: { path: path.relative(repo, reviewSheet.target), sha256: sha256(reviewSheet.source), metadata: { width: sheetStream.width, height: sheetStream.height, columns: 4, rows: 4, frameCount: 16 } },
+       reel: { path: path.relative(repo, reviewReel.target), sha256: sha256(reviewReel.source), metadata: { width: reelStream.width, height: reelStream.height, codec: reelStream.codec_name, pixFmt: reelStream.pix_fmt, fps: 30, duration: reviewSpec.duration, frameCount: reviewSpec.frameCount } },
+       contactSheet: { path: path.relative(repo, reviewSheet.target), sha256: sha256(reviewSheet.source), metadata: { width: sheetStream.width, height: sheetStream.height, columns: reviewSpec.columns, rows: reviewSpec.rows, frameCount: canonicalFrames.length, offsetY: reviewSpec.padTop } },
       },
     }, null, 2) + "\n");
-   let generatedPackage;
-   try { generatedPackage = JSON.parse(fs.readFileSync(packageReceipt.source, "utf8")); assertReviewPackageReceipt(generatedPackage, { expectedFrames: canonicalFrames }); } catch (error) { throw new Error(`generated review package receipt is invalid: ${error.message}`); }
+    let generatedPackage;
+    try { generatedPackage = JSON.parse(fs.readFileSync(packageReceipt.source, "utf8")); assertReviewPackageReceipt(generatedPackage, { expectedFrames: canonicalFrames }); } catch (error) { throw new Error(`generated review package receipt is invalid: ${error.message}`); }
+    generatedReviewPackageSha = sha256(packageReceipt.source);
 }
 if (!reviewOnly) {
 const posterShot = shotlist.shots.find((shot) => shot.id === "work-board-drag");
@@ -579,13 +607,38 @@ const oldFull = parseChecksums(fullChecksumPath, "checksums-full.sha256");
 // rebuilt from an incomplete checksum file.
 if (!reviewOnly) requireUnchanged(oldReview, "checksums-review.sha256");
 
+let invalidateFullState = false;
 function validateFullState() {
-  if (!fs.existsSync(fullReceiptPath) || !fs.existsSync(fullChecksumPath)) return null;
+  const hasReceipt = fs.existsSync(fullReceiptPath);
+  const hasLedger = fs.existsSync(fullChecksumPath);
+  if (hasReceipt !== hasLedger) {
+    invalidateFullState = true;
+    return null;
+  }
+  if (!hasReceipt) return null;
   let fullReceipt;
   try { fullReceipt = JSON.parse(fs.readFileSync(fullReceiptPath, "utf8")); assertFullPackageReceipt(fullReceipt); }
   catch (error) { throw new Error(`checksums-full package receipt is invalid: ${error.message}`); }
-  if (fullReceipt.inputFingerprint !== receipt.inputFingerprint || !fullReceipt.reviewReceipt || fullReceipt.reviewReceipt.inputFingerprint !== receipt.inputFingerprint)
-    throw new Error("checksums-full package receipt fingerprint binding is invalid");
+  if (fullReceipt.inputFingerprint !== receipt.inputFingerprint || fullReceipt.reviewReceipt.inputFingerprint !== receipt.inputFingerprint || fullReceipt.reviewPackageReceipt.inputFingerprint !== receipt.inputFingerprint) {
+    invalidateFullState = true;
+    return null;
+  }
+  const expectedPackageSha = reviewOnly
+    ? generatedReviewPackageSha
+    : (fs.existsSync(packageReceiptPath) ? sha256(packageReceiptPath) : null);
+  if (!expectedPackageSha) {
+    invalidateFullState = true;
+    return null;
+  }
+  try {
+    assertFullPackageReceipt(fullReceipt, {
+      expectedReviewReceiptSha256: sha256(receiptPath),
+      expectedReviewPackageReceiptSha256: expectedPackageSha,
+    });
+  } catch {
+    invalidateFullState = true;
+    return null;
+  }
   const expected = new Map(Object.entries(fullReceipt.artifacts));
   expected.set("provenance/full-package-receipt.json", sha256(fullReceiptPath));
   const actual = parseChecksums(fullChecksumPath, "checksums-full.sha256");
@@ -632,9 +685,10 @@ if (!reviewOnly) {
     receiptArtifacts.set(relative, sha256(file));
   }
   const fullReceipt = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     inputFingerprint: receipt.inputFingerprint,
-    reviewReceipt: { path: "artifacts/skybao-film/provenance/targeted-review-receipt.json", inputFingerprint: receipt.inputFingerprint },
+    reviewReceipt: { path: "artifacts/skybao-film/provenance/targeted-review-receipt.json", sha256: sha256(receiptPath), inputFingerprint: receipt.inputFingerprint },
+    reviewPackageReceipt: { path: "artifacts/skybao-film/provenance/review-package-receipt.json", sha256: sha256(packageReceiptPath), inputFingerprint: receipt.inputFingerprint },
     artifacts: Object.fromEntries([...receiptArtifacts].sort(([a], [b]) => a.localeCompare(b))),
   };
   assertFullPackageReceipt(fullReceipt);
@@ -666,10 +720,16 @@ function verifyChecksumSet(file, expected, label) {
 }
 
 promoteWithRollback(
-  [...stagedByTarget.entries()].map(([relative, source]) => ({
+  [
+    ...(invalidateFullState ? [
+      { remove: true, target: fullReceiptPath },
+      { remove: true, target: fullChecksumPath },
+    ] : []),
+    ...[...stagedByTarget.entries()].map(([relative, source]) => ({
     source,
     target: path.join(artifactRoot, relative),
-  })),
+    })),
+  ],
   stage
 );
 fs.rmSync(stage, { recursive: true, force: true });

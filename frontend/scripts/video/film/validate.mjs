@@ -60,8 +60,8 @@ try {
 }
 const shotlistPath = path.join(selectedFilmDir, "shotlist.json");
 const environmentPath = path.join(selectedFilmDir, "environment.json");
-const catalogFilePath = path.join(repo, "artifacts", "skybao-ui", "catalog.json");
-const uiRoot = path.join(repo, "artifacts", "skybao-ui");
+let catalogFilePath;
+let uiRoot;
 const filmRoot = path.join(repo, "artifacts", "skybao-film");
 const buildManifestPath = manifestPathArg
   ? path.resolve(manifestPathArg)
@@ -176,10 +176,17 @@ function check(condition, message) {
 
 if (!requireFile(shotlistPath, "shotlist")) process.exit(1);
 if (!requireFile(environmentPath, "environment recipe")) process.exit(1);
-if (!requireFile(catalogFilePath, "UI catalog")) process.exit(1);
 
 const shotlist = readJson(shotlistPath, "shotlist");
 const environment = readJson(environmentPath, "environment recipe");
+const configuredCatalog = environment?.toolInputs?.uiCatalog;
+if (!nonemptyString(configuredCatalog) || path.isAbsolute(configuredCatalog) || configuredCatalog.includes("..")) {
+  fail("environment.toolInputs.uiCatalog must be a checkout-relative catalog path");
+} else {
+  catalogFilePath = path.resolve(repo, configuredCatalog);
+  uiRoot = path.dirname(catalogFilePath);
+}
+if (!catalogFilePath || !requireFile(catalogFilePath, "UI catalog")) process.exit(1);
 const catalog = readJson(catalogFilePath, "UI catalog");
 const shotlistObject = object(shotlist);
 const environmentObject = object(environment);
@@ -245,6 +252,8 @@ check(
   catalog.recipeVersion === "skybao-capture-v4",
   "UI catalog recipeVersion must be skybao-capture-v4"
 );
+const zoomPercent = catalog.zoomPercent ?? catalog.capture?.zoomPercent ?? catalog.capture?.zoom?.percent;
+check(zoomPercent === 150, "UI catalog must be the complete zoom-150 capture package");
 
 const navigationTiming = object(direction.navigationTiming) ? direction.navigationTiming : {};
 if (!object(direction.navigationTiming)) fail("shotlist.direction.navigationTiming must be an object");
@@ -503,6 +512,15 @@ for (const group of groupOrder) {
     calloutFrames.end <= 1200, `${group} callout frame window is invalid`);
   check(integer(callout.fadeFrames) && callout.fadeFrames >= 4 && callout.fadeFrames <= 12,
     `${group} callout fade must be 4–12 frames`);
+  const calloutTransition = object(callout.transition) ? callout.transition : null;
+  check(Boolean(calloutTransition), `${group} callout transition is required`);
+  check(Array.isArray(calloutTransition?.entranceOffsetM) && calloutTransition.entranceOffsetM.length === 2 &&
+    calloutTransition.entranceOffsetM.every(finite) && Array.isArray(calloutTransition?.exitOffsetM) &&
+    calloutTransition.exitOffsetM.length === 2 && calloutTransition.exitOffsetM.every(finite),
+    `${group} callout transition offsets must be finite screen-space pairs`);
+  check(finite(calloutTransition?.startScale) && calloutTransition.startScale >= 0.7 && calloutTransition.startScale < 1 &&
+    finite(calloutTransition?.exitScale) && calloutTransition.exitScale >= 0.8 && calloutTransition.exitScale <= 1,
+    `${group} callout transition scales must be bounded`);
   check(calloutFrames.start - callout.fadeFrames >= 1 &&
     calloutFrames.end + callout.fadeFrames <= 1200,
     `${group} callout fade exceeds film bounds`);
@@ -517,6 +535,72 @@ for (const group of groupOrder) {
     const window = [item.frames?.start, item.frames?.start + transition.frames - 1];
     return paddedCallout[0] <= window[1] && paddedCallout[1] >= window[0];
   }), `${group} callout must not overlap a same-face dissolve`);
+}
+const floatingHighlights = shotlistObject && Array.isArray(shotlist.floatingHighlights) ? shotlist.floatingHighlights : [];
+check(floatingHighlights.length === 7, "recipe must contain exactly seven floating highlights");
+const floatingIds = floatingHighlights.map((beat) => beat?.id);
+check(floatingHighlights.every(object) && floatingIds.every(nonemptyString) &&
+  new Set(floatingIds).size === floatingHighlights.length,
+  "floating highlight IDs must be unique nonempty strings");
+function descriptorFor(beat) {
+  const shot = shots.find((item) => object(item) && item.id === beat?.shotId);
+  const source = shot?.source || {};
+  const entry = (Array.isArray(catalog.assets) ? catalog.assets : []).find((candidate) =>
+    object(candidate) && candidate.type === source.type && candidate.id === source.id &&
+    candidate.framing === source.framing);
+  const containers = [entry?.targets, entry?.captureTargets, entry?.elementTargets,
+    catalog.targets, catalog.captureTargets, catalog.elementTargets, catalog.highlights];
+  for (const container of containers) {
+    if (Array.isArray(container)) {
+      const found = container.find((candidate) => object(candidate) &&
+        [candidate.targetId, candidate.id, candidate.target].includes(beat?.targetId) &&
+        (candidate.frame === undefined || candidate.sourceFrame === undefined ||
+          Number(candidate.frame ?? candidate.sourceFrame) === beat?.sourceFrame));
+      if (found) return found;
+    } else if (object(container) && object(container[beat?.targetId])) {
+      return container[beat.targetId];
+    }
+  }
+  return null;
+}
+check(!Object.hasOwn(glassRoot, "uiCropScale") && !Object.hasOwn(glassRoot, "uiCropCenter") &&
+  !Object.hasOwn(shotlist, "cropOverrides"),
+  "penultimate recipe must not contain Blender-side crop controls");
+for (const beat of floatingHighlights) {
+  const shot = shots.find((item) => object(item) && item.id === beat?.shotId);
+  check(Boolean(shot), `floating highlight ${beat?.id || "<unnamed>"} references an unknown shot`);
+  check(integer(beat?.globalFrame) && beat.globalFrame >= (shot?.frames?.start ?? NaN) &&
+    beat.globalFrame <= (shot?.frames?.end ?? NaN),
+    `floating highlight ${beat?.id || "<unnamed>"} must land inside its shot`);
+  check(integer(beat?.sourceFrame) && beat.sourceFrame >= 1 && nonemptyString(beat?.targetId) &&
+    ["before-action", "after-action"].includes(beat?.capturePhase),
+    `floating highlight ${beat?.id || "<unnamed>"} semantic capture reference is malformed`);
+  const descriptor = descriptorFor(beat);
+  check(Boolean(descriptor), `floating highlight ${beat?.id || "<unnamed>"} has no capture descriptor`);
+  if (descriptor) {
+    const phase = descriptor.capturePhase ?? descriptor.phase;
+    check(phase === beat.capturePhase, `floating highlight ${beat.id} capture phase does not match descriptor`);
+    const bounds = descriptor.normalizedBounds ?? descriptor.bounds;
+    check(object(bounds) && ["left", "top", "width", "height"].every((key) => finite(bounds[key])) &&
+      bounds.left >= 0 && bounds.top >= 0 && bounds.width > 0 && bounds.height > 0 &&
+      bounds.left + bounds.width <= 1 && bounds.top + bounds.height <= 1,
+      `floating highlight ${beat.id} descriptor normalizedBounds are malformed`);
+    const radii = descriptor.cornerRadii ?? descriptor.borderRadius ?? descriptor.cornerRadiusPx;
+    check(radii !== undefined && (Array.isArray(radii) ? radii.length === 4 : typeof radii === "string" || typeof radii === "number" || object(radii)),
+      `floating highlight ${beat.id} descriptor corner radii are malformed`);
+    check(object(descriptor.cutout) && nonemptyString(descriptor.cutout.path) &&
+      isSha256(descriptor.cutout.sha256 ?? descriptor.cutout.contentSha256),
+      `floating highlight ${beat.id} descriptor cutout provenance is missing`);
+    check(object(descriptor.cutout) && (Array.isArray(descriptor.cutout.paddingPx)
+      ? descriptor.cutout.paddingPx.length === 2 && descriptor.cutout.paddingPx.every(finite)
+      : finite(descriptor.cutout.paddingPx)),
+      `floating highlight ${beat.id} descriptor cutout paddingPx is malformed`);
+    if (object(descriptor.cutout)) {
+      const cutoutPath = catalogPath(descriptor.cutout.path, `floating highlight ${beat.id} cutout`);
+      if (cutoutPath) check(sha256(cutoutPath) === (descriptor.cutout.sha256 ?? descriptor.cutout.contentSha256),
+        `floating highlight ${beat.id} cutout hash is stale`);
+    }
+  }
 }
 const cameraForFocus = cameraRoot;
 const focusMoves = Array.isArray(cameraForFocus.focusMoves) ? cameraForFocus.focusMoves : [];
@@ -551,11 +635,13 @@ for (const rawMove of focusMoves) {
     integer(move.easeFrames) && move.easeFrames >= 4 && move.easeFrames <= 12 &&
     move.easeFrames * 2 <= move.end - move.start,
     `focus move ${moveLabel} needs ordered integer frames and a 4–12 frame ease`);
+  const lensMin = Math.max(24, baselineLens * 0.65);
+  const lensMax = baselineLens * 1.25;
   check(finite(move.lensStartMM) && finite(move.lensPeakMM) && finite(move.lensEndMM) &&
-    move.lensStartMM >= 48 && move.lensStartMM <= 58 &&
-    move.lensPeakMM >= 48 && move.lensPeakMM <= 58 &&
-    move.lensEndMM >= 48 && move.lensEndMM <= 58 &&
-    move.lensPeakMM >= Math.max(move.lensStartMM, move.lensEndMM) &&
+    move.lensStartMM >= lensMin && move.lensStartMM <= lensMax &&
+    move.lensPeakMM >= lensMin && move.lensPeakMM <= lensMax &&
+    move.lensEndMM >= lensMin && move.lensEndMM <= lensMax &&
+    move.lensPeakMM > Math.max(move.lensStartMM, move.lensEndMM) &&
     move.lensStartMM === baselineLens && move.lensEndMM === baselineLens &&
     Array.isArray(move.targetOffsetM) && move.targetOffsetM.length === 2,
     `focus move ${moveLabel} must return to the configured baseline lens`);
@@ -589,6 +675,29 @@ check(glassRoot.cornerSegments >= 3 && glassRoot.cornerSegments <= 64,
   "glass cornerSegments must be an integer from 3 to 64");
 check(finite(glassRoot.uiInsetM) && glassRoot.uiInsetM >= 0 && glassRoot.uiInsetM < glassRoot.widthM / 2 && uiWidth > 0 && uiHeight > 0 && uiHeight <= glassRoot.heightM,
   "uiInsetM must be nonnegative and leave a valid aspect-preserving 16:9 UI rectangle");
+check(!Object.hasOwn(glassRoot, "uiCropScale") && !Object.hasOwn(glassRoot, "uiCropCenter"),
+  "glass must not contain Blender-side crop controls");
+const designLanguagePath = environmentObject && nonemptyString(environment.toolInputs?.designLanguage)
+  ? path.resolve(repo, environment.toolInputs.designLanguage) : null;
+check(Boolean(designLanguagePath) && requireFile(designLanguagePath, "design language"),
+  "environment.toolInputs.designLanguage must point to the app design contract");
+const designLanguage = designLanguagePath && fs.existsSync(designLanguagePath)
+  ? readJson(designLanguagePath, "design language") : {};
+const floatingElement = object(designLanguage.floatingElement) ? designLanguage.floatingElement : {};
+check(designLanguage.schemaVersion === 1 && object(designLanguage.themes?.dark?.hero) &&
+  colorValue(designLanguage.themes.dark.hero.primary) && colorValue(designLanguage.themes.dark.hero.secondary),
+  "design language dark hero colors are required");
+for (const key of ["paddingPx", "extrusionM", "openingExtrusionM", "bevelM", "liftM", "openingLiftM", "maxScale", "fresnelPower", "rimStrength", "haloStrength", "durationFrames"])
+  check(finite(floatingElement[key]), `design language floatingElement.${key} is required`);
+check(floatingElement.extrusionM > 0 && floatingElement.openingExtrusionM > floatingElement.extrusionM &&
+  floatingElement.openingExtrusionM <= 0.02 && floatingElement.bevelM > 0 &&
+  floatingElement.bevelM < floatingElement.extrusionM / 2,
+  "opening floating elements must be thicker than the restrained highlights and use a fitting bevel");
+check(floatingElement.liftM > 0 && floatingElement.openingLiftM > floatingElement.liftM &&
+  floatingElement.openingLiftM <= 0.04,
+  "opening floating elements must lift higher than the restrained highlights");
+check(floatingElement.maxScale <= 1.02 && floatingElement.durationFrames === 18,
+  "floatingElement must use the restrained 1.02 / 18-frame treatment");
 check(finite(glassRoot.cornerRadiusM) && glassRoot.cornerRadiusM > 0 && glassRoot.cornerRadiusM <= Math.min(glassRoot.widthM, glassRoot.heightM) / 2 &&
   finite(glassRoot.uiMaskCornerRadiusM) && glassRoot.uiMaskCornerRadiusM > 0 && glassRoot.uiMaskCornerRadiusM <= Math.min(uiWidth, uiHeight) / 2,
   "glass and UI corner radii must be positive and fit their rectangles");
@@ -687,7 +796,7 @@ const baselineCoverage = projectedWidth(camera.baselineDistanceM);
 const coverageIncrease = currentCoverage / baselineCoverage - 1;
 check(
   currentCoverage >= 0.75 && currentCoverage <= 0.82,
-  "glass should cover about 75–82 percent of frame width"
+  "penultimate glass framing should cover about 75–82 percent of frame width"
 );
 check(
   coverageIncrease >= 0.1 && coverageIncrease <= 0.15,
@@ -899,7 +1008,7 @@ function validateManifestProvenance() {
   }
   if (strictProvenance) {
     for (const [label, entry] of [["shotlist", manifest.shotlist], ["environment", manifest.environment], ["catalog", manifest.uiCatalog]])
-      if (entry?.path !== { shotlist: "frontend/scripts/video/film/shotlist.json", environment: "frontend/scripts/video/film/environment.json", catalog: "artifacts/skybao-ui/catalog.json" }[label])
+      if (entry?.path !== { shotlist: "frontend/scripts/video/film/shotlist.json", environment: "frontend/scripts/video/film/environment.json", catalog: configuredCatalog }[label])
         fail(`${label} provenance path is not the selected recipe`);
     const expected = new Map();
     const assets = Array.isArray(catalog.assets) ? catalog.assets : [];

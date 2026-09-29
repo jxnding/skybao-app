@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "themes": {
+    "dark": {
+      "hero": { "primary": "#38bdf8", "secondary": "#2563eb" },
+      "status": { "complete": "#34d399" }
+    },
+    "light": {
+      "hero": { "primary": "#0284c7", "secondary": "#2563eb" },
+      "status": { "complete": "#059669" }
+    }
+  },
+  "floatingElement": {
+    "paddingPx": 6,
+    "extrusionM": 0.004,
+    "openingExtrusionM": 0.01,
+    "bevelM": 0.0008,
+    "liftM": 0.012,
+    "openingLiftM": 0.024,
+    "maxScale": 1.02,
+    "fresnelPower": 4,
+    "rimStrength": 0.35,
+    "haloStrength": 0.08,
+    "durationFrames": 18
+  }
+}

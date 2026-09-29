@@ -8,11 +8,13 @@
     "fps": 30
   },
   "toolInputs": {
-    "uiCatalog": "artifacts/skybao-ui/catalog.json",
+    "uiCatalog": "artifacts/skybao-ui-zoom-150/catalog.json",
+    "designLanguage": "frontend/src/skybao-design-language.json",
     "shotlist": "frontend/scripts/video/film/shotlist.json",
     "cloudTexture": "frontend/public/clouds-dark.webp",
     "consumer": "frontend/scripts/video/film/build-blender.py",
-    "cursorHelper": "frontend/scripts/video/film/cursor_window.py"
+    "cursorHelper": "frontend/scripts/video/film/cursor_window.py",
+    "uiPlaneWindowHelper": "frontend/scripts/video/film/ui_plane_window.py"
   },
   "glass": {
     "widthM": 3.3,
@@ -22,6 +24,8 @@
     "cornerSegments": 8,
     "uiInsetM": 0.012,
     "uiMaskCornerRadiusM": 0.043,
+    "uiEmission": 1.12,
+    "uiTextureGamma": 1.0,
     "layers": {
       "backing": {
         "roughness": 0.17,
@@ -123,6 +127,19 @@
   "editorial": {
     "textColor": "#E8F6FF",
     "emissionStrength": 1.4
+  },
+  "colorManagement": {
+    "viewTransform": "AgX",
+    "contrastCurve": {
+      "enabled": true,
+      "points": [
+        [0.0, 0.0],
+        [0.25, 0.2],
+        [0.5, 0.5],
+        [0.75, 0.8],
+        [1.0, 1.0]
+      ]
+    }
   },
   "render": {
     "engine": "CYCLES",

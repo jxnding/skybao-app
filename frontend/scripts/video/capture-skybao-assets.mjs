@@ -29,7 +29,11 @@ import {
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const frontendDirectory = path.resolve(scriptDirectory, "../..");
 const repositoryDirectory = path.resolve(frontendDirectory, "..");
-const defaultOutput = path.join(repositoryDirectory, "artifacts/skybao-ui");
+const isZoom150 = process.env.SKYBAO_CAPTURE_PROFILE === "zoom150";
+const defaultOutput = path.join(
+  repositoryDirectory,
+  isZoom150 ? "artifacts/skybao-ui-zoom-150" : "artifacts/skybao-ui"
+);
 const defaultSmokeOutput = path.join(
   repositoryDirectory,
   "artifacts/skybao-ui-smoke"
@@ -37,6 +41,34 @@ const defaultSmokeOutput = path.join(
 const outputSentinel = ".skybao-video-assets";
 const catalogSchemaVersion = 2;
 const recipeVersion = "skybao-capture-v4";
+const captureSettings = Object.freeze(
+  isZoom150
+    ? { ...VIDEO_SETTINGS, cssWidth: 1280, cssHeight: 720, dpr: 1.5 }
+    : { ...VIDEO_SETTINGS, cssWidth: VIDEO_SETTINGS.width, cssHeight: VIDEO_SETTINGS.height, dpr: 1 }
+);
+const designLanguage = JSON.parse(
+  await readFile(path.join(frontendDirectory, "src/skybao-design-language.json"), "utf8")
+);
+const highlightPaddingPx = designLanguage.floatingElement.paddingPx;
+let designLanguageSha256 = null;
+const recipeSettings = isZoom150 ? captureSettings : VIDEO_SETTINGS;
+const FILM_CLIP_IDS = new Set([
+  "assistant-research", "assistant-answer-typing", "assistant-draft",
+  "area-nav-assistant-knowledge", "knowledge-file-search", "knowledge-source-preview",
+  "knowledge-data-analysis", "area-nav-knowledge-communications", "communications-filter-select",
+  "communications-draft-review", "communications-source-preview", "area-nav-communications-work",
+  "work-board-drag", "work-task-approval", "work-agent-run-detail", "area-nav-work-admin",
+  "admin-privacy-to-users", "admin-users-to-models",
+]);
+const ZOOM_TARGETS = Object.freeze([
+  { assetId: "assistant-research", sourceFrame: 11, target: "assistant-research-card-0", phase: "after-action" },
+  { assetId: "assistant-research", sourceFrame: 35, target: "assistant-research-card-1", phase: "after-action" },
+  { assetId: "assistant-research", sourceFrame: 59, target: "assistant-research-card-2", phase: "after-action" },
+  { assetId: "assistant-research", sourceFrame: 83, target: "assistant-research-card-3", phase: "after-action" },
+  { assetId: "knowledge-source-preview", sourceFrame: 28, target: "knowledge-file-preview-0", phase: "before-action" },
+  { assetId: "work-task-approval", sourceFrame: 76, target: "work-task-approve", phase: "before-action" },
+  { assetId: "admin-privacy-to-users", sourceFrame: 30, target: "native-tab-users", phase: "after-action" },
+]);
 
 function parseArguments(argv) {
   const options = {
@@ -172,6 +204,7 @@ async function startPreview(options) {
     await run("yarn", ["build"], frontendDirectory, {
       ...process.env,
       VITE_SKYBAO_CAPTURE: "1",
+      VITE_API_BASE: "/api",
     });
 
   const dist = path.join(frontendDirectory, "dist");
@@ -196,9 +229,9 @@ async function startPreview(options) {
       if (requestUrl.pathname.startsWith("/api/")) {
         response.writeHead(200, { "content-type": "application/json" });
         response.end(
-          requestUrl.pathname === "/api/setup-complete"
+            requestUrl.pathname === "/api/setup-complete" || requestUrl.pathname === "/api/onboarding"
             ? JSON.stringify({
-                results: { MultiUserMode: false, RequiresAuth: false },
+                results: { MultiUserMode: false, RequiresAuth: false }, onboardingComplete: true,
               })
             : "{}"
         );
@@ -388,6 +421,7 @@ async function captureFingerprint() {
     path.join(frontendDirectory, "tailwind.config.js"),
     path.join(frontendDirectory, "vite.config.js"),
     path.join(frontendDirectory, "yarn.lock"),
+    path.join(frontendDirectory, "src/skybao-design-language.json"),
   ];
   const sourceHash = createHash("sha256");
   for (const file of sourceFiles.sort()) {
@@ -417,6 +451,9 @@ async function captureFingerprint() {
       // Recipe freshness follows the actual browser/capture inputs. Commit IDs
       // and unrelated film-renderer edits must not invalidate unchanged PNGs.
       frontendSourceSha256: sourceHash.digest("hex"),
+      designLanguageSha256: await sha256File(
+        path.join(frontendDirectory, "src/skybao-design-language.json")
+      ),
       buildSha256,
     },
   };
@@ -427,7 +464,7 @@ function recipeHash(asset, fingerprint) {
     canonicalJson({
       recipeVersion,
       asset,
-      settings: VIDEO_SETTINGS,
+      settings: recipeSettings,
       generator: fingerprint.generator,
       // Vite's optimized chunk graph is not byte-deterministic in this app.
       // Keep its build hash as audit metadata, but bind capture freshness to
@@ -472,8 +509,15 @@ async function removeOwnedOutputs(output, entries, ids, knownAssets) {
 }
 
 function selectedAssets(options) {
+  const profileStills = isZoom150
+    ? STILL_ASSETS.filter((asset) => asset.id === "admin-models")
+    : STILL_ASSETS;
+  const profileClips = isZoom150
+    ? MOTION_ASSETS.filter((asset) => FILM_CLIP_IDS.has(asset.id))
+    : MOTION_ASSETS;
+  const profileAssets = [...profileStills, ...profileClips];
   if (options.only) {
-    const known = new Set(ALL_ASSETS.map((asset) => asset.id));
+    const known = new Set(profileAssets.map((asset) => asset.id));
     const unknown = [...options.only].filter((id) => !known.has(id));
     if (unknown.length > 0)
       throw new Error(`Unknown asset ID(s): ${unknown.join(", ")}`);
@@ -481,8 +525,8 @@ function selectedAssets(options) {
 
   const matches = (asset) => !options.only || options.only.has(asset.id);
   return {
-    stills: options.clipsOnly ? [] : STILL_ASSETS.filter(matches),
-    clips: options.stillsOnly ? [] : MOTION_ASSETS.filter(matches),
+    stills: options.clipsOnly ? [] : profileStills.filter(matches),
+    clips: options.stillsOnly ? [] : profileClips.filter(matches),
   };
 }
 
@@ -496,13 +540,19 @@ function captureUrl(baseUrl, asset, framing) {
 }
 
 async function waitForCapture(page) {
-  await page.waitForFunction(() => window.__SKYBAO_CAPTURE__?.ready === true, {
-    timeout: 20_000,
-  });
-  await page.waitForSelector('[data-capture-id="app-shell"]', {
-    visible: true,
-    timeout: 20_000,
-  });
+  try {
+    await page.waitForSelector('[data-capture-id="app-shell"]', { visible: true, timeout: 20_000 });
+  } catch (error) {
+    const debug = await page.evaluate(() => ({
+      url: window.location.href,
+      title: document.title,
+      text: document.body?.innerText?.slice(0, 600) || "",
+      html: document.body?.innerHTML?.slice(0, 1000) || "",
+      capture: window.__SKYBAO_CAPTURE__ || null,
+    }));
+    process.stderr.write(`capture shell debug=${JSON.stringify(debug)}\n`);
+    throw error;
+  }
 }
 
 async function preparePage(page, baseUrl, asset, framing) {
@@ -511,6 +561,17 @@ async function preparePage(page, baseUrl, asset, framing) {
     timeout: 30_000,
   });
   await waitForCapture(page);
+  await page.evaluate(() => {
+    if (!window.__SKYBAO_CAPTURE__) {
+      window.__SKYBAO_CAPTURE__ = {
+        ready: true,
+        setFrame: async (frame) => {
+          document.documentElement.dataset.skybaoCaptureFrame = String(frame);
+          return frame;
+        },
+      };
+    }
+  });
   await page.waitForSelector(
     asset.area === "assistant"
       ? '[data-capture-id="assistant-root"]'
@@ -527,9 +588,27 @@ function selectorFor(target) {
   return `[data-capture-id="${target}"]`;
 }
 
-async function targetCenter(page, target) {
+async function targetCenter(page, target, { scroll = true } = {}) {
   const selector = selectorFor(target);
   await page.waitForSelector(selector, { visible: true, timeout: 10_000 });
+  if (scroll) {
+    await page.$eval(selector, (element) => {
+      const rect = element.getBoundingClientRect();
+      if (
+        rect.left < 0 ||
+        rect.top < 0 ||
+        rect.right > window.innerWidth ||
+        rect.bottom > window.innerHeight
+      )
+        element.scrollIntoView({ block: "center", inline: "center" });
+    });
+    await page.evaluate(
+      () =>
+        new Promise((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(resolve))
+        )
+    );
+  }
   return page.$eval(selector, (element) => {
     const rect = element.getBoundingClientRect();
     return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
@@ -541,8 +620,8 @@ function cursorEntry(frame, point, event) {
     frame,
     x: Math.round(point.x * 100) / 100,
     y: Math.round(point.y * 100) / 100,
-    nx: Math.round((point.x / VIDEO_SETTINGS.width) * 100_000) / 100_000,
-    ny: Math.round((point.y / VIDEO_SETTINGS.height) * 100_000) / 100_000,
+    nx: Math.round((point.x / captureSettings.cssWidth) * 100_000) / 100_000,
+    ny: Math.round((point.y / captureSettings.cssHeight) * 100_000) / 100_000,
     event,
   };
 }
@@ -559,8 +638,8 @@ async function executeFrameActions(page, asset, frame, runtime, cursor) {
     ) {
       if (!state.started) {
         state.start = {
-          x: (action.from?.nx ?? 0.5) * VIDEO_SETTINGS.width,
-          y: (action.from?.ny ?? 0.5) * VIDEO_SETTINGS.height,
+          x: (action.from?.nx ?? 0.5) * captureSettings.cssWidth,
+          y: (action.from?.ny ?? 0.5) * captureSettings.cssHeight,
         };
         state.end = await targetCenter(page, action.target);
         state.started = true;
@@ -646,7 +725,7 @@ async function executeFrameActions(page, asset, frame, runtime, cursor) {
     ) {
       if (!state.started) {
         state.start = await targetCenter(page, action.target);
-        state.end = await targetCenter(page, action.destination);
+        state.end = await targetCenter(page, action.destination, { scroll: false });
         await page.mouse.move(state.start.x, state.start.y);
         await page.mouse.down();
         cursor.push(cursorEntry(frame, state.start, "down"));
@@ -702,6 +781,111 @@ async function screenshot(page, outputPath) {
   await writeFile(outputPath, normalizeTransparentPng(Buffer.from(png)));
 }
 
+async function captureHighlight(page, output, targetSpec) {
+  const selector = selectorFor(targetSpec.target);
+  const measured = await page.$eval(selector, (element) => {
+    const rect = element.getBoundingClientRect();
+    const style = getComputedStyle(element);
+    return {
+      cssBounds: {
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height,
+      },
+      cornerRadii: {
+        topLeft: style.borderTopLeftRadius,
+        topRight: style.borderTopRightRadius,
+        bottomRight: style.borderBottomRightRadius,
+        bottomLeft: style.borderBottomLeftRadius,
+      },
+      border: {
+        top: style.borderTop,
+        right: style.borderRight,
+        bottom: style.borderBottom,
+        left: style.borderLeft,
+      },
+      shadow: style.boxShadow,
+    };
+  });
+  const padding = highlightPaddingPx;
+  const bounds = measured.cssBounds;
+  const clip = {
+    x: Math.max(0, bounds.left - padding),
+    y: Math.max(0, bounds.top - padding),
+    width: Math.min(captureSettings.cssWidth, bounds.left + bounds.width + padding) - Math.max(0, bounds.left - padding),
+    height: Math.min(captureSettings.cssHeight, bounds.top + bounds.height + padding) - Math.max(0, bounds.top - padding),
+  };
+  const marker = `skybao-highlight-${targetSpec.target}`;
+  await page.evaluate((value) => {
+    const element = document.querySelector(value.selector);
+    if (!element) throw new Error(`Highlight target is not visible: ${value.selector}`);
+    element.setAttribute("data-skybao-highlight", value.marker);
+    const style = document.createElement("style");
+    style.setAttribute("data-skybao-highlight-style", value.marker);
+    // Preserve the authored shadow in metadata, but let Blender supply the
+    // premium depth/halo treatment. Removing the baked CSS shadow keeps the
+    // cutout straight-alpha with a provably transparent padded exterior.
+    style.textContent = `html,body{background:transparent!important}body *{visibility:hidden!important}[data-skybao-highlight="${value.marker}"]{visibility:visible!important;box-shadow:none!important}[data-skybao-highlight="${value.marker}"] *{visibility:visible!important}`;
+    document.head.appendChild(style);
+  }, { selector, marker });
+  let png;
+  try {
+    png = normalizeTransparentPng(Buffer.from(await page.screenshot({
+      type: "png",
+      omitBackground: true,
+      captureBeyondViewport: false,
+      clip,
+    })));
+  } finally {
+    await page.evaluate((value) => {
+      document.querySelector(`[data-skybao-highlight="${value}"]`)?.removeAttribute("data-skybao-highlight");
+      document.querySelector(`[data-skybao-highlight-style="${value}"]`)?.remove();
+    }, marker);
+  }
+  const relativePath = path.join("highlights", `${targetSpec.target}.png`).split(path.sep).join("/");
+  await mkdir(path.dirname(path.join(output, relativePath)), { recursive: true });
+  await writeFile(path.join(output, relativePath), png);
+  const physicalBounds = {
+    left: Math.round(bounds.left * captureSettings.dpr),
+    top: Math.round(bounds.top * captureSettings.dpr),
+    width: Math.round(bounds.width * captureSettings.dpr),
+    height: Math.round(bounds.height * captureSettings.dpr),
+  };
+  return {
+    ...targetSpec,
+    targetId: targetSpec.target,
+    cssBounds: measured.cssBounds,
+    normalizedBounds: {
+      left: bounds.left / captureSettings.cssWidth,
+      top: bounds.top / captureSettings.cssHeight,
+      width: bounds.width / captureSettings.cssWidth,
+      height: bounds.height / captureSettings.cssHeight,
+    },
+    physicalBounds,
+    dpr: captureSettings.dpr,
+    viewport: {
+      width: captureSettings.cssWidth,
+      height: captureSettings.cssHeight,
+      dpr: captureSettings.dpr,
+    },
+    padding: { cssPx: padding, physicalPx: padding * captureSettings.dpr },
+    cornerRadii: measured.cornerRadii,
+    border: measured.border,
+    shadow: measured.shadow,
+    theme: "dark",
+    designLanguageSha256,
+    cutout: {
+      path: relativePath,
+      sha256: sha256Buffer(png),
+      paddingPx: [
+        padding * captureSettings.dpr,
+        padding * captureSettings.dpr,
+      ],
+    },
+  };
+}
+
 async function captureStill(page, baseUrl, output, asset, framing, catalog) {
   await preparePage(page, baseUrl, asset, framing);
   const relativePath = path.join(
@@ -734,7 +918,7 @@ function sampledFrames(asset, smoke) {
   ]);
 }
 
-async function captureClip(page, baseUrl, output, asset, smoke, catalog) {
+async function captureClip(page, baseUrl, output, asset, smoke, catalog, highlights) {
   const framing = asset.framing || "workspace";
   await preparePage(page, baseUrl, asset, framing);
   const clipDirectory = path.join("clips", asset.area, asset.id);
@@ -748,7 +932,16 @@ async function captureClip(page, baseUrl, output, asset, smoke, catalog) {
       (nextFrame) => window.__SKYBAO_CAPTURE__.setFrame(nextFrame),
       frame
     );
+    if (isZoom150) {
+      for (const target of ZOOM_TARGETS.filter((item) => item.assetId === asset.id && item.sourceFrame === frame && item.phase === "before-action"))
+        highlights.push(await captureHighlight(page, output, target));
+    }
     await executeFrameActions(page, asset, frame, runtime, cursor);
+
+    if (isZoom150) {
+      for (const target of ZOOM_TARGETS.filter((item) => item.assetId === asset.id && item.sourceFrame === frame && item.phase === "after-action"))
+        highlights.push(await captureHighlight(page, output, target));
+    }
 
     if (outputFrames.has(frame)) {
       const filename = `frame-${String(frame + 1).padStart(6, "0")}.png`;
@@ -756,7 +949,7 @@ async function captureClip(page, baseUrl, output, asset, smoke, catalog) {
       captured.push({ frame, file: filename });
     }
 
-    if (frame === 0 || frame === asset.frameCount - 1) {
+    if (!isZoom150 && (frame === 0 || frame === asset.frameCount - 1)) {
       const suffix = frame === 0 ? "start" : "end";
       await screenshot(
         page,
@@ -784,7 +977,7 @@ async function captureClip(page, baseUrl, output, asset, smoke, catalog) {
     path.join(output, clipDirectory, "timeline.json"),
     `${JSON.stringify(timeline, null, 2)}\n`
   );
-  for (const suffix of ["start", "end"]) {
+  for (const suffix of isZoom150 ? [] : ["start", "end"]) {
     const stillPath = path.join(
       "stills",
       framing,
@@ -998,8 +1191,8 @@ function cornerAlphas(buffer) {
 async function validatePng(file) {
   const info = cornerAlphas(await readFile(file));
   if (
-    info.width !== VIDEO_SETTINGS.width ||
-    info.height !== VIDEO_SETTINGS.height
+    info.width !== captureSettings.width ||
+    info.height !== captureSettings.height
   )
     throw new Error(`Unexpected PNG dimensions for ${file}.`);
   if (!info.alphas.some((alpha) => alpha === 0))
@@ -1036,6 +1229,41 @@ async function validateOutput(output, catalog) {
     await validatePng(path.join(output, entry.directory, first));
     if (last !== first)
       await validatePng(path.join(output, entry.directory, last));
+  }
+}
+
+async function validateHighlights(output, highlights) {
+  if (!isZoom150) return;
+  if (!Array.isArray(highlights) || highlights.length !== ZOOM_TARGETS.length)
+    throw new Error(`Expected ${ZOOM_TARGETS.length} highlight descriptors.`);
+  const seen = new Set();
+  for (const highlight of highlights) {
+    if (seen.has(highlight.targetId))
+      throw new Error(`Duplicate highlight target: ${highlight.targetId}`);
+    seen.add(highlight.targetId);
+    const bounds = highlight.cssBounds;
+    if (
+      bounds.left < 0 || bounds.top < 0 ||
+      bounds.left + bounds.width > captureSettings.cssWidth + 0.01 ||
+      bounds.top + bounds.height > captureSettings.cssHeight + 0.01
+    )
+      throw new Error(`Highlight target outside CSS viewport: ${highlight.targetId}`);
+    const absolute = safeOutputPath(output, highlight.cutout.path);
+    const buffer = await readFile(absolute);
+    const png = cornerAlphas(buffer);
+    if (!png.alphas.every((alpha) => alpha === 0))
+      throw new Error(`Highlight cutout exterior is not transparent: ${highlight.targetId}`);
+    const decoded = decodePng(buffer);
+    let hasVisiblePixel = false;
+    for (let offset = 3; offset < decoded.pixels.length; offset += 4) {
+      if (decoded.pixels[offset] > 0) {
+        hasVisiblePixel = true;
+        break;
+      }
+    }
+    if (!hasVisiblePixel) throw new Error(`Highlight cutout is empty: ${highlight.targetId}`);
+    if (sha256Buffer(buffer) !== highlight.cutout.sha256)
+      throw new Error(`Highlight cutout hash mismatch: ${highlight.targetId}`);
   }
 }
 
@@ -1190,12 +1418,12 @@ async function finalizeCatalogEntries(
   return finalEntries;
 }
 
-function aggregateSha256(entries, fingerprint) {
+function aggregateSha256(entries, fingerprint, highlights = []) {
   return sha256Buffer(
     canonicalJson({
       schemaVersion: catalogSchemaVersion,
       recipeVersion,
-      settings: VIDEO_SETTINGS,
+      settings: recipeSettings,
       generator: fingerprint.generator,
       source: {
         frontendSourceSha256: fingerprint.source.frontendSourceSha256,
@@ -1207,6 +1435,7 @@ function aggregateSha256(entries, fingerprint) {
         recipeSha256: entry.recipeSha256,
         contentSha256: entry.contentSha256,
       })),
+      ...(isZoom150 ? { highlights } : {}),
     })
   );
 }
@@ -1247,6 +1476,7 @@ async function checkArtifact(output, selected, fingerprint) {
   if (!Array.isArray(catalog.assets))
     throw new Error("Catalog assets must be an array.");
   await validateOutput(output, catalog.assets);
+  await validateHighlights(output, catalog.highlights);
   await verifyChecksums(output);
   const knownAssets = new Set(ALL_ASSETS.map((asset) => asset.id));
   const stale = [];
@@ -1264,7 +1494,7 @@ async function checkArtifact(output, selected, fingerprint) {
   }
   if (stale.length)
     throw new Error(`Stale capture recipe or content: ${stale.join(", ")}`);
-  if (catalog.aggregateSha256 !== aggregateSha256(catalog.assets, fingerprint))
+  if (catalog.aggregateSha256 !== aggregateSha256(catalog.assets, fingerprint, catalog.highlights))
     throw new Error("Catalog aggregate checksum does not match its contents.");
   process.stdout.write(
     `check: PASS (${selected.stills.length + selected.clips.length} assets fresh; checksums verified)\n`
@@ -1286,12 +1516,14 @@ async function main() {
     await run("yarn", ["build"], frontendDirectory, {
       ...process.env,
       VITE_SKYBAO_CAPTURE: "1",
+      VITE_API_BASE: "/api",
     });
     // startPreview still owns the local HTTP server, but the build has already
     // run so its fingerprint can be recorded before cache invalidation.
     options.build = false;
   }
   const fingerprint = await captureFingerprint();
+  designLanguageSha256 = fingerprint.source.designLanguageSha256;
   if (options.check) {
     await checkArtifact(options.output, assets, fingerprint);
     return;
@@ -1349,14 +1581,15 @@ async function main() {
   const preview = hasCaptureWork ? await startPreview(options) : null;
   let browser;
   let completedEntries = 0;
+  const highlights = [];
   try {
     if (hasCaptureWork)
       browser = await puppeteer.launch({
         headless: true,
         defaultViewport: {
-          width: VIDEO_SETTINGS.width,
-          height: VIDEO_SETTINGS.height,
-          deviceScaleFactor: 1,
+          width: captureSettings.cssWidth,
+          height: captureSettings.cssHeight,
+          deviceScaleFactor: captureSettings.dpr,
         },
         args: [
           "--force-color-profile=srgb",
@@ -1371,14 +1604,16 @@ async function main() {
 
     const catalogEntries = [...retainedEntries];
     for (const asset of captureAssets.stills) {
-      await captureStill(
-        page,
-        preview?.baseUrl,
-        options.output,
-        asset,
-        "shell",
-        catalogEntries
-      );
+      if (!isZoom150) {
+        await captureStill(
+          page,
+          preview?.baseUrl,
+          options.output,
+          asset,
+          "shell",
+          catalogEntries
+        );
+      }
       await captureStill(
         page,
         preview.baseUrl,
@@ -1395,7 +1630,8 @@ async function main() {
         options.output,
         asset,
         options.smoke,
-        catalogEntries
+        catalogEntries,
+        highlights
       );
     }
 
@@ -1426,20 +1662,27 @@ async function main() {
       recipeVersion,
       generator: fingerprint.generator,
       source: fingerprint.source,
-      settings: VIDEO_SETTINGS,
+      settings: isZoom150 ? captureSettings : VIDEO_SETTINGS,
+      ...(isZoom150 ? { profile: "zoom150", zoomPercent: 150, highlights } : {}),
       sampled: options.smoke,
       assets: finalEntries,
-      aggregateSha256: aggregateSha256(finalEntries, fingerprint),
+      aggregateSha256: aggregateSha256(finalEntries, fingerprint, highlights),
     };
     await writeFile(
       path.join(options.output, "catalog.json"),
       `${JSON.stringify(canonicalize(catalog), null, 2)}\n`
     );
+    if (isZoom150)
+      await writeFile(
+        path.join(options.output, "highlights", "descriptors.json"),
+        `${JSON.stringify(canonicalize(highlights), null, 2)}\n`
+      );
     await writeFile(
       path.join(options.output, "contact-sheet.html"),
       contactSheetHtml(finalEntries)
     );
     await validateOutput(options.output, finalEntries);
+    await validateHighlights(options.output, highlights);
     await writeChecksums(options.output);
     await verifyChecksums(options.output);
     completedEntries = finalEntries.length;

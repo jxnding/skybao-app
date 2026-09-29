@@ -34,8 +34,18 @@ Blender builder:
 - sharp emissive UI over the frosted glass backing;
 - cyan/blue perimeter lighting with one restrained traveling glint;
 - three seeded blue-gray cloud/fog cards at separate depths for parallax;
-- a centered, enlarged, nearly locked camera and low-key blue lighting;
+- a centered hero camera with the penultimate 50 mm baseline and low-key blue
+  lighting; the complete UI comes from the real 150% capture package, with no
+  Blender-side UV crop or camera-wide zoom;
 - bounded `camera.focusMoves` push-ins that target key micro-interactions.
+
+The full UI screenshot is a zero-thickness rounded image plane held 0.55 mm
+above the real 5 mm glass slab. Semantic interaction highlights are separate
+rounded solids: the four opening Assistant cards use 10 mm of extrusion and a
+24 mm peak lift for a clearer hero-scale completion beat, while later highlights
+retain the restrained 4 mm depth and 12 mm lift. During each area flip, the outgoing and incoming image planes
+exchange render ownership exactly at the authored 90-degree `edgeOn` frame, so
+the old screenshot cannot ghost onto the emerging reverse face.
 
 `shotlist.json.editorialCallouts` contains one 2–4-word lower-third per area.
 The Blender builder creates these as camera-facing Cycles text objects (never
@@ -43,11 +53,18 @@ painted into the React PNGs), with keyed eased opacity, safe lower-third
 coordinates, and Blender's built-in Bfont (deliberately, for portable glyph
 metrics). `positionM` is a screen-space LEFT/CENTER anchor; validation uses
 conservative full Bfont title extents rather than only the anchor. Their
-complete estimated bounds, frame windows, and copy are
-validated before a build. `environment.json` owns the focus moves: each
+complete estimated bounds, frame windows, copy, and authored slide/scale
+entrance and exit keys are validated before a build. `shotlist.json`
+`floatingHighlights` owns seven semantic target beats. Capture descriptors resolve
+the target bounds, four-corner radius, source frame, and transparent cutout;
+Blender adds a rounded front/back cap, shallow sidewall, subtle lift, and a
+hero-color Layer Weight rim into an isolated `HighlightGlow` AOV. No circular
+halo, hard-coded coordinates, or neon green ring remains.
+`environment.json` owns the focus moves: each
 move specifies a shot, frame window, screen-space target offset, subtle lens
-peak, and ease duration. The 10–15% camera enlargement is the resting/baseline
-coverage contract; focus peaks are intentionally bounded editorial pushes and
+peak, and ease duration. The 50 mm hero lens is the resting/baseline coverage
+contract. Focus peaks are
+intentionally bounded editorial pushes and
 may exceed that resting enlargement. Moves return to neutral lens/offset and
 are rejected when they cross flips, dissolves, or one another. `cornerSegments`
 and `uiInsetM` are consumed by Blender geometry rather than decorative fields.
@@ -75,6 +92,10 @@ yarn video:film --check --cycles-device=metal
 # Portable but much slower fallback.
 yarn video:film --cycles-device=cpu
 ```
+
+Use `yarn video:film --preview-zoom150` for a separate silent candidate. It
+writes `skybao-40s-preview-zoom150.mp4`, its versioned blend/manifest/report,
+and never promotes the current preview/master or shared audio artifact.
 
 `auto` is the default. `--check` is read-only: after validating the recipes and
 captures, it asks Blender to probe the requested Cycles device without building
@@ -149,20 +170,24 @@ runs that approval check.
 generated image/video, and promotes the handoff set atomically. Render commands
 do not invoke handoff automatically; run it after both current renders.
 `video:film:handoff --review-only` is the bootstrap path when the package receipt
-is absent (or stale): it validates the targeted receipt, creates the deterministic 16-frame
-4x4 contact sheet and 8-second/240-frame 30fps H.264 reel, then writes and
+is absent (or stale): it validates the targeted receipt, creates the deterministic current
+`targetedReviewFrames` set (currently 38 frames), a vertically centered 8x5
+contact sheet, and a
+9.5-second/285-frame 30fps H.264 reel, then writes and
 validates `provenance/review-package-receipt.json`. Full handoff additionally
 requires that completed package. The package receipt binds the exact source
 frame order and media/grid metadata. `checksums-review.sha256` owns the
 targeted package, reel, contact sheet, and current review artifacts;
 `checksums-full.sha256` owns validated preview/final/profile/full-review
 artifacts and is authenticated by the exact-set
-`provenance/full-package-receipt.json`, including its receipt entry and current
-targeted-review/input fingerprint. `checksums.sha256` is only the union of
-independently validated review and full ledgers. A targeted refresh
-preserves the rest of `review/` and invalidates only review-package and
-review-checksum approval metadata; preserved checksum entries are retained
-only after their old digest and file are revalidated.
+`provenance/full-package-receipt.json`. Schema v2 binds the current input
+fingerprint and the exact SHA-256 values of both the targeted-review receipt and
+the completed review-package receipt. `checksums.sha256` is only the union of
+independently validated review and full ledgers. A targeted refresh preserves
+the rest of `review/`, but invalidates the review-package/checksum approval and
+the paired full receipt/ledger that depends on it. Half-present full state is
+cleared as one rollback-safe pair during review-only handoff; preserved entries
+are retained only after their old digest and file are revalidated.
 
 When changing `environment.json`, use the same sequence: `--check` to verify
 the Cycles contract/device, `--samples=<frame indices>` for a fast visual
@@ -201,6 +226,25 @@ The capture manifest defines the real interaction and cursor timeline for each
 clip. Navigation bridges are normal capture assets too: open the actual primary
 navigation, move the cursor, click the next area, then let the slab flip. Do
 not substitute a separately drawn navigation overlay.
+
+The film input catalog is selected by `environment.toolInputs.uiCatalog` and is
+currently `artifacts/skybao-ui-zoom-150/catalog.json`. It must contain complete
+motion sequences at zoom 150, not the five-still review strips. Its digest and
+the app-owned `frontend/src/skybao-design-language.json` digest are bound in
+every build manifest so theme or capture changes invalidate the film.
+Each authored floating target resolves a descriptor with `normalizedBounds`
+(`left`, `top`, `width`, `height`, normalized to the 150% PNG), `cornerRadii`
+or a CSS `borderRadius` value, `capturePhase`, and a `cutout` object containing
+relative `path`, `sha256`, and `paddingPx`. Padding is cropped from the cutout
+UVs; it never expands the physical sidewall silhouette. The builder accepts
+descriptor maps or arrays under an asset/catalog `targets`, `captureTargets`,
+or `elementTargets` collection.
+
+The film input catalog is selected by `environment.toolInputs.uiCatalog` and is
+currently `artifacts/skybao-ui-zoom-150/catalog.json`. It must contain complete
+motion sequences at zoom 150, not the five-still review strips. Its digest and
+the app-owned `frontend/src/skybao-design-language.json` digest are bound in
+every build manifest so theme or capture changes invalidate the film.
 
 When adding or changing a UI action:
 
@@ -249,8 +293,7 @@ is included in the environment tool-input provenance.
 
 Approve only when these conditions hold:
 
-- UI remains sharp, rounded, and approximately 10–15% larger than the prior
-  centered framing.
+- UI remains sharp, rounded, and substantially enlarged for hero readability.
 - The background has slow layered parallax, while the camera does not drift.
 - The glass edge stays cyan/blue and never becomes a bright edge-on bar.
 - Every area change reads as a real sidebar cursor click followed by the same

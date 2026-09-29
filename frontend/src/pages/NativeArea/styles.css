@@ -10,6 +10,9 @@
   --mint: #d9eee8;
   --orange: #e67e3a;
   --blue: #4c77da;
+  --sb-hero-primary: #38bdf8;
+  --sb-hero-secondary: #2563eb;
+  --sb-status-complete: #34d399;
   min-height: 100vh;
   background: var(--paper);
   color: var(--ink);
@@ -3563,11 +3566,11 @@ html[data-theme="light"] .sb-mobile-nav {
 }
 .sb-story-research-grid > div.complete {
   opacity: 1;
-  border-color: rgba(52, 211, 153, 0.3);
+  border-color: color-mix(in srgb, var(--sb-status-complete) 30%, transparent);
   transform: translateY(-1px);
 }
 .sb-story-research-grid svg {
-  color: #34d399;
+  color: var(--sb-status-complete);
   flex: none;
 }
 .sb-story-research-grid span:last-child {

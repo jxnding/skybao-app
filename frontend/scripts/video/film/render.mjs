@@ -27,6 +27,9 @@ const reviewManifestPath = path.join(artifactRoot, "provenance", "targeted-revie
 const reviewAudioPath = path.join(artifactRoot, "audio", "targeted-review-mix.wav");
 const reviewRoot = path.join(artifactRoot, "review", "targeted");
 const reviewPackagePath = path.join(artifactRoot, "provenance", "review-package-receipt.json");
+const fullReceiptPath = path.join(artifactRoot, "provenance", "full-package-receipt.json");
+const fullChecksumPath = path.join(artifactRoot, "checksums-full.sha256");
+const aggregateChecksumPath = path.join(artifactRoot, "checksums.sha256");
 const reviewReelPath = path.join(artifactRoot, "review", "skybao-targeted-review-reel.mp4");
 const reviewContactSheetPath = path.join(artifactRoot, "review", "skybao-targeted-review-contact-sheet.png");
 // Kept beside, rather than inside, the committed film artifact directory. The
@@ -34,6 +37,14 @@ const reviewContactSheetPath = path.join(artifactRoot, "review", "skybao-targete
 // leaving it available for diagnosis or manual cleanup.
 const stagingRoot = path.join(repo, "artifacts", ".skybao-film-staging");
 const shotlistPath = path.join(here, "shotlist.json");
+const environmentPath = path.join(here, "environment.json");
+const environmentRecipe = JSON.parse(fs.readFileSync(environmentPath, "utf8"));
+const catalogRelative = environmentRecipe.toolInputs?.uiCatalog;
+if (typeof catalogRelative !== "string" || path.isAbsolute(catalogRelative) || catalogRelative.includes(".."))
+  throw new Error("environment.toolInputs.uiCatalog must be a safe relative path");
+const catalogPath = path.resolve(repo, catalogRelative);
+const catalogRecipe = JSON.parse(fs.readFileSync(catalogPath, "utf8"));
+const captureProfile = catalogRecipe.profile === "zoom150" ? "zoom150" : null;
 const captureScript = path.join(
   repo,
   "frontend",
@@ -109,7 +120,7 @@ if (canonicalTargeted && (!Array.isArray(canonicalFrames) || canonicalFrames.len
   canonicalFrames.some((frame) => !Number.isInteger(frame) || frame < 1 || frame > (recipe.format?.frames || 1200)) ||
   new Set(canonicalFrames).size !== canonicalFrames.length))
   throw new Error("shotlist.targetedReviewFrames must be unique bounded integer frames");
-const modeFlags = ["--preview", "--final", "--build-only", "--check", "--check-artifacts"].filter(
+const modeFlags = ["--preview", "--preview-zoom150", "--final", "--build-only", "--check", "--check-artifacts"].filter(
   has
 );
 if (modeFlags.length > 1) {
@@ -123,7 +134,9 @@ const mode = has("--check-artifacts")
     ? "check"
   : targetedReview
     ? "review"
-    : has("--final")
+      : has("--preview-zoom150")
+        ? "preview-zoom150"
+      : has("--final")
       ? "final"
       : has("--build-only")
         ? "build-only"
@@ -134,6 +147,7 @@ const unknown = scriptArgs.filter(
   (arg) =>
     ![
       "--preview",
+      "--preview-zoom150",
       "--final",
       "--build-only",
       "--check",
@@ -189,6 +203,7 @@ function run(command, args, label, options = {}) {
     cwd: repo,
     stdio: options.capture ? ["ignore", "pipe", "pipe"] : "inherit",
     encoding: options.capture ? "utf8" : undefined,
+    env: options.env || process.env,
   });
   if (result.error) throw result.error;
   if (result.status !== 0) {
@@ -226,7 +241,7 @@ function reviewReceipt() {
   const sources = {
     shotlist: sha256(shotlistPath),
     environment: sha256(path.join(here, "environment.json")),
-    catalog: sha256(path.join(repo, "artifacts", "skybao-ui", "catalog.json")),
+    catalog: sha256(catalogPath),
     scene: sha256Json(manifest.scene),
   };
   if (JSON.stringify(receipt.provenance) !== JSON.stringify(sources)) throw new Error("canonical targeted review receipt provenance is stale");
@@ -253,7 +268,7 @@ function reviewPackageReceipt() {
   if (!exists(reviewPackagePath) || !exists(reviewReelPath) || !exists(reviewContactSheetPath)) throw new Error("review package receipt, reel, and contact sheet are required");
   let receipt;
   try { receipt = JSON.parse(fs.readFileSync(reviewPackagePath, "utf8")); } catch { throw new Error("review package receipt is invalid"); }
-  assertReviewPackageReceipt(receipt);
+  assertReviewPackageReceipt(receipt, { expectedFrames: recipe.targetedReviewFrames });
   if (receipt.targetedReviewReceipt.sha256 !== sha256(targetedReceiptPath) || receipt.targetedReviewReceipt.inputFingerprint !== JSON.parse(fs.readFileSync(targetedReceiptPath, "utf8")).inputFingerprint) throw new Error("review package receipt is not bound to the current targeted receipt");
   for (const [name, file] of [["reel", reviewReelPath], ["contactSheet", reviewContactSheetPath]]) {
     const artifact = receipt.artifacts[name];
@@ -414,7 +429,12 @@ function assertCyclesBuildManifest(buildManifest, requestedDevice) {
 run(
   process.execPath,
   [captureScript, "--check", `--only=${filmAssetIds().join(",")}`],
-  "UI capture freshness"
+  "UI capture freshness",
+  {
+    env: captureProfile
+      ? { ...process.env, SKYBAO_CAPTURE_PROFILE: captureProfile }
+      : process.env,
+  }
 );
 
 if (mode === "check") {
@@ -500,10 +520,10 @@ const blenderArgs = [
 ];
 
 let framesDir = null;
-if (["preview", "final"].includes(mode)) {
+if (["preview", "final", "preview-zoom150"].includes(mode)) {
   framesDir = stagedFramesRoot;
   blenderArgs.push("--frames-out", framesDir);
-  blenderArgs.push("--quality", mode);
+  blenderArgs.push("--quality", mode === "preview-zoom150" ? "preview" : mode);
   blenderArgs.push("--receipt", targetedReceiptPath);
 }
 if (mode === "review") blenderArgs.push("--frames-out", stagedReviewRoot);
@@ -592,7 +612,7 @@ if (mode === "review") {
       provenance: {
         shotlist: sha256(shotlistPath),
         environment: sha256(path.join(here, "environment.json")),
-        catalog: sha256(path.join(repo, "artifacts", "skybao-ui", "catalog.json")),
+        catalog: sha256(catalogPath),
         scene: sha256Json(JSON.parse(fs.readFileSync(stagedManifestPath, "utf8")).scene),
         },
         inputFingerprint: inputFingerprint(JSON.parse(fs.readFileSync(stagedManifestPath, "utf8"))),
@@ -650,10 +670,16 @@ if (mode === "review") {
            // receipt/checksum binds the replaced frame set.
             { remove: true, target: reviewPackagePath },
             { remove: true, target: path.join(artifactRoot, "checksums-review.sha256") },
-            { remove: true, target: path.join(artifactRoot, "checksums.sha256") }] : [
-          { remove: true, target: path.join(artifactRoot, "provenance", "review-package-receipt.json") },
+             { remove: true, target: aggregateChecksumPath },
+             // Removing the review-package receipt invalidates every full
+             // approval that binds it, even if the targeted receipt is stable.
+             { remove: true, target: fullReceiptPath },
+             { remove: true, target: fullChecksumPath }] : [
+          // Ad-hoc samples do not replace the canonical targeted package, so
+          // preserve its receipt and any full approval bound to it. Only the
+          // review ledgers are stale if root-level sample frames changed.
           { remove: true, target: path.join(artifactRoot, "checksums-review.sha256") },
-          { remove: true, target: path.join(artifactRoot, "checksums.sha256") }]),
+          { remove: true, target: aggregateChecksumPath }]),
     ],
     stage
   );
@@ -681,8 +707,9 @@ for (let index = 0; index < frames.length; index += 1) {
   }
 }
 
-const outputName =
-  mode === "final" ? "skybao-40s-master.mp4" : "skybao-40s-preview.mp4";
+const candidatePreview = mode === "preview-zoom150";
+const outputName = mode === "final" ? "skybao-40s-master.mp4" :
+  candidatePreview ? "skybao-40s-preview-zoom150.mp4" : "skybao-40s-preview.mp4";
 const outputPath = path.join(deliverableRoot, outputName);
 const stagedOutputPath = path.join(stage, outputName);
 const versionedManifestName = `build-manifest-${mode}.json`;
@@ -703,12 +730,13 @@ const encodeArgs = [
   "1",
   "-i",
   path.join(framesDir, "frame-%06d.png"),
-  "-i",
-  stagedAudioPath,
-  "-map",
-  "0:v:0",
-  "-map",
-  "1:a:0",
+];
+if (!candidatePreview) {
+  encodeArgs.push("-i", stagedAudioPath);
+}
+encodeArgs.push(
+  "-map", "0:v:0",
+  ...(!candidatePreview ? ["-map", "1:a:0"] : []),
   "-frames:v",
   "1200",
   "-r",
@@ -729,19 +757,11 @@ const encodeArgs = [
   "bt709",
   "-color_trc",
   "bt709",
-  "-af",
-  "loudnorm=I=-16:TP=-1.5:LRA=8",
-  "-ar",
-  "48000",
-  "-c:a",
-  "aac",
-  "-b:a",
-  mode === "final" ? "320k" : "192k",
   "-movflags",
   "+faststart",
-  "-shortest",
+  ...(!candidatePreview ? ["-shortest", "-af", "loudnorm=I=-16:TP=-1.5:LRA=8", "-ar", "48000", "-c:a", "aac", "-b:a", mode === "final" ? "320k" : "192k"] : []),
   stagedOutputPath,
-];
+);
 const encodeRun = run(ffmpeg, encodeArgs, `encode ${outputName}`);
 
 const probe = run(
@@ -781,8 +801,11 @@ if (
     `encoded color tags are ${video.color_primaries}/${video.color_transfer}/${video.color_space}, expected bt709/bt709/bt709`
   );
 }
-if (!audio || audio.sample_rate !== "48000" || audio.channels !== 2) {
+if (!candidatePreview && (!audio || audio.sample_rate !== "48000" || audio.channels !== 2)) {
   throw new Error("encoded audio is not stereo 48kHz");
+}
+if (candidatePreview && audio) {
+  throw new Error("zoom-150 preview candidate must contain zero audio streams");
 }
 if (Math.abs(duration - 40) > 0.05)
   throw new Error(`encoded duration ${duration}s is not 40s`);
@@ -818,6 +841,8 @@ const report = {
   validation: {
     contiguousFrames: true,
     blackSegments: 0,
+    audioStreams: audio ? 1 : 0,
+    silentCandidate: candidatePreview,
     framesRetained: keepFrames,
   },
   render: {
@@ -849,17 +874,17 @@ const report = {
     },
   },
   video,
-  audio,
+  audio: candidatePreview ? null : audio,
   files: {
     video: path.relative(repo, outputPath),
     blend: path.relative(repo, versionedBlendPath),
-    mix: path.relative(repo, audioPath),
+    mix: candidatePreview ? null : path.relative(repo, audioPath),
     buildManifest: path.relative(repo, versionedManifestPath),
   },
   sha256: {
     video: sha256(stagedOutputPath),
     blend: sha256(stagedBlendPath),
-    mix: sha256(stagedAudioPath),
+    mix: candidatePreview ? null : sha256(stagedAudioPath),
     buildManifest: sha256(stagedManifestPath),
   },
   provenance: {
@@ -885,16 +910,18 @@ report.sha256.buildManifest = sha256(stagedVersionedManifestPath);
 fs.writeFileSync(stagedReportPath, `${JSON.stringify(report, null, 2)}\n`);
 
 const promotions = [
-  { source: stagedBlendPath, target: blendPath },
+  ...(candidatePreview ? [] : [{ source: stagedBlendPath, target: blendPath }]),
   { source: stagedVersionedBlendPath, target: versionedBlendPath },
-  { source: stagedManifestPath, target: buildManifestPath },
+  ...(candidatePreview ? [] : [{ source: stagedManifestPath, target: buildManifestPath }]),
   { source: stagedVersionedManifestPath, target: versionedManifestPath },
   { source: stagedOutputPath, target: outputPath },
   { source: stagedReportPath, target: reportPath },
-  { source: stagedAudioPath, target: audioPath },
-  { remove: true, target: path.join(artifactRoot, "provenance", "full-package-receipt.json") },
-  { remove: true, target: path.join(artifactRoot, "checksums-full.sha256") },
-  { remove: true, target: path.join(artifactRoot, "checksums.sha256") },
+  ...(candidatePreview ? [] : [{ source: stagedAudioPath, target: audioPath }]),
+  ...(candidatePreview ? [] : [
+    { remove: true, target: path.join(artifactRoot, "provenance", "full-package-receipt.json") },
+    { remove: true, target: path.join(artifactRoot, "checksums-full.sha256") },
+    { remove: true, target: aggregateChecksumPath },
+  ]),
 ];
 if (keepFrames)
   promotions.push({

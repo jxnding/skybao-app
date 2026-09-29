@@ -12,22 +12,10 @@
   "shotCount": 19,
   "groupOrder": ["assistant", "knowledge", "communications", "work", "admin"],
   "targetedReviewFrames": [
-    45,
-    94,
-    223,
-    241,
-    296,
-    370,
-    481,
-    535,
-    721,
-    775,
-    800,
-    856,
-    961,
-    1015,
-    1085,
-    1180
+    8, 10, 11, 14, 15, 18, 21, 29, 32, 35, 38, 39, 45, 52, 59, 63, 80, 83, 87, 94,
+    223, 241, 265, 269, 323, 327, 366, 370, 374, 378, 481, 506, 510, 560, 564,
+    721, 746, 750, 800, 804, 852, 856, 857, 860, 861, 864, 865, 961, 986, 990,
+    997, 1001, 1005, 1009, 1040, 1044, 1085, 1180
   ],
   "direction": {
     "rotationDirection": "continuous clockwise",
@@ -65,11 +53,20 @@
     ]
   },
   "editorialCallouts": [
-    { "id": "callout-assistant", "group": "assistant", "text": "Grounded Answers with Citations", "shotId": "assistant-research", "frames": { "start": 18, "end": 72 }, "face": "front", "positionM": [-1.30, -0.66], "fontSizeM": 0.09, "fadeFrames": 8 },
-    { "id": "callout-knowledge", "group": "knowledge", "text": "Unified Knowledge Search", "shotId": "knowledge-file-search", "frames": { "start": 269, "end": 323 }, "face": "back", "positionM": [-1.30, -0.66], "fontSizeM": 0.09, "fadeFrames": 8 },
-    { "id": "callout-communications", "group": "communications", "text": "Connected Team Context", "shotId": "communications-filter-select", "frames": { "start": 510, "end": 560 }, "face": "front", "positionM": [-1.30, -0.66], "fontSizeM": 0.09, "fadeFrames": 8 },
-    { "id": "callout-work", "group": "work", "text": "Automated Agent Workflows", "shotId": "work-board-drag", "frames": { "start": 750, "end": 800 }, "face": "back", "positionM": [-1.30, -0.66], "fontSizeM": 0.09, "fadeFrames": 8 },
-    { "id": "callout-admin", "group": "admin", "text": "Enterprise Governance", "shotId": "admin-privacy-to-users", "frames": { "start": 990, "end": 1040 }, "face": "front", "positionM": [-1.30, -0.66], "fontSizeM": 0.09, "fadeFrames": 8 }
+    { "id": "callout-assistant", "group": "assistant", "text": "Grounded Answers with Citations", "shotId": "assistant-research", "frames": { "start": 18, "end": 72 }, "face": "front", "positionM": [-0.55, -0.66], "fontSizeM": 0.09, "fadeFrames": 8, "transition": { "entranceOffsetM": [0.0, -0.05], "exitOffsetM": [0.0, 0.05], "startScale": 0.94, "exitScale": 0.98 } },
+    { "id": "callout-knowledge", "group": "knowledge", "text": "Unified Knowledge Search", "shotId": "knowledge-file-search", "frames": { "start": 269, "end": 323 }, "face": "back", "positionM": [-0.55, -0.66], "fontSizeM": 0.09, "fadeFrames": 8, "transition": { "entranceOffsetM": [0.0, -0.05], "exitOffsetM": [0.0, 0.05], "startScale": 0.94, "exitScale": 0.98 } },
+    { "id": "callout-communications", "group": "communications", "text": "Connected Team Context", "shotId": "communications-filter-select", "frames": { "start": 510, "end": 560 }, "face": "front", "positionM": [-0.55, -0.66], "fontSizeM": 0.09, "fadeFrames": 8, "transition": { "entranceOffsetM": [0.0, -0.05], "exitOffsetM": [0.0, 0.05], "startScale": 0.94, "exitScale": 0.98 } },
+    { "id": "callout-work", "group": "work", "text": "Automated Agent Workflows", "shotId": "work-board-drag", "frames": { "start": 750, "end": 800 }, "face": "back", "positionM": [-0.55, -0.66], "fontSizeM": 0.09, "fadeFrames": 8, "transition": { "entranceOffsetM": [0.0, -0.05], "exitOffsetM": [0.0, 0.05], "startScale": 0.94, "exitScale": 0.98 } },
+    { "id": "callout-admin", "group": "admin", "text": "Enterprise Governance", "shotId": "admin-privacy-to-users", "frames": { "start": 990, "end": 1040 }, "face": "front", "positionM": [-0.55, -0.66], "fontSizeM": 0.09, "fadeFrames": 8, "transition": { "entranceOffsetM": [0.0, -0.05], "exitOffsetM": [0.0, 0.05], "startScale": 0.94, "exitScale": 0.98 } }
+  ],
+  "floatingHighlights": [
+    { "id": "assistant-research-card-0", "shotId": "assistant-research", "globalFrame": 11, "sourceFrame": 11, "targetId": "assistant-research-card-0", "capturePhase": "after-action" },
+    { "id": "assistant-research-card-1", "shotId": "assistant-research", "globalFrame": 35, "sourceFrame": 35, "targetId": "assistant-research-card-1", "capturePhase": "after-action" },
+    { "id": "assistant-research-card-2", "shotId": "assistant-research", "globalFrame": 59, "sourceFrame": 59, "targetId": "assistant-research-card-2", "capturePhase": "after-action" },
+    { "id": "assistant-research-card-3", "shotId": "assistant-research", "globalFrame": 83, "sourceFrame": 83, "targetId": "assistant-research-card-3", "capturePhase": "after-action" },
+    { "id": "knowledge-file-preview-0", "shotId": "knowledge-source-preview", "globalFrame": 370, "sourceFrame": 28, "targetId": "knowledge-file-preview-0", "capturePhase": "before-action" },
+    { "id": "work-task-approve", "shotId": "work-task-approval", "globalFrame": 856, "sourceFrame": 76, "targetId": "work-task-approve", "capturePhase": "before-action" },
+    { "id": "native-tab-users", "shotId": "admin-privacy-to-users", "globalFrame": 1001, "sourceFrame": 30, "targetId": "native-tab-users", "capturePhase": "after-action" }
   ],
   "shots": [
     {

@@ -36,6 +36,7 @@ import json
 import math
 import os
 import random
+import re
 import subprocess
 import sys
 import time
@@ -46,6 +47,7 @@ import traceback
 # plain-Python execution.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from cursor_window import event_for_frame
+from ui_plane_window import ui_plane_render_window
 
 try:
     import bpy  # type: ignore
@@ -74,6 +76,10 @@ UI_OFFSET = 0.00055       # crisp UI rests just proud of frosted backing
 UI_INSET = 0.012
 UI_W = SLAB_W - 2.0 * UI_INSET
 UI_H = UI_W * 9.0 / 16.0
+UI_CROP_X = 1.0
+UI_CROP_Z = 1.0
+UI_CROP_CENTER_X = 0.5
+UI_CROP_CENTER_Z = 0.5
 CORNER_SEGMENTS = 8
 CAM_Z = 5.88
 FOCAL_MM = 50.0
@@ -84,6 +90,7 @@ BREATH_PERIOD_S = 12.0
 FPS = 30
 FILM_TOTAL = 1200
 FILM_SHOT_COUNT = 19
+DESIGN_LANGUAGE = {}
 MAX_SHOTS = 100
 EXPECTED_FLIPS = (
     ("assistant", "knowledge", 231, 251, 241),
@@ -117,7 +124,7 @@ def rgb(value, default=(0.0, 0.0, 0.0)):
 def apply_environment_config(config, shotlist):
     """Load scene constants from the versioned environment manifest."""
     global ENVIRONMENT, SLAB_W, SLAB_H, SLAB_T, SLAB_HALF_T
-    global SLAB_RADIUS, UI_RADIUS, UI_OFFSET, UI_INSET, UI_W, UI_H, CORNER_SEGMENTS, CAM_Z, FOCAL_MM
+    global SLAB_RADIUS, UI_RADIUS, UI_OFFSET, UI_INSET, UI_W, UI_H, UI_CROP_X, UI_CROP_Z, UI_CROP_CENTER_X, UI_CROP_CENTER_Z, CORNER_SEGMENTS, CAM_Z, FOCAL_MM
     global ROT_FRAMES, DISSOLVE_FRAMES, BREATH_AMP, BREATH_PERIOD_S, FPS
 
     ENVIRONMENT = config
@@ -138,6 +145,10 @@ def apply_environment_config(config, shotlist):
     # rather than independently shrinking the physical slab vertically.
     UI_W = SLAB_W - 2.0 * UI_INSET
     UI_H = UI_W * 9.0 / 16.0
+    # zoom-150 capture is already a complete 1920x1080 source. Blender never
+    # crops or recenters it; retain explicit full-frame values for mapping.
+    UI_CROP_X, UI_CROP_Z = 1.0, 1.0
+    UI_CROP_CENTER_X, UI_CROP_CENTER_Z = 0.5, 0.5
     CORNER_SEGMENTS = max(3, int(glass.get("cornerSegments", CORNER_SEGMENTS)))
     UI_OFFSET = float(nested(
         glass, ("layers", "ui", "offsetM"), glass.get("uiOffset", UI_OFFSET)))
@@ -151,6 +162,11 @@ def apply_environment_config(config, shotlist):
     DISSOLVE_FRAMES = int(shotlist.get("direction", {}).get(
         "sameFaceDissolveFrames", DISSOLVE_FRAMES))
     FPS = int(shotlist.get("format", {}).get("fps", FPS))
+
+
+def crop_for_shot(shot, shotlist=None):
+    """Resolve the complete captured source rectangle; no Blender-side crop."""
+    return {"scale": (1.0, 1.0), "center": (0.5, 0.5)}
 
 
 # ---------------------------------------------------------------------------
@@ -260,6 +276,16 @@ def resolve_paths(args):
         film_dir = os.path.join(repo, "frontend", "scripts", "video", "film")
         if not os.path.isdir(film_dir):
             raise FilmError("alternate repository has no frontend/scripts/video/film: {0}".format(repo))
+    environment_path = os.path.join(film_dir, "environment.json")
+    try:
+        with open(environment_path, "r", encoding="utf-8") as fh:
+            environment = json.load(fh)
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise FilmError("cannot read environment recipe: {0}".format(exc))
+    catalog_relative = environment.get("toolInputs", {}).get(
+        "uiCatalog", "artifacts/skybao-ui/catalog.json")
+    catalog_path = safe_repo_path(repo, catalog_relative, "environment uiCatalog")
+    ui_root = os.path.dirname(catalog_path)
     canonical_audio = (args.get("audio_canonical") or os.path.join(
         repo, "artifacts", "skybao-film", "audio", "skybao-mix.wav"))
     return dict(
@@ -267,8 +293,8 @@ def resolve_paths(args):
         repo=repo,
         shotlist=os.path.join(film_dir, "shotlist.json"),
         environment=os.path.join(film_dir, "environment.json"),
-        ui=os.path.join(repo, "artifacts", "skybao-ui"),
-        catalog=os.path.join(repo, "artifacts", "skybao-ui", "catalog.json"),
+        ui=ui_root,
+        catalog=catalog_path,
         film=os.path.join(repo, "artifacts", "skybao-film"),
         audio=(args.get("audio") or canonical_audio),
         audio_canonical=canonical_audio,
@@ -293,6 +319,29 @@ def load_json(path):
     return value
 
 
+def load_design_language(environment, repo):
+    """Load the app-owned visual contract and validate its stable interface."""
+    relative = nested(environment, ("toolInputs", "designLanguage"), None)
+    if not isinstance(relative, str) or not relative.strip():
+        raise FilmError("environment.toolInputs.designLanguage is required")
+    path = safe_repo_path(repo, relative, "environment designLanguage")
+    value = load_json(path)
+    dark = nested(value, ("themes", "dark"), {})
+    hero = nested(dark, ("hero",), {})
+    floating = value.get("floatingElement")
+    if value.get("schemaVersion") != 1 or not isinstance(floating, dict):
+        raise FilmError("design language must use schemaVersion 1 and floatingElement")
+    for name in ("primary", "secondary"):
+        if not isinstance(hero.get(name), str) or not hero[name].startswith("#"):
+            raise FilmError("design language dark.hero.{0} is required".format(name))
+    required = {"paddingPx", "extrusionM", "openingExtrusionM", "bevelM",
+                "liftM", "openingLiftM", "maxScale",
+                "fresnelPower", "rimStrength", "haloStrength", "durationFrames"}
+    if not required.issubset(floating):
+        raise FilmError("design language floatingElement is incomplete")
+    return value, path
+
+
 def require_file(path):
     if not os.path.isfile(path):
         raise FilmError("missing asset file: {0}".format(path))
@@ -310,7 +359,7 @@ def safe_catalog_path(root, value, label):
     if (os.path.isabs(candidate) or candidate.startswith("//") or
             ":" in candidate.split(os.sep)[0] or
             any(part == ".." for part in candidate.split(os.sep))):
-        raise FilmError("{0} escapes artifacts/skybao-ui: {1!r}".format(label, value))
+        raise FilmError("{0} escapes the selected UI catalog root: {1!r}".format(label, value))
     base = os.path.realpath(root)
     resolved = os.path.realpath(os.path.join(base, candidate))
     try:
@@ -318,7 +367,7 @@ def safe_catalog_path(root, value, label):
     except ValueError:
         inside = False
     if not inside or resolved == base:
-        raise FilmError("{0} escapes artifacts/skybao-ui: {1!r}".format(label, value))
+        raise FilmError("{0} escapes the selected UI catalog root: {1!r}".format(label, value))
     return resolved
 
 
@@ -784,7 +833,10 @@ def configure_scene(scene, width, height, total, fps,
         transforms = [item.identifier for item in prop.enum_items]
     except Exception:
         transforms = []
-    for candidate in ("AgX", "Filmic", "Standard"):
+    preferred_transform = str(nested(
+        ENVIRONMENT, ("colorManagement", "viewTransform"), "AgX"))
+    for candidate in dict.fromkeys(
+            (preferred_transform, "AgX", "Filmic", "Standard")):
         if candidate in transforms:
             try:
                 vset.view_transform = candidate
@@ -797,6 +849,41 @@ def configure_scene(scene, width, height, total, fps,
                 setattr(vset, prop, value)
             except Exception:
                 pass
+
+    curve_cfg = nested(
+        ENVIRONMENT, ("colorManagement", "contrastCurve"), {})
+    use_curve = bool(curve_cfg.get("enabled", False))
+    if hasattr(vset, "use_curve_mapping"):
+        vset.use_curve_mapping = use_curve
+    if use_curve:
+        raw_points = curve_cfg.get("points", [])
+        try:
+            points = [(float(point[0]), float(point[1]))
+                      for point in raw_points]
+        except (TypeError, ValueError, IndexError):
+            raise FilmError(
+                "colorManagement.contrastCurve.points must be [x, y] pairs")
+        if (len(points) < 2 or points[0] != (0.0, 0.0) or
+                points[-1] != (1.0, 1.0) or
+                any(not 0.0 <= value <= 1.0
+                    for point in points for value in point) or
+                any(points[index][0] >= points[index + 1][0]
+                    for index in range(len(points) - 1))):
+            raise FilmError(
+                "colorManagement.contrastCurve.points must run from "
+                "[0, 0] to [1, 1] with increasing x values in 0..1")
+        mapping = vset.curve_mapping
+        if mapping is None or len(mapping.curves) < 4:
+            raise FilmError("Blender did not create the color-management curve")
+        combined = mapping.curves[3]
+        for point in list(combined.points)[1:-1]:
+            combined.points.remove(point)
+        combined.points[0].location = points[0]
+        combined.points[-1].location = points[-1]
+        for x_value, y_value in points[1:-1]:
+            point = combined.points.new(x_value, y_value)
+            point.handle_type = "AUTO"
+        mapping.update()
 
 
 def ensure_scene(name, cfg, device_requested="auto", profile="preview"):
@@ -849,6 +936,9 @@ def ui_material(name, image):
     tex = add_node(mat, "ShaderNodeTexImage", "Tex")
     tex.image = image
     tex.extension = "CLIP"
+    brightness = add_node(mat, "ShaderNodeGamma", "UIBrightness")
+    set_input(brightness, "Gamma", float(nested(
+        ENVIRONMENT, ("glass", "uiTextureGamma"), 1.0)))
     em = add_node(mat, "ShaderNodeEmission", "Emit")
     set_input(em, "Strength", float(nested(
         ENVIRONMENT, ("glass", "uiEmission"), 1.12)))
@@ -859,12 +949,54 @@ def ui_material(name, image):
     mix = add_node(mat, "ShaderNodeMixShader", "Mix")
     trans = add_node(mat, "ShaderNodeBsdfTransparent", "Transparent")
     out = add_node(mat, "ShaderNodeOutputMaterial", "Out")
-    link(mat, tex.outputs["Color"], em.inputs["Color"])
+    link(mat, tex.outputs["Color"], brightness.inputs["Color"])
+    link(mat, brightness.outputs["Color"], em.inputs["Color"])
     link(mat, tex.outputs["Alpha"], alpha.inputs[0])
     link(mat, opacity.outputs[0], alpha.inputs[1])
     link(mat, alpha.outputs[0], mix.inputs["Factor"])
     link(mat, trans.outputs["BSDF"], mix.inputs[1])
     link(mat, em.outputs["Emission"], mix.inputs[2])
+    link(mat, mix.outputs["Shader"], out.inputs["Surface"])
+    mat.blend_method = "BLEND"
+    mat.show_transparent_back = True
+    return mat
+
+
+def floating_edge_material(name, color, rim_strength=0.35, fresnel_power=4.0):
+    """Transparent edge treatment driven by Layer Weight/Facing, not bloom."""
+    mat = new_material(name)
+    layer = add_node(mat, "ShaderNodeLayerWeight", "LayerWeight")
+    fresnel = add_node(mat, "ShaderNodeMath", "FresnelPower")
+    fresnel.operation = "POWER"
+    fresnel.inputs[1].default_value = float(fresnel_power)
+    ramp = add_node(mat, "ShaderNodeValToRGB", "RimRamp")
+    ramp.color_ramp.interpolation = "EASE"
+    ramp.color_ramp.elements[0].position = 0.35
+    ramp.color_ramp.elements[1].position = 0.88
+    ramp.color_ramp.elements[0].color = (0.0, 0.0, 0.0, 1.0)
+    ramp.color_ramp.elements[1].color = (1.0, 1.0, 1.0, 1.0)
+    emission = add_node(mat, "ShaderNodeEmission", "RimEmission")
+    set_input(emission, "Color", (*color, 1.0))
+    set_input(emission, "Strength", float(rim_strength))
+    link(mat, layer.outputs["Fresnel"], fresnel.inputs[0])
+    link(mat, fresnel.outputs[0], ramp.inputs[0])
+    # Keep the compositor AOV identical to the visible rim mask. A direct
+    # emission -> AOV link would turn the whole rounded panel into a glow
+    # source even though the surface shader itself is correctly masked.
+    glow_mask = add_node(mat, "ShaderNodeMixRGB", "HighlightGlowMask")
+    glow_mask.blend_type = "MULTIPLY"
+    glow_mask.inputs[0].default_value = 1.0
+    link(mat, emission.outputs["Emission"], glow_mask.inputs[1])
+    link(mat, ramp.outputs["Color"], glow_mask.inputs[2])
+    transparent = add_node(mat, "ShaderNodeBsdfTransparent", "Transparent")
+    mix = add_node(mat, "ShaderNodeMixShader", "EdgeMix")
+    out = add_node(mat, "ShaderNodeOutputMaterial", "Out")
+    link(mat, ramp.outputs["Color"], mix.inputs[0])
+    link(mat, transparent.outputs["BSDF"], mix.inputs[1])
+    link(mat, emission.outputs["Emission"], mix.inputs[2])
+    aov = add_node(mat, "ShaderNodeOutputAOV", "HighlightGlow")
+    aov.aov_name = "HighlightGlow"
+    link(mat, glow_mask.outputs["Color"], aov.inputs["Color"])
     link(mat, mix.outputs["Shader"], out.inputs["Surface"])
     mat.blend_method = "BLEND"
     mat.show_transparent_back = True
@@ -1115,19 +1247,24 @@ def make_box_mesh(name, w, d, h):
 
 def rounded_rect_points(w, h, radius, segments=10):
     """Clockwise rounded-rectangle outline in local X/Z coordinates."""
-    r = max(0.0, min(float(radius), min(w, h) / 2.0 - 1e-6))
+    if isinstance(radius, (list, tuple)) and len(radius) == 4:
+        radii = [max(0.0, min(float(value), min(w, h) / 2.0 - 1e-6)) for value in radius]
+    else:
+        value = max(0.0, min(float(radius), min(w, h) / 2.0 - 1e-6))
+        radii = [value] * 4
+    # CSS order: top-left, top-right, bottom-right, bottom-left.
     corners = [
-        (w / 2.0 - r, -h / 2.0 + r, -90.0, 0.0),
-        (w / 2.0 - r, h / 2.0 - r, 0.0, 90.0),
-        (-w / 2.0 + r, h / 2.0 - r, 90.0, 180.0),
-        (-w / 2.0 + r, -h / 2.0 + r, 180.0, 270.0),
+        (w / 2.0 - radii[1], -h / 2.0 + radii[1], -90.0, 0.0, radii[1]),
+        (w / 2.0 - radii[2], h / 2.0 - radii[2], 0.0, 90.0, radii[2]),
+        (-w / 2.0 + radii[3], h / 2.0 - radii[3], 90.0, 180.0, radii[3]),
+        (-w / 2.0 + radii[0], -h / 2.0 + radii[0], 180.0, 270.0, radii[0]),
     ]
     points = []
-    for cx, cz, a0, a1 in corners:
+    for cx, cz, a0, a1, corner_radius in corners:
         for step in range(segments + 1):
             angle = math.radians(a0 + (a1 - a0) * step / float(segments))
-            points.append((cx + r * math.cos(angle),
-                           cz + r * math.sin(angle)))
+            points.append((cx + corner_radius * math.cos(angle),
+                           cz + corner_radius * math.sin(angle)))
     return points
 
 
@@ -1147,7 +1284,9 @@ def make_rounded_panel_mesh(name, w, d, h, radius, segments=10):
     return mesh
 
 
-def make_rounded_plane_mesh(name, w, h, radius, segments=10):
+def make_rounded_plane_mesh(name, w, h, radius, segments=10,
+                            crop_scale=(1.0, 1.0), crop_center=(0.5, 0.5),
+                            uv_bounds=None):
     """Rounded XZ image plane whose UVs geometrically clip capture corners."""
     outline = rounded_rect_points(w, h, radius, segments)
     verts = [(x, 0.0, z) for x, z in outline]
@@ -1161,8 +1300,17 @@ def make_rounded_plane_mesh(name, w, h, radius, segments=10):
         for loop_index in poly.loop_indices:
             vertex_index = mesh.loops[loop_index].vertex_index
             vertex = verts[vertex_index]
-            uv.data[loop_index].uv = (
-                vertex[0] / w + 0.5, vertex[2] / h + 0.5)
+            if uv_bounds is not None:
+                u0, v0, u1, v1 = uv_bounds
+                uv.data[loop_index].uv = (
+                    u0 + ((vertex[0] / w) + 0.5) * (u1 - u0),
+                    v0 + ((vertex[2] / h) + 0.5) * (v1 - v0))
+            else:
+                crop_x, crop_z = crop_scale
+                center_x, center_z = crop_center
+                uv.data[loop_index].uv = (
+                    center_x + (vertex[0] / w) * crop_x,
+                    center_z + (vertex[2] / h) * crop_z)
     mesh.update()
     return mesh
 
@@ -1568,7 +1716,7 @@ def _set_deterministic_easing(animation_data):
 
 
 def build_ui_planes(scene, slab, shotlist, catalog_index, paths, manifest):
-    """Layer rounded UI planes; dissolve within areas and overlap at flips."""
+    """Layer rounded UI planes with dissolves and edge-on flip handoffs."""
     shots = shotlist["shots"]
     planes = []
     for index, shot in enumerate(shots):
@@ -1586,6 +1734,7 @@ def build_ui_planes(scene, slab, shotlist, catalog_index, paths, manifest):
         shot_start = shot["frames"]["start"]
         shot_end = shot["frames"]["end"]
         face = shot.get("face", "front")
+        crop = crop_for_shot(shot, shotlist)
         is_back = face == "back"
         previous = shots[index - 1] if index > 0 else None
         following = shots[index + 1] if index + 1 < len(shots) else None
@@ -1596,11 +1745,12 @@ def build_ui_planes(scene, slab, shotlist, catalog_index, paths, manifest):
         dissolve_out = bool(following and following.get(
             "transitionIn", {}).get("type") == "same-face-dissolve")
 
-        render_start = shot_start - (ROT_FRAMES // 2 if flip_in else 0)
-        render_end = shot_end + (ROT_FRAMES // 2 if flip_out else
-                                 DISSOLVE_FRAMES if dissolve_out else 0)
-        render_start = max(1, render_start)
-        render_end = min(int(shotlist["format"]["frames"]), render_end)
+        try:
+            render_start, render_end = ui_plane_render_window(
+                shots, index, int(shotlist["format"]["frames"]),
+                DISSOLVE_FRAMES)
+        except ValueError as exc:
+            raise FilmError("shot {0}: {1}".format(shot["number"], exc))
 
         clip_info = None
         if src["type"] == "clip":
@@ -1618,6 +1768,7 @@ def build_ui_planes(scene, slab, shotlist, catalog_index, paths, manifest):
             image = _load_image(first)
             clip_info = {
                 "directory": directory,
+                "entry": entry,
                 "trim_start": src["startFrame"],
                 "trim_end": src["endFrame"],
                 "shot_start": shot_start,
@@ -1627,6 +1778,7 @@ def build_ui_planes(scene, slab, shotlist, catalog_index, paths, manifest):
                 "timeline": timeline,
                 "shot": shot,
                 "face": face,
+                "crop": crop,
             }
         else:
             image = _load_image(safe_catalog_path(
@@ -1637,9 +1789,10 @@ def build_ui_planes(scene, slab, shotlist, catalog_index, paths, manifest):
         plane = add_mesh_object(
             scene,
             make_rounded_plane_mesh(
-                 "ui.{0}.mesh".format(shot["number"]),
+                  "ui.{0}.mesh".format(shot["number"]),
                   UI_W, UI_H,
-                  UI_RADIUS, CORNER_SEGMENTS),
+                  UI_RADIUS, CORNER_SEGMENTS,
+                  crop["scale"], crop["center"]),
             "UI.S{0:02d}.{1}".format(shot["number"], face), mat, parent=slab)
 
         # Later shots sit microns closer during a dissolve, avoiding z-fight.
@@ -1729,6 +1882,45 @@ def build_editorial_callouts(scene, slab, shotlist, manifest):
         text.rotation_euler = (math.radians(-90.0 if face == "back" else 90.0), 0.0, 0.0)
         text.scale = (-1.0, -1.0, 1.0) if face == "back" else (1.0, 1.0, 1.0)
         text.data.materials.append(mat)
+        transition = callout.get("transition", {})
+        entrance_offset = transition.get("entranceOffsetM", [-0.12, 0.0])
+        exit_offset = transition.get("exitOffsetM", [0.10, 0.0])
+        entrance_scale = float(transition.get("startScale", 0.86))
+        exit_scale = float(transition.get("exitScale", 0.96))
+        local_entrance = (-float(entrance_offset[0]) if face == "back" else float(entrance_offset[0]),
+                          0.0,
+                          float(entrance_offset[1]))
+        local_exit = (-float(exit_offset[0]) if face == "back" else float(exit_offset[0]),
+                      0.0,
+                      float(exit_offset[1]))
+        base_location = tuple(text.location)
+        base_scale = tuple(text.scale)
+        # The caption is authored as a compact slide/settle: it arrives from
+        # below with a small scale-up, holds cleanly, then exits with a
+        # shorter upward slide. These keys are intentionally explicit so the scene
+        # contract can prove the exact motion language in a saved blend.
+        text.location = tuple(base_location[i] + local_entrance[i]
+                              for i in range(3))
+        text.scale = tuple(value * entrance_scale for value in base_scale)
+        text.keyframe_insert(data_path="location", frame=max(1, start - fade))
+        text.keyframe_insert(data_path="scale", frame=max(1, start - fade))
+        text.location = base_location
+        text.scale = base_scale
+        text.keyframe_insert(data_path="location", frame=start)
+        text.keyframe_insert(data_path="scale", frame=start)
+        text.keyframe_insert(data_path="location", frame=end)
+        text.keyframe_insert(data_path="scale", frame=end)
+        text.location = tuple(base_location[i] + local_exit[i]
+                              for i in range(3))
+        text.scale = tuple(value * exit_scale for value in base_scale)
+        text.keyframe_insert(data_path="location", frame=min(
+            shotlist["format"]["frames"], end + fade))
+        text.keyframe_insert(data_path="scale", frame=min(
+            shotlist["format"]["frames"], end + fade))
+        # Keep the object's authored rest transform available to validators and
+        # to editors opening the blend at frame 1.
+        text.location = base_location
+        text.scale = base_scale
         text.hide_render = True
         text.keyframe_insert(data_path="hide_render", frame=max(1, start - fade - 1))
         text.hide_render = False
@@ -1740,6 +1932,272 @@ def build_editorial_callouts(scene, slab, shotlist, manifest):
         _set_editorial_opacity(mat, end, 1.0)
         _set_editorial_opacity(mat, min(shotlist["format"]["frames"], end + fade), 0.0)
     manifest["editorial_callouts"] = len(callouts)
+
+
+def _target_descriptor(entry, target_id, source_frame, beat_phase, catalog=None):
+    """Resolve a capture-owned semantic target descriptor without coordinates."""
+    candidates = []
+    containers = [entry.get("targets"), entry.get("captureTargets"),
+                  entry.get("elementTargets")]
+    if isinstance(catalog, dict):
+        containers.extend([catalog.get("targets"), catalog.get("captureTargets"),
+                           catalog.get("elementTargets"), catalog.get("highlights")])
+    for container in containers:
+        if isinstance(container, list):
+            candidates.extend(container)
+        elif isinstance(container, dict):
+            value = container.get(target_id)
+            if isinstance(value, dict):
+                candidates.append(dict(value, targetId=target_id))
+    for candidate in candidates:
+        ident = candidate.get("targetId", candidate.get("id", candidate.get("target")))
+        frame = candidate.get("frame", candidate.get("sourceFrame"))
+        phase = candidate.get("capturePhase", candidate.get("phase"))
+        if (ident == target_id and (frame is None or int(frame) == int(source_frame)) and
+                (phase is None or phase == beat_phase)):
+            return candidate
+    raise FilmError("zoom-150 catalog has no descriptor for target {0} at source frame {1}".format(
+        target_id, source_frame))
+
+
+def _descriptor_geometry(descriptor):
+    bounds = descriptor.get("normalizedBounds", descriptor.get("bounds", descriptor))
+    center = descriptor.get("centerNormalized")
+    size = descriptor.get("sizeNormalized")
+    if isinstance(bounds, dict):
+        left = bounds.get("left", bounds.get("x"))
+        top = bounds.get("top", bounds.get("y"))
+        if center is None and all(value is not None for value in (left, top, bounds.get("width"), bounds.get("height"))):
+            center = [float(left) + float(bounds["width"]) / 2.0,
+                      float(top) + float(bounds["height"]) / 2.0]
+        if size is None and all(key in bounds for key in ("width", "height")):
+            size = [float(bounds["width"]), float(bounds["height"])]
+    if (not isinstance(center, list) or len(center) != 2 or
+            not isinstance(size, list) or len(size) != 2):
+        raise FilmError("capture target descriptor must provide normalized center and size")
+    viewport = descriptor.get("viewport", {})
+    viewport_width = float(descriptor.get("viewportWidth", viewport.get("width", 1920)))
+    viewport_height = float(descriptor.get("viewportHeight", viewport.get("height", 1080)))
+    raw_radii = descriptor.get("cornerRadii", descriptor.get("borderRadius", descriptor.get("cornerRadiusPx", 10)))
+    if isinstance(raw_radii, dict):
+        raw_radii = [raw_radii.get(key, 10) for key in ("topLeft", "topRight", "bottomRight", "bottomLeft")]
+    if isinstance(raw_radii, str):
+        raw_radii = raw_radii.replace(",", " ").split()
+    if not isinstance(raw_radii, (list, tuple)):
+        raw_radii = [raw_radii] * 4
+    if len(raw_radii) == 1:
+        raw_radii = list(raw_radii) * 4
+    if len(raw_radii) != 4:
+        raise FilmError("capture target corner radii must contain four CSS values")
+    def css_px(value):
+        if isinstance(value, (list, tuple)):
+            value = value[0] if value else 0
+        match = re.match(r"^\s*([0-9]+(?:\.[0-9]+)?)", str(value))
+        if not match:
+            raise FilmError("capture target corner radius is not a CSS pixel value")
+        return float(match.group(1))
+    radii_px = [css_px(value) for value in raw_radii]
+    cutout = descriptor.get("cutout")
+    if not isinstance(cutout, dict) or not isinstance(cutout.get("path"), str) or not cutout.get("path").strip():
+        raise FilmError("capture target descriptor must provide cutout.path")
+    if not isinstance(cutout.get("sha256", cutout.get("contentSha256")), str):
+        raise FilmError("capture target cutout must provide sha256")
+    return ([float(center[0]), float(center[1])], [float(size[0]), float(size[1])],
+            radii_px, viewport_width, viewport_height, cutout)
+
+
+def target_to_ui(shot, normalized):
+    """Map a capture-owned normalized target center onto the full UI plane."""
+    nx, ny = float(normalized[0]), float(normalized[1])
+    x = (nx - 0.5) * UI_W
+    if shot.get("face", "front") == "back":
+        x *= -1.0
+    z = (0.5 - ny) * UI_H
+    return x, z
+
+
+def _highlight_materials(name, image, hero, floating):
+    front = ui_material("FloatingFront.mat." + name, image)
+    edge = floating_edge_material("FloatingEdge.mat." + name, hero,
+                                  floating["rimStrength"], floating["fresnelPower"])
+    return front, edge
+
+
+def configure_highlight_compositor(scene):
+    """Keep highlight glow isolated to the HighlightGlow AOV."""
+    # Blender 5.2 moved scene compositor nodes from Scene.node_tree to the
+    # scene's CompositorNodeTree datablock. Make the scene active before
+    # creating Render Layers so Blender exposes the scene's custom AOV sockets.
+    for window in getattr(getattr(bpy.context, "window_manager", None), "windows", []):
+        try:
+            window.scene = scene
+        except Exception:
+            pass
+    try:
+        layer = scene.view_layers[0]
+        if not any(aov.name == "HighlightGlow" for aov in layer.aovs):
+            layer.aovs.add().name = "HighlightGlow"
+        if hasattr(layer, "update_render_passes"):
+            layer.update_render_passes()
+    except Exception as exc:
+        raise FilmError("cannot configure HighlightGlow AOV: {0}".format(exc))
+    scene.use_nodes = True
+    node_tree = getattr(scene, "compositing_node_group", None)
+    if node_tree is None:
+        node_tree = bpy.data.node_groups.new(
+            "SkyBaoCompositor", "CompositorNodeTree")
+        scene.compositing_node_group = node_tree
+    nodes = node_tree.nodes
+    links = node_tree.links
+    for node in list(nodes):
+        nodes.remove(node)
+    render_layers = nodes.new("CompositorNodeRLayers")
+    render_layers.name = "Render Layers"
+    render_layers.layer = layer.name
+    render_layers.update()
+    if render_layers.outputs.get("HighlightGlow") is None:
+        raise FilmError("Blender compositor did not expose the HighlightGlow AOV")
+    glow = nodes.new("CompositorNodeGlare")
+    glow.name = "AOV Fog Glow"
+    # Blender 5.2 exposes compositor settings as menu/value sockets; older
+    # releases exposed the same settings as RNA properties on the node.
+    if hasattr(glow, "glare_type"):
+        glow.glare_type = "FOG_GLOW"
+        glow.quality = "LOW"
+        glow.threshold = 1.0
+        glow.size = 6
+    else:
+        set_input(glow, "Type", "Fog Glow")
+        set_input(glow, "Quality", "Low")
+        set_input(glow, "Threshold", 1.0)
+        set_input(glow, "Size", 6.0)
+    # Blender 5.2 removed the legacy compositor MixRGB/Composite node types.
+    # ShaderNodeMixRGB remains available in a CompositorNodeTree and preserves
+    # the explicit ADD blend and low-strength factor for this isolated AOV.
+    add = nodes.new("ShaderNodeMixRGB")
+    add.name = "Highlight Glow Add"
+    add.blend_type = "ADD"
+    add.inputs[0].default_value = 0.08
+    output_socket = node_tree.interface.items_tree.get("Image")
+    if output_socket is None:
+        output_socket = node_tree.interface.new_socket(
+            name="Image", in_out="OUTPUT", socket_type="NodeSocketColor")
+    composite = nodes.new("NodeGroupOutput")
+    composite.name = "Group Output"
+    links.new(render_layers.outputs["HighlightGlow"], glow.inputs["Image"])
+    links.new(render_layers.outputs["Image"], add.inputs[1])
+    links.new(glow.outputs["Image"], add.inputs[2])
+    links.new(add.outputs["Color"], composite.inputs["Image"])
+
+
+def build_floating_highlights(scene, slab, shotlist, manifest, catalog, paths):
+    """Build seven semantic, rounded UI cutouts with a restrained 3D lift."""
+    beats = shotlist.get("floatingHighlights", [])
+    if len(beats) != 7:
+        raise FilmError("floatingHighlights must contain exactly seven authored beats")
+    by_id = {shot.get("id"): shot for shot in shotlist.get("shots", [])}
+    clips = {info["shot"]["id"]: info for info in FILM_CLIP_INFO}
+    floating = DESIGN_LANGUAGE["floatingElement"]
+    hero = rgb(nested(DESIGN_LANGUAGE, ("themes", "dark", "hero", "primary"), None),
+               (0.22, 0.74, 1.0))
+    built = []
+    total = int(shotlist["format"]["frames"])
+    for index, beat in enumerate(beats):
+        shot = by_id.get(beat.get("shotId"))
+        if not shot:
+            raise FilmError("floating highlight references unknown shot: {0}".format(beat.get("id")))
+        frame = int(beat.get("globalFrame"))
+        info = clips.get(shot["id"])
+        if info is None:
+            raise FilmError("floating highlight requires a clip-backed shot: {0}".format(shot["id"]))
+        source_frame = int(beat.get("sourceFrame"))
+        descriptor = _target_descriptor(info.get("entry", {}), beat["targetId"], source_frame,
+                                        beat.get("capturePhase"), catalog)
+        center, size, radii_px, viewport_width, viewport_height, cutout = _descriptor_geometry(descriptor)
+        x, z = target_to_ui(shot, center)
+        width = size[0] * UI_W
+        height = size[1] * UI_H
+        radii = [max(0.001, min(value * UI_W / viewport_width,
+                                min(width, height) / 2.0)) for value in radii_px]
+        face = shot.get("face", "front")
+        sign = 1.0 if face == "back" else -1.0
+        name = "FloatingHighlight.{0}.{1}".format(beat["id"], index)
+        cutout_path = safe_catalog_path(paths["ui"], cutout["path"],
+                                        "floating highlight cutout {0}".format(beat["id"]))
+        expected_cutout_hash = cutout.get("sha256", cutout.get("contentSha256"))
+        actual_cutout_hash = sha256_file(cutout_path)
+        if actual_cutout_hash != expected_cutout_hash:
+            raise FilmError("floating highlight cutout hash mismatch: {0}".format(beat["id"]))
+        cutout_image = _load_image(cutout_path)
+        padding = cutout.get("paddingPx", [0, 0])
+        if isinstance(padding, (int, float, str)):
+            padding = [padding, padding]
+        if not isinstance(padding, (list, tuple)) or len(padding) != 2:
+            raise FilmError("floating highlight cutout paddingPx must be a two-value pair")
+        padding_x, padding_y = float(padding[0]), float(padding[1])
+        image_width = max(1.0, float(getattr(cutout_image, "size", [1, 1])[0]))
+        image_height = max(1.0, float(getattr(cutout_image, "size", [1, 1])[1]))
+        uv_bounds = (padding_x / image_width, padding_y / image_height,
+                     1.0 - padding_x / image_width, 1.0 - padding_y / image_height)
+        front_mat, edge_mat = _highlight_materials(name, cutout_image, hero, floating)
+        extrusion = float(
+            floating["openingExtrusionM"]
+            if beat["shotId"] == "assistant-research"
+            else floating["extrusionM"])
+        peak_lift = float(
+            floating["openingLiftM"]
+            if beat["shotId"] == "assistant-research"
+            else floating["liftM"])
+        panel = add_mesh_object(scene, make_rounded_panel_mesh(
+            name + ".mesh", width, extrusion, height, radii),
+            name, edge_mat, parent=slab)
+        bevel = panel.modifiers.new("Rounded bevel", "BEVEL")
+        bevel.width = float(floating["bevelM"])
+        bevel.segments = 3
+        cap_name = "FloatingFront.{0}.{1}".format(beat["id"], index)
+        cap_mesh = make_rounded_plane_mesh(cap_name + ".mesh", width, height, radii,
+                                           max(4, CORNER_SEGMENTS), uv_bounds=uv_bounds)
+        cap = add_mesh_object(scene, cap_mesh, cap_name, front_mat, parent=slab)
+        back_name = "FloatingBack.{0}.{1}".format(beat["id"], index)
+        back = add_mesh_object(scene, make_rounded_plane_mesh(
+            back_name + ".mesh", width, height, radii, max(4, CORNER_SEGMENTS),
+            uv_bounds=uv_bounds), back_name, front_mat, parent=slab)
+        base_y = sign * (SLAB_HALF_T + UI_OFFSET + 0.0008)
+        cap_offset = extrusion / 2.0 + 0.0001
+        start = max(1, frame - 6)
+        keys = [start, max(1, frame - 1), frame, min(total, frame + 8), min(total, frame + 18)]
+        scales = [0.98, 1.0, min(1.02, float(floating["maxScale"])), 1.015, 1.0]
+        shoulder_lift = min(0.006, peak_lift / 2.0)
+        lifts = [0.0, shoulder_lift, peak_lift, shoulder_lift, 0.0]
+        object_specs = ((panel, 0.0, 1.0), (cap, sign * cap_offset, -1.0 if face == "back" else 1.0),
+                        (back, -sign * cap_offset, -1.0 if face == "back" else 1.0))
+        for obj, surface_offset, face_scale in object_specs:
+            obj.location = (x, base_y + surface_offset, z)
+            obj.scale = (face_scale, 1.0, 1.0)
+            obj.hide_render = True
+            obj.keyframe_insert(data_path="hide_render", frame=max(1, start - 1))
+            obj.hide_render = False
+            obj.keyframe_insert(data_path="hide_render", frame=start)
+            for key, scale, lift in zip(keys, scales, lifts):
+                obj.location = (x, base_y + surface_offset + sign * lift, z)
+                obj.scale = (face_scale * scale, scale, scale)
+                obj.keyframe_insert(data_path="location", frame=key)
+                obj.keyframe_insert(data_path="scale", frame=key)
+            obj.hide_render = True
+            obj.keyframe_insert(data_path="hide_render", frame=min(total, frame + 19))
+            obj.location = (x, base_y + surface_offset, z)
+            obj.scale = (face_scale, 1.0, 1.0)
+        built.append({"id": beat["id"], "targetId": beat["targetId"],
+                      "panel": name, "front": cap_name, "back": back_name,
+                      "shotId": shot["id"], "globalFrame": frame,
+                      "sourceFrame": source_frame, "centerNormalized": center,
+                      "sizeNormalized": size, "cornerRadiiPx": radii_px,
+                      "cutout": {"path": cutout["path"], "sha256": expected_cutout_hash,
+                                 "paddingPx": [padding_x, padding_y]},
+                      "extrusionM": extrusion,
+                      "liftM": peak_lift,
+                      "bevelM": float(floating["bevelM"])})
+    manifest["floating_highlights"] = built
 
 
 def build_cursor_tracks(scene, slab, catalog_index, paths, materials, manifest):
@@ -1780,9 +2238,10 @@ def build_cursor_tracks(scene, slab, catalog_index, paths, materials, manifest):
 
     def point(info, event):
         nx, ny = float(event["nx"]), float(event["ny"])
-        x = (nx - 0.5) * UI_W
+        crop = info["crop"]
+        x = (nx - crop["center"][0]) * UI_W / crop["scale"][0]
         if info["face"] == "back": x *= -1.0
-        return (x, (0.5 - ny) * UI_H)
+        return ((x, (crop["center"][1] - ny) * UI_H / crop["scale"][1]))
 
     for info in FILM_CLIP_INFO:
         shot = info["shot"]
@@ -1815,6 +2274,11 @@ def build_cursor_tracks(scene, slab, catalog_index, paths, materials, manifest):
         trim_zero = info["trim_start"] - 1
         events = [event for event in events
                   if trim_zero <= int(event["frame"]) <= info["trim_end"] - 1]
+        crop = info["crop"]
+        for event in events:
+            if (not crop["center"][0] - crop["scale"][0] / 2.0 <= float(event["nx"]) <= crop["center"][0] + crop["scale"][0] / 2.0 or
+                    not crop["center"][1] - crop["scale"][1] / 2.0 <= float(event["ny"]) <= crop["center"][1] + crop["scale"][1] / 2.0):
+                raise FilmError("shot {0} cursor event falls outside its UI crop window".format(shot["id"]))
         if not events:
             # A valid capture may simply not use a pointer.  Do not invent one,
             # and do not turn an empty timeline into a build failure.
@@ -2244,7 +2708,22 @@ def validate_delivery_dependencies(strip, paths):
     if missing:
         raise FilmError("non-portable delivery dependencies:\n  - {0}".format(
             "\n  - ".join(missing)))
-    return {"images": image_count, "sounds": sound_count, "missing": 0}
+    return delivery_dependency_summary(strip)
+
+
+def delivery_dependency_summary(strip):
+    """Return the fingerprinted dependency counts without remapping paths.
+
+    The pre-render receipt gate needs these deterministic scene values, but
+    changing Blender's relative image paths before rendering can alter sequence
+    resolution. Full path validation and remapping happen only after render.
+    """
+    return {
+        "images": sum(1 for image in bpy.data.images
+                      if image.source == "FILE" and image.filepath),
+        "sounds": 1 if strip is not None and getattr(strip, "sound", None) else 0,
+        "missing": 0,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -2585,6 +3064,19 @@ def validate_editorial_and_focus(shotlist, environment):
                 not _integer(callout.get("fadeFrames")) or
                 not 4 <= callout["fadeFrames"] <= 12):
             raise FilmError("{0} has malformed position, font, timing, or fade".format(label))
+        transition = callout.get("transition")
+        if (not isinstance(transition, dict) or
+                not isinstance(transition.get("entranceOffsetM"), list) or
+                len(transition["entranceOffsetM"]) != 2 or
+                not all(_finite_number(value) for value in transition["entranceOffsetM"]) or
+                not isinstance(transition.get("exitOffsetM"), list) or
+                len(transition["exitOffsetM"]) != 2 or
+                not all(_finite_number(value) for value in transition["exitOffsetM"]) or
+                not _finite_number(transition.get("startScale")) or
+                not _finite_number(transition.get("exitScale")) or
+                not 0.7 <= transition["startScale"] < 1.0 or
+                not 0.8 <= transition["exitScale"] <= 1.0):
+            raise FilmError("{0}.transition must specify bounded slide offsets and scales".format(label))
         shot_frames = shot.get("frames")
         if (not isinstance(shot_frames, dict) or frames["start"] < shot_frames.get("start", 0) or
                 frames["end"] > shot_frames.get("end", 0) or
@@ -2607,6 +3099,27 @@ def validate_editorial_and_focus(shotlist, environment):
     if any(count != 1 for count in group_counts.values()):
         raise FilmError("editorialCallouts must contain exactly one callout per expected group")
 
+    floating = shotlist.get("floatingHighlights")
+    if not isinstance(floating, list) or len(floating) != 7:
+        raise FilmError("shotlist.floatingHighlights must contain exactly seven authored beats")
+    if "cropOverrides" in shotlist or "uiCropScale" in glass or "uiCropCenter" in glass:
+        raise FilmError("penultimate recipe must not contain Blender-side crop controls")
+    seen_targets = set()
+    for index, beat in enumerate(floating):
+        label = "floatingHighlights[{0}]".format(index)
+        if not isinstance(beat, dict):
+            raise FilmError(label + " must be an object")
+        ident, target = beat.get("id"), beat.get("targetId")
+        shot = by_id.get(beat.get("shotId"))
+        frame, source_frame = beat.get("globalFrame"), beat.get("sourceFrame")
+        if (not isinstance(ident, str) or not ident.strip() or
+                not isinstance(target, str) or not target.strip() or target in seen_targets or
+                not isinstance(shot, dict) or not _integer(frame) or
+                frame < shot.get("frames", {}).get("start", 0) or frame > shot.get("frames", {}).get("end", 0) or
+                not _integer(source_frame) or source_frame < 1 or
+                beat.get("capturePhase") not in ("before-action", "after-action")):
+            raise FilmError(label + " has malformed semantic target or timing")
+        seen_targets.add(target)
     camera = environment.get("camera")
     moves = camera.get("focusMoves") if isinstance(camera, dict) else None
     if not isinstance(camera, dict) or not isinstance(moves, list) or len(moves) < 2:
@@ -2653,8 +3166,10 @@ def validate_editorial_and_focus(shotlist, environment):
         if not isinstance(target, list) or len(target) != 2 or not all(_finite_number(v) for v in target):
             raise FilmError("{0}.targetOffsetM must contain finite x/z offsets".format(label))
         lenses = [move.get("lensStartMM"), move.get("lensPeakMM"), move.get("lensEndMM")]
-        if (not all(_finite_number(v) and 48 <= v <= 58 for v in lenses) or
-                move["lensPeakMM"] < max(move["lensStartMM"], move["lensEndMM"]) or
+        lens_min = max(24.0, float(baseline) * 0.65)
+        lens_max = float(baseline) * 1.25
+        if (not all(_finite_number(v) and lens_min <= v <= lens_max for v in lenses) or
+                move["lensPeakMM"] <= max(move["lensStartMM"], move["lensEndMM"]) or
                 move["lensStartMM"] != baseline or move["lensEndMM"] != baseline):
             raise FilmError("{0} has invalid lens baseline or peak".format(label))
         window = (start, end)
@@ -2775,6 +3290,8 @@ def build(args):
     shotlist = load_json(paths["shotlist"])
     environment = load_json(paths["environment"])
     catalog = load_json(paths["catalog"])
+    global ENVIRONMENT
+    ENVIRONMENT = environment
     validate_film_contract(shotlist)
     validate_editorial_and_focus(shotlist, environment)
     validate_data_paths(environment, paths)
@@ -2799,10 +3316,14 @@ def build(args):
     if shots[-1]["frames"]["end"] != expected:
         raise FilmError("shotlist does not end at frame {0}".format(expected))
 
+    design_language, design_language_path = load_design_language(environment, paths["repo"])
+    global DESIGN_LANGUAGE
+    DESIGN_LANGUAGE = design_language
     catalog_index = build_catalog_index(catalog, paths["ui"])
     profile = (args.get("profile") or
                ("final" if args.get("quality") == "final" else "preview"))
     sc = ensure_scene("skybao-film", cfg, args.get("device", "auto"), profile)
+    configure_highlight_compositor(sc)
 
     # --- materials ---
     materials = {
@@ -2866,12 +3387,26 @@ def build(args):
 
     build_ui_planes(sc, slab, shotlist, catalog_index, paths, manifest)
     build_editorial_callouts(sc, slab, shotlist, manifest)
+    build_floating_highlights(sc, slab, shotlist, manifest, catalog, paths)
     build_cursor_tracks(sc, slab, catalog_index, paths, materials, manifest)
     build_flips(slab, shotlist, cfg["total"])
     set_scene_animation_easing(sc, shotlist)
+    # Save the editable scene at its neutral hero rest pose. Animated tracks
+    # remain fully keyed; validators and editors should not open on a pulse.
+    sc.frame_set(1)
     sound_strip = build_sound(sc, paths, manifest)
 
+    manifest["design_language"] = {
+        "path": os.path.relpath(design_language_path, paths["repo"]),
+        "schemaVersion": design_language.get("schemaVersion"),
+    }
     write_manifest(cfg, paths, manifest)
+    # The receipt gate runs before the expensive full-frame render. Its input
+    # fingerprint includes scene metadata, so write the deterministic
+    # dependency summary into the pre-render manifest exactly as the final
+    # manifest will. Do not remap Blender's image paths until after rendering.
+    manifest["portable_dependencies"] = delivery_dependency_summary(sound_strip)
+    write_build_manifest(sc, cfg, paths, catalog, manifest)
     if args.get("receipt") and args.get("quality"):
         subprocess.run([os.environ.get("NODE_BIN", "node"), os.path.join(paths["film_dir"], "receipt-gate.mjs"),
                         "--repo", paths["repo"], "--manifest", paths["build_manifest"],
@@ -2889,9 +3424,12 @@ def build(args):
         rendered = True
     RENDER_RUNTIME["elapsedRenderSeconds"] = (
         time.perf_counter() - render_started if rendered else 0.0)
+    # Validate/remap only after rendering so Image/Sequence strips keep their
+    # original resolution context. The final manifest is still rewritten with
+    # observed render elapsed time.
     relink_assets_for_delivery(sound_strip, paths)
-    manifest["portable_dependencies"] = validate_delivery_dependencies(
-        sound_strip, paths)
+    if validate_delivery_dependencies(sound_strip, paths) != manifest["portable_dependencies"]:
+        raise FilmError("delivery dependency summary changed during render")
     saved = save_blend(sc, paths)
     validate_delivery_dependencies(sound_strip, paths)
     built_manifest = write_build_manifest(sc, cfg, paths, catalog, manifest)
@@ -2929,6 +3467,7 @@ def main(argv):
             shotlist = load_json(paths["shotlist"])
             environment = load_json(paths["environment"])
             catalog = load_json(paths["catalog"])
+            ENVIRONMENT = environment
             validate_film_contract(shotlist)
             validate_editorial_and_focus(shotlist, environment)
             validate_data_paths(environment, paths)

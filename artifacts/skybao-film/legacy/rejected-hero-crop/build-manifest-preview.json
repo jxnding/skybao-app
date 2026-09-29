@@ -1,0 +1,1185 @@
+{
+  "audio": {
+    "path": "artifacts/skybao-film/audio/skybao-mix.wav",
+    "sha256": "ff4c45fa4973e7c71936ec4cdb93e3d4f9283aa5de4aa699e6a7ed22197f2833"
+  },
+  "blender": {
+    "engine": "CYCLES",
+    "objects": 70,
+    "version": "5.2.0 LTS"
+  },
+  "environment": {
+    "id": "skybao-glass-atmosphere",
+    "path": "frontend/scripts/video/film/environment.json",
+    "seed": 830194,
+    "sha256": "eaca80cc68dde6799474dd18d25bb796e3c417c4d985914230e164cdec13fffe"
+  },
+  "format": {
+    "fps": 30,
+    "frames": 1200,
+    "height": 1080,
+    "width": 1920
+  },
+  "inputAssets": {
+    "builder": {
+      "path": "frontend/scripts/video/film/build-blender.py",
+      "sha256": "374cded294f63f6195a95b8cb0b843ea6f03c59c5c6d1a1ab9c3c11ff8460d71"
+    },
+    "cloudCard-far": {
+      "path": "frontend/public/clouds-dark.webp",
+      "sha256": "939f5269e5da0706eedf025463fcadf0513b512f9ea22ccbc0407b328fdb4931"
+    },
+    "cloudCard-mid": {
+      "path": "frontend/public/clouds-dark.webp",
+      "sha256": "939f5269e5da0706eedf025463fcadf0513b512f9ea22ccbc0407b328fdb4931"
+    },
+    "cloudCard-near": {
+      "path": "frontend/public/clouds-dark.webp",
+      "sha256": "939f5269e5da0706eedf025463fcadf0513b512f9ea22ccbc0407b328fdb4931"
+    },
+    "cloudTexture": {
+      "path": "frontend/public/clouds-dark.webp",
+      "sha256": "939f5269e5da0706eedf025463fcadf0513b512f9ea22ccbc0407b328fdb4931"
+    },
+    "consumer": {
+      "path": "frontend/scripts/video/film/build-blender.py",
+      "sha256": "374cded294f63f6195a95b8cb0b843ea6f03c59c5c6d1a1ab9c3c11ff8460d71"
+    },
+    "cursorHelper": {
+      "path": "frontend/scripts/video/film/cursor_window.py",
+      "sha256": "9778375e5d0ead4865539f3869c9ed7a6b02e2071b8b0e7a6fb4a73a2892340a"
+    },
+    "sceneContract": {
+      "path": "frontend/scripts/video/film/scene-contract.py",
+      "sha256": "5b09c2bb339e4107859a0e6612dbbb05d3b6cb9883ed8ce1779229560937a060"
+    },
+    "shotlist": {
+      "path": "frontend/scripts/video/film/shotlist.json",
+      "sha256": "8a582adba80ff0af92386635297368392ac636c92c4f7d4f4184ead2e0254c2e"
+    },
+    "uiCatalog": {
+      "path": "artifacts/skybao-ui/catalog.json",
+      "sha256": "74c7964d5916ffb603080d21d1089fb2462b1149ec805b9b9714a39f9d5ef513"
+    }
+  },
+  "render": {
+    "activeDeviceIds": [
+      "METAL_Apple M1 Max (GPU - 32 cores)"
+    ],
+    "adaptiveThreshold": 0.029999999329447746,
+    "animatedSeed": false,
+    "bounces": {
+      "causticsReflective": false,
+      "causticsRefractive": false,
+      "diffuse": 2,
+      "glossy": 4,
+      "indirectClamp": 10,
+      "max": 8,
+      "transmission": 8,
+      "transparent": 8
+    },
+    "computeDeviceType": "METAL",
+    "denoise": {
+      "inputPasses": "RGB_ALBEDO_NORMAL",
+      "prefilter": "ACCURATE",
+      "quality": "HIGH",
+      "type": "OPENIMAGEDENOISE",
+      "useGpu": true
+    },
+    "deviceFallback": null,
+    "deviceRequested": "metal",
+    "deviceResolved": "metal",
+    "devices": [
+      {
+        "id": "CPU",
+        "name": "Apple M1 Max",
+        "type": "CPU",
+        "use": false
+      },
+      {
+        "id": "METAL_Apple M1 Max (GPU - 32 cores)",
+        "name": "Apple M1 Max (GPU - 32 cores)",
+        "type": "METAL",
+        "use": true
+      }
+    ],
+    "elapsedRenderSeconds": 3094.9243944580085,
+    "engine": "CYCLES",
+    "metalRT": "AUTO",
+    "persistentData": true,
+    "profile": "preview",
+    "resolutionPercentage": 50,
+    "samples": 32,
+    "seed": 830194
+  },
+  "scene": {
+    "area_flips": 4,
+    "cursor_logical_tracks": 16,
+    "cursor_mesh_datablocks": 2,
+    "cursor_physical_objects": 6,
+    "cursor_physical_rigs": 2,
+    "cursor_track_provenance": [
+      {
+        "activityWindows": [
+          [
+            163,
+            168
+          ],
+          [
+            186,
+            192
+          ]
+        ],
+        "eventCount": 5,
+        "face": "front",
+        "globalFrames": [
+          163,
+          207
+        ],
+        "number": 3,
+        "shot": "assistant-draft",
+        "source": "clip:assistant-draft",
+        "sourceFrames": [
+          18,
+          62
+        ],
+        "timeline": "artifacts/skybao-ui/clips/assistant/assistant-draft/timeline.json"
+      },
+      {
+        "activityWindows": [
+          [
+            215,
+            228
+          ]
+        ],
+        "eventCount": 12,
+        "face": "front",
+        "globalFrames": [
+          208,
+          251
+        ],
+        "number": 4,
+        "shot": "area-nav-assistant-knowledge",
+        "source": "clip:area-nav-assistant-knowledge",
+        "sourceFrames": [
+          1,
+          44
+        ],
+        "timeline": "artifacts/skybao-ui/clips/assistant/area-nav-assistant-knowledge/timeline.json"
+      },
+      {
+        "activityWindows": [
+          [
+            274,
+            280
+          ],
+          [
+            334,
+            340
+          ]
+        ],
+        "eventCount": 2,
+        "face": "back",
+        "globalFrames": [
+          252,
+          341
+        ],
+        "number": 5,
+        "shot": "knowledge-file-search",
+        "source": "clip:knowledge-file-search",
+        "sourceFrames": [
+          1,
+          90
+        ],
+        "timeline": "artifacts/skybao-ui/clips/knowledge/knowledge-file-search/timeline.json"
+      },
+      {
+        "activityWindows": [
+          [
+            368,
+            374
+          ]
+        ],
+        "eventCount": 4,
+        "face": "back",
+        "globalFrames": [
+          342,
+          386
+        ],
+        "number": 6,
+        "shot": "knowledge-source-preview",
+        "source": "clip:knowledge-source-preview",
+        "sourceFrames": [
+          1,
+          45
+        ],
+        "timeline": "artifacts/skybao-ui/clips/knowledge/knowledge-source-preview/timeline.json"
+      },
+      {
+        "activityWindows": [
+          [
+            387,
+            392
+          ],
+          [
+            442,
+            447
+          ]
+        ],
+        "eventCount": 8,
+        "face": "back",
+        "globalFrames": [
+          387,
+          447
+        ],
+        "number": 7,
+        "shot": "knowledge-data-analysis",
+        "source": "clip:knowledge-data-analysis",
+        "sourceFrames": [
+          30,
+          90
+        ],
+        "timeline": "artifacts/skybao-ui/clips/knowledge/knowledge-data-analysis/timeline.json"
+      },
+      {
+        "activityWindows": [
+          [
+            455,
+            468
+          ]
+        ],
+        "eventCount": 12,
+        "face": "back",
+        "globalFrames": [
+          448,
+          491
+        ],
+        "number": 8,
+        "shot": "area-nav-knowledge-communications",
+        "source": "clip:area-nav-knowledge-communications",
+        "sourceFrames": [
+          1,
+          44
+        ],
+        "timeline": "artifacts/skybao-ui/clips/knowledge/area-nav-knowledge-communications/timeline.json"
+      },
+      {
+        "activityWindows": [
+          [
+            518,
+            524
+          ],
+          [
+            562,
+            568
+          ]
+        ],
+        "eventCount": 5,
+        "face": "front",
+        "globalFrames": [
+          492,
+          585
+        ],
+        "number": 9,
+        "shot": "communications-filter-select",
+        "source": "clip:communications-filter-select",
+        "sourceFrames": [
+          1,
+          94
+        ],
+        "timeline": "artifacts/skybao-ui/clips/communications/communications-filter-select/timeline.json"
+      },
+      {
+        "activityWindows": [
+          [
+            586,
+            591
+          ]
+        ],
+        "eventCount": 1,
+        "face": "front",
+        "globalFrames": [
+          586,
+          647
+        ],
+        "number": 10,
+        "shot": "communications-draft-review",
+        "source": "clip:communications-draft-review",
+        "sourceFrames": [
+          42,
+          103
+        ],
+        "timeline": "artifacts/skybao-ui/clips/communications/communications-draft-review/timeline.json"
+      },
+      {
+        "activityWindows": [
+          [
+            672,
+            678
+          ]
+        ],
+        "eventCount": 4,
+        "face": "front",
+        "globalFrames": [
+          648,
+          687
+        ],
+        "number": 11,
+        "shot": "communications-source-preview",
+        "source": "clip:communications-source-preview",
+        "sourceFrames": [
+          1,
+          40
+        ],
+        "timeline": "artifacts/skybao-ui/clips/communications/communications-source-preview/timeline.json"
+      },
+      {
+        "activityWindows": [
+          [
+            695,
+            708
+          ]
+        ],
+        "eventCount": 12,
+        "face": "front",
+        "globalFrames": [
+          688,
+          731
+        ],
+        "number": 12,
+        "shot": "area-nav-communications-work",
+        "source": "clip:area-nav-communications-work",
+        "sourceFrames": [
+          1,
+          44
+        ],
+        "timeline": "artifacts/skybao-ui/clips/communications/area-nav-communications-work/timeline.json"
+      },
+      {
+        "activityWindows": [
+          [
+            764,
+            824
+          ]
+        ],
+        "eventCount": 61,
+        "face": "back",
+        "globalFrames": [
+          732,
+          824
+        ],
+        "number": 13,
+        "shot": "work-board-drag",
+        "source": "clip:work-board-drag",
+        "sourceFrames": [
+          1,
+          93
+        ],
+        "timeline": "artifacts/skybao-ui/clips/work/work-board-drag/timeline.json"
+      },
+      {
+        "activityWindows": [
+          [
+            855,
+            861
+          ]
+        ],
+        "eventCount": 4,
+        "face": "back",
+        "globalFrames": [
+          825,
+          875
+        ],
+        "number": 14,
+        "shot": "work-task-approval",
+        "source": "clip:work-task-approval",
+        "sourceFrames": [
+          45,
+          95
+        ],
+        "timeline": "artifacts/skybao-ui/clips/work/work-task-approval/timeline.json"
+      },
+      {
+        "activityWindows": [
+          [
+            904,
+            910
+          ]
+        ],
+        "eventCount": 4,
+        "face": "back",
+        "globalFrames": [
+          876,
+          927
+        ],
+        "number": 15,
+        "shot": "work-agent-run-detail",
+        "source": "clip:work-agent-run-detail",
+        "sourceFrames": [
+          1,
+          52
+        ],
+        "timeline": "artifacts/skybao-ui/clips/work/work-agent-run-detail/timeline.json"
+      },
+      {
+        "activityWindows": [
+          [
+            935,
+            948
+          ]
+        ],
+        "eventCount": 12,
+        "face": "back",
+        "globalFrames": [
+          928,
+          971
+        ],
+        "number": 16,
+        "shot": "area-nav-work-admin",
+        "source": "clip:area-nav-work-admin",
+        "sourceFrames": [
+          1,
+          44
+        ],
+        "timeline": "artifacts/skybao-ui/clips/work/area-nav-work-admin/timeline.json"
+      },
+      {
+        "activityWindows": [
+          [
+            1000,
+            1006
+          ]
+        ],
+        "eventCount": 4,
+        "face": "front",
+        "globalFrames": [
+          972,
+          1061
+        ],
+        "number": 17,
+        "shot": "admin-privacy-to-users",
+        "source": "clip:admin-privacy-to-users",
+        "sourceFrames": [
+          1,
+          90
+        ],
+        "timeline": "artifacts/skybao-ui/clips/admin/admin-privacy-to-users/timeline.json"
+      },
+      {
+        "activityWindows": [
+          [
+            1090,
+            1096
+          ]
+        ],
+        "eventCount": 4,
+        "face": "front",
+        "globalFrames": [
+          1062,
+          1151
+        ],
+        "number": 18,
+        "shot": "admin-users-to-models",
+        "source": "clip:admin-users-to-models",
+        "sourceFrames": [
+          1,
+          90
+        ],
+        "timeline": "artifacts/skybao-ui/clips/admin/admin-users-to-models/timeline.json"
+      }
+    ],
+    "cursor_track_skips": [
+      {
+        "reason": "timeline has no cursor events",
+        "shot": "assistant-research"
+      },
+      {
+        "reason": "timeline has no cursor events",
+        "shot": "assistant-answer-typing"
+      }
+    ],
+    "cursor_tracks": 16,
+    "editorial_callouts": 5,
+    "emphasis_beats": [
+      {
+        "crop": {
+          "center": [
+            0.5,
+            0.5
+          ],
+          "scale": [
+            0.58,
+            0.58
+          ]
+        },
+        "frame": 11,
+        "id": "assistant-source-1",
+        "object": "Emphasis.assistant-source-1.0",
+        "overlay": "ElementPop.assistant-source-1.0",
+        "radiusM": 0.16,
+        "shotId": "assistant-research",
+        "sourceNormalized": [
+          0.352,
+          0.38
+        ],
+        "sourceSizeNormalized": [
+          0.18,
+          0.06
+        ]
+      },
+      {
+        "crop": {
+          "center": [
+            0.5,
+            0.5
+          ],
+          "scale": [
+            0.58,
+            0.58
+          ]
+        },
+        "frame": 35,
+        "id": "assistant-source-2",
+        "object": "Emphasis.assistant-source-2.1",
+        "overlay": "ElementPop.assistant-source-2.1",
+        "radiusM": 0.16,
+        "shotId": "assistant-research",
+        "sourceNormalized": [
+          0.531,
+          0.38
+        ],
+        "sourceSizeNormalized": [
+          0.18,
+          0.06
+        ]
+      },
+      {
+        "crop": {
+          "center": [
+            0.5,
+            0.5
+          ],
+          "scale": [
+            0.58,
+            0.58
+          ]
+        },
+        "frame": 59,
+        "id": "assistant-source-3",
+        "object": "Emphasis.assistant-source-3.2",
+        "overlay": "ElementPop.assistant-source-3.2",
+        "radiusM": 0.16,
+        "shotId": "assistant-research",
+        "sourceNormalized": [
+          0.352,
+          0.431
+        ],
+        "sourceSizeNormalized": [
+          0.18,
+          0.06
+        ]
+      },
+      {
+        "crop": {
+          "center": [
+            0.5,
+            0.5
+          ],
+          "scale": [
+            0.58,
+            0.58
+          ]
+        },
+        "frame": 83,
+        "id": "assistant-source-4",
+        "object": "Emphasis.assistant-source-4.3",
+        "overlay": "ElementPop.assistant-source-4.3",
+        "radiusM": 0.16,
+        "shotId": "assistant-research",
+        "sourceNormalized": [
+          0.531,
+          0.431
+        ],
+        "sourceSizeNormalized": [
+          0.18,
+          0.06
+        ]
+      }
+    ],
+    "environment": "skybao-glass-atmosphere",
+    "portable_dependencies": {
+      "images": 20,
+      "missing": 0,
+      "sounds": 1
+    },
+    "shotlist_path": "frontend/scripts/video/film/shotlist.json",
+    "shots": [
+      {
+        "face": "front",
+        "frames": [
+          1,
+          90
+        ],
+        "group": "assistant",
+        "id": "assistant-research",
+        "kind": "action",
+        "number": 1,
+        "source": "clip:assistant-research"
+      },
+      {
+        "face": "front",
+        "frames": [
+          91,
+          162
+        ],
+        "group": "assistant",
+        "id": "assistant-answer-typing",
+        "kind": "action",
+        "number": 2,
+        "source": "clip:assistant-answer-typing"
+      },
+      {
+        "face": "front",
+        "frames": [
+          163,
+          207
+        ],
+        "group": "assistant",
+        "id": "assistant-draft",
+        "kind": "action",
+        "number": 3,
+        "source": "clip:assistant-draft"
+      },
+      {
+        "face": "front",
+        "frames": [
+          208,
+          251
+        ],
+        "group": "assistant",
+        "id": "area-nav-assistant-knowledge",
+        "kind": "navigation",
+        "number": 4,
+        "source": "clip:area-nav-assistant-knowledge"
+      },
+      {
+        "face": "back",
+        "frames": [
+          252,
+          341
+        ],
+        "group": "knowledge",
+        "id": "knowledge-file-search",
+        "kind": "action",
+        "number": 5,
+        "source": "clip:knowledge-file-search"
+      },
+      {
+        "face": "back",
+        "frames": [
+          342,
+          386
+        ],
+        "group": "knowledge",
+        "id": "knowledge-source-preview",
+        "kind": "action",
+        "number": 6,
+        "source": "clip:knowledge-source-preview"
+      },
+      {
+        "face": "back",
+        "frames": [
+          387,
+          447
+        ],
+        "group": "knowledge",
+        "id": "knowledge-data-analysis",
+        "kind": "action",
+        "number": 7,
+        "source": "clip:knowledge-data-analysis"
+      },
+      {
+        "face": "back",
+        "frames": [
+          448,
+          491
+        ],
+        "group": "knowledge",
+        "id": "area-nav-knowledge-communications",
+        "kind": "navigation",
+        "number": 8,
+        "source": "clip:area-nav-knowledge-communications"
+      },
+      {
+        "face": "front",
+        "frames": [
+          492,
+          585
+        ],
+        "group": "communications",
+        "id": "communications-filter-select",
+        "kind": "action",
+        "number": 9,
+        "source": "clip:communications-filter-select"
+      },
+      {
+        "face": "front",
+        "frames": [
+          586,
+          647
+        ],
+        "group": "communications",
+        "id": "communications-draft-review",
+        "kind": "action",
+        "number": 10,
+        "source": "clip:communications-draft-review"
+      },
+      {
+        "face": "front",
+        "frames": [
+          648,
+          687
+        ],
+        "group": "communications",
+        "id": "communications-source-preview",
+        "kind": "action",
+        "number": 11,
+        "source": "clip:communications-source-preview"
+      },
+      {
+        "face": "front",
+        "frames": [
+          688,
+          731
+        ],
+        "group": "communications",
+        "id": "area-nav-communications-work",
+        "kind": "navigation",
+        "number": 12,
+        "source": "clip:area-nav-communications-work"
+      },
+      {
+        "face": "back",
+        "frames": [
+          732,
+          824
+        ],
+        "group": "work",
+        "id": "work-board-drag",
+        "kind": "action",
+        "number": 13,
+        "source": "clip:work-board-drag"
+      },
+      {
+        "face": "back",
+        "frames": [
+          825,
+          875
+        ],
+        "group": "work",
+        "id": "work-task-approval",
+        "kind": "action",
+        "number": 14,
+        "source": "clip:work-task-approval"
+      },
+      {
+        "face": "back",
+        "frames": [
+          876,
+          927
+        ],
+        "group": "work",
+        "id": "work-agent-run-detail",
+        "kind": "action",
+        "number": 15,
+        "source": "clip:work-agent-run-detail"
+      },
+      {
+        "face": "back",
+        "frames": [
+          928,
+          971
+        ],
+        "group": "work",
+        "id": "area-nav-work-admin",
+        "kind": "navigation",
+        "number": 16,
+        "source": "clip:area-nav-work-admin"
+      },
+      {
+        "face": "front",
+        "frames": [
+          972,
+          1061
+        ],
+        "group": "admin",
+        "id": "admin-privacy-to-users",
+        "kind": "action",
+        "number": 17,
+        "source": "clip:admin-privacy-to-users"
+      },
+      {
+        "face": "front",
+        "frames": [
+          1062,
+          1151
+        ],
+        "group": "admin",
+        "id": "admin-users-to-models",
+        "kind": "action",
+        "number": 18,
+        "source": "clip:admin-users-to-models"
+      },
+      {
+        "face": "front",
+        "frames": [
+          1152,
+          1200
+        ],
+        "group": "admin",
+        "id": "admin-models-final",
+        "kind": "final-hold",
+        "number": 19,
+        "source": "still:admin-models"
+      }
+    ],
+    "sound": "skybao-mix.wav",
+    "ui_planes": 19
+  },
+  "schemaVersion": 2,
+  "shotlist": {
+    "path": "frontend/scripts/video/film/shotlist.json",
+    "sha256": "8a582adba80ff0af92386635297368392ac636c92c4f7d4f4184ead2e0254c2e"
+  },
+  "uiCatalog": {
+    "aggregateSha256": "c288346c2a55d92ef5ca4397ed16e0453c06fb32907fc5774c700685ff03adc7",
+    "path": "artifacts/skybao-ui/catalog.json",
+    "sha256": "74c7964d5916ffb603080d21d1089fb2462b1149ec805b9b9714a39f9d5ef513"
+  },
+  "usedUiAssets": [
+    {
+      "contentSha256": "6a93fa424796a9840f1dfca86ce42fe40db13a774af79c4d02dac3c56f958522",
+      "framing": "workspace",
+      "id": "admin-privacy-to-users",
+      "ownerId": "admin-privacy-to-users",
+      "recipeSha256": "64696f270861e359a179c134ef79d2183f3997c4c8ae8a93159af950f32f2f69",
+      "recipeVersion": "skybao-capture-v4",
+      "timeline": "clips/admin/admin-privacy-to-users/timeline.json",
+      "timelineSha256": "cb201c95e68c849456b714d6b8dbce8973c88121980d66b0a9de745fd3f9543b",
+      "trimRanges": [
+        [
+          1,
+          90
+        ]
+      ],
+      "type": "clip"
+    },
+    {
+      "contentSha256": "1122a5555b5f8b9a05fb0bcebe8a0c4373a928851f0b7eb45f7dcc2600fc33f9",
+      "framing": "workspace",
+      "id": "admin-users-to-models",
+      "ownerId": "admin-users-to-models",
+      "recipeSha256": "8898a73c0a7f7e8c273298d990dc9c7150c0d8ac11f0ffae1a8df5b3037c0567",
+      "recipeVersion": "skybao-capture-v4",
+      "timeline": "clips/admin/admin-users-to-models/timeline.json",
+      "timelineSha256": "e3ff0ed4d8f571ba35749c96aee6d144ee57f7bbfdfa21d701a8847d687cff97",
+      "trimRanges": [
+        [
+          1,
+          90
+        ]
+      ],
+      "type": "clip"
+    },
+    {
+      "contentSha256": "7bc387e440c24a7224d6ae834327c27aee31270854691f59c37600d08b85b6ba",
+      "framing": "workspace",
+      "id": "area-nav-assistant-knowledge",
+      "ownerId": "area-nav-assistant-knowledge",
+      "recipeSha256": "9c90a1fcaf926886b19ab64ad3aa739c04b93df4ae3f7f80ba0b64e677a4562e",
+      "recipeVersion": "skybao-capture-v4",
+      "timeline": "clips/assistant/area-nav-assistant-knowledge/timeline.json",
+      "timelineSha256": "05ba22374b833ca67b431dde334f4be9c487b72fc9cd619e09ad5b929b63ebcd",
+      "trimRanges": [
+        [
+          1,
+          44
+        ]
+      ],
+      "type": "clip"
+    },
+    {
+      "contentSha256": "ab6ac103ab7073d6f493820bbd6804df3301774a85846975953435a9f65534f6",
+      "framing": "workspace",
+      "id": "area-nav-communications-work",
+      "ownerId": "area-nav-communications-work",
+      "recipeSha256": "fbb97013ee94e5e872689f2f56be07f69c0268347cf08f4982cfefc823210972",
+      "recipeVersion": "skybao-capture-v4",
+      "timeline": "clips/communications/area-nav-communications-work/timeline.json",
+      "timelineSha256": "51629e3f21c10d5a11cc4c4aa6a7c88c42615c4c1e79f39c73e0342b06a67cac",
+      "trimRanges": [
+        [
+          1,
+          44
+        ]
+      ],
+      "type": "clip"
+    },
+    {
+      "contentSha256": "89f78d8b87f7bde04daf4dceef1f5773ec7b517b89566585eafffece0cc37392",
+      "framing": "workspace",
+      "id": "area-nav-knowledge-communications",
+      "ownerId": "area-nav-knowledge-communications",
+      "recipeSha256": "72eb3054cd451085ccf96246a9dd0710fedf1d815196ae0d99abb36e1ac55bdd",
+      "recipeVersion": "skybao-capture-v4",
+      "timeline": "clips/knowledge/area-nav-knowledge-communications/timeline.json",
+      "timelineSha256": "fb531bf8ae40c9442d3e61356c029833ff8e56b7c0b43379919bd7118fe05da6",
+      "trimRanges": [
+        [
+          1,
+          44
+        ]
+      ],
+      "type": "clip"
+    },
+    {
+      "contentSha256": "b8bb4c3b78ecb55b304766f0821582244d478b9ea43425c93e914698ad67e0b3",
+      "framing": "workspace",
+      "id": "area-nav-work-admin",
+      "ownerId": "area-nav-work-admin",
+      "recipeSha256": "27effdd82a3f3d57af24f9e7df176932ee4b827ace3ba58136f59c60fba55846",
+      "recipeVersion": "skybao-capture-v4",
+      "timeline": "clips/work/area-nav-work-admin/timeline.json",
+      "timelineSha256": "951a0a8fef53f39ad736cf916de9d6f49a7d9bdb15e5a74c92e68605b1be3763",
+      "trimRanges": [
+        [
+          1,
+          44
+        ]
+      ],
+      "type": "clip"
+    },
+    {
+      "contentSha256": "2df24610fced6cd259652d43b8393e7727ceed335537479d1f7f98b0e1136e2b",
+      "framing": "workspace",
+      "id": "assistant-answer-typing",
+      "ownerId": "assistant-answer-typing",
+      "recipeSha256": "b2d89a7d1e71d641b3cb6a9901585d2929863efdc8cf6c46e20777ff24c6152d",
+      "recipeVersion": "skybao-capture-v4",
+      "timeline": "clips/assistant/assistant-answer-typing/timeline.json",
+      "timelineSha256": "46383fc3e88f2764450bb64da232c0bc78687501c7276990d9b57d120b0f5f79",
+      "trimRanges": [
+        [
+          1,
+          72
+        ]
+      ],
+      "type": "clip"
+    },
+    {
+      "contentSha256": "79068c1c56a2216a20a602a0621f42d65385e2413602d33674fdb4b243faad3b",
+      "framing": "workspace",
+      "id": "assistant-draft",
+      "ownerId": "assistant-draft",
+      "recipeSha256": "7423e38efe3f0c39747bba099a44557d54cc1cdf1c71918df73bc6f97cbb977c",
+      "recipeVersion": "skybao-capture-v4",
+      "timeline": "clips/assistant/assistant-draft/timeline.json",
+      "timelineSha256": "0d8542e0451167c9d0ac3d9dea508da4c05fcc4bb5be8732a3dfb486578cc68c",
+      "trimRanges": [
+        [
+          18,
+          62
+        ]
+      ],
+      "type": "clip"
+    },
+    {
+      "contentSha256": "941eeed5b70b669430a497f317767dc6b36af2e2135ab3ba1937650dc98349d9",
+      "framing": "workspace",
+      "id": "assistant-research",
+      "ownerId": "assistant-research",
+      "recipeSha256": "c238682132df06b217333db90d212da0eef01242c8b4db763aa751df586e4692",
+      "recipeVersion": "skybao-capture-v4",
+      "timeline": "clips/assistant/assistant-research/timeline.json",
+      "timelineSha256": "e34779546afe097299b1cc0f6b48ec46276e59b21d3a6dfb13f011c95de614cf",
+      "trimRanges": [
+        [
+          1,
+          90
+        ]
+      ],
+      "type": "clip"
+    },
+    {
+      "contentSha256": "77dca98bbb0fd494b7136ef667f9ee0267a1e45d5451513b0282b4cc30ca004e",
+      "framing": "workspace",
+      "id": "communications-draft-review",
+      "ownerId": "communications-draft-review",
+      "recipeSha256": "9a866bd4926df6e5363af45e1d345201418b7d3a50fad2835b12a8032cec6219",
+      "recipeVersion": "skybao-capture-v4",
+      "timeline": "clips/communications/communications-draft-review/timeline.json",
+      "timelineSha256": "bcb715b5b329253446e4108b0ccc50d12334be5a4da42cbd3d19ff9e53488253",
+      "trimRanges": [
+        [
+          42,
+          103
+        ]
+      ],
+      "type": "clip"
+    },
+    {
+      "contentSha256": "6b5836ade76f7c9bd02bf6311a07192121dc3badfde6458761eea03b3b154959",
+      "framing": "workspace",
+      "id": "communications-filter-select",
+      "ownerId": "communications-filter-select",
+      "recipeSha256": "1f17e07dab25dfbd6f9a478d03e3b821d259786ac6b867c249d7904680b52908",
+      "recipeVersion": "skybao-capture-v4",
+      "timeline": "clips/communications/communications-filter-select/timeline.json",
+      "timelineSha256": "2c9280356e3b840016e80c65d984e30404e35c4bfae8e5b3c7451d905acd0ff0",
+      "trimRanges": [
+        [
+          1,
+          94
+        ]
+      ],
+      "type": "clip"
+    },
+    {
+      "contentSha256": "cefc001bb89a776649ff0e6801f4fd81e6630b78c2559cc72b0212b9073a98b7",
+      "framing": "workspace",
+      "id": "communications-source-preview",
+      "ownerId": "communications-source-preview",
+      "recipeSha256": "76c048e8fbe8c46817c151028900c15407246c73aa5d93c3b87d5e836985750a",
+      "recipeVersion": "skybao-capture-v4",
+      "timeline": "clips/communications/communications-source-preview/timeline.json",
+      "timelineSha256": "b23d4e6e1b7aeeab1289d5f00f11c5b0d5dfb1383a64c49aa6c0366d6a807471",
+      "trimRanges": [
+        [
+          1,
+          40
+        ]
+      ],
+      "type": "clip"
+    },
+    {
+      "contentSha256": "187ddd8e9cb5716e98fdb059b8038e27acace546e8f534eb3b2371611ddf7b43",
+      "framing": "workspace",
+      "id": "knowledge-data-analysis",
+      "ownerId": "knowledge-data-analysis",
+      "recipeSha256": "c87a65b7383988d67131209f502190d1d44e963d32a87ecedb666235c2d97875",
+      "recipeVersion": "skybao-capture-v4",
+      "timeline": "clips/knowledge/knowledge-data-analysis/timeline.json",
+      "timelineSha256": "faa7cac8fbd5dd83216fc838a823963d1b7bf8c3e0357787dbf9bbad7ce43c4e",
+      "trimRanges": [
+        [
+          30,
+          90
+        ]
+      ],
+      "type": "clip"
+    },
+    {
+      "contentSha256": "098681335f69c2c16bbaa21180b560db217cd78951afb09bd11105ac2acb7a46",
+      "framing": "workspace",
+      "id": "knowledge-file-search",
+      "ownerId": "knowledge-file-search",
+      "recipeSha256": "17511b8e30f0fb0bd0671371b1da85d47b9262423555e6dfe461f3efadbd0c6d",
+      "recipeVersion": "skybao-capture-v4",
+      "timeline": "clips/knowledge/knowledge-file-search/timeline.json",
+      "timelineSha256": "f7d6deaf8259b517db2150e90d255215f5c71a021304948c17cd890fc655196e",
+      "trimRanges": [
+        [
+          1,
+          90
+        ]
+      ],
+      "type": "clip"
+    },
+    {
+      "contentSha256": "587b08ad883da920599f2b393cb8a93a567ba0e31985d1c99cfeea858e3e5fd8",
+      "framing": "workspace",
+      "id": "knowledge-source-preview",
+      "ownerId": "knowledge-source-preview",
+      "recipeSha256": "4332b4ac68ab6755bffc07baa14fe1bfc497e820743c6b1bb62633948ee1a336",
+      "recipeVersion": "skybao-capture-v4",
+      "timeline": "clips/knowledge/knowledge-source-preview/timeline.json",
+      "timelineSha256": "8bc20d786d5133efb80b4e09a2ef4057e813d9cfb0543abd3c46e2bc5b99e976",
+      "trimRanges": [
+        [
+          1,
+          45
+        ]
+      ],
+      "type": "clip"
+    },
+    {
+      "contentSha256": "953382a51cb57361234173ba6e8185c4993203a5837cdbca13d682c15fb9f663",
+      "framing": "workspace",
+      "id": "work-agent-run-detail",
+      "ownerId": "work-agent-run-detail",
+      "recipeSha256": "f86181d0f821b6f197443fbcfe2e183a8b1fa3516c4520f64d33aaea8af76f15",
+      "recipeVersion": "skybao-capture-v4",
+      "timeline": "clips/work/work-agent-run-detail/timeline.json",
+      "timelineSha256": "53c62b425b3308a0f46214ff90d7617b814ee52f3bf2ff185a2cc21e28afcea5",
+      "trimRanges": [
+        [
+          1,
+          52
+        ]
+      ],
+      "type": "clip"
+    },
+    {
+      "contentSha256": "a115a2bb83bc3a19d94ea342eea6addb6c8fcaf1ef370dc50902a68b61b16ad4",
+      "framing": "workspace",
+      "id": "work-board-drag",
+      "ownerId": "work-board-drag",
+      "recipeSha256": "1590dd7a7607b43c10c69b4b9cb5cc7e98352fc1b231351273f8f93052d7d915",
+      "recipeVersion": "skybao-capture-v4",
+      "timeline": "clips/work/work-board-drag/timeline.json",
+      "timelineSha256": "5fbcf2bfd6e76748739c44ec7c55b66795c94c7b3d5e34a77cb16defd7d4dd2c",
+      "trimRanges": [
+        [
+          1,
+          93
+        ]
+      ],
+      "type": "clip"
+    },
+    {
+      "contentSha256": "29cd2ef11ffd1759887080e7d552c9c078efcd0bc4c0c464d774369b6b4d3071",
+      "framing": "workspace",
+      "id": "work-task-approval",
+      "ownerId": "work-task-approval",
+      "recipeSha256": "b1bc3cf690ea9ba4d7abc4cf658c5e70ab998fd869abb2b8121818d4625c5193",
+      "recipeVersion": "skybao-capture-v4",
+      "timeline": "clips/work/work-task-approval/timeline.json",
+      "timelineSha256": "73b36af6ddbec5e903c2cd8501df1e2c68eacb2a16952b921c10bf5e40c28e03",
+      "trimRanges": [
+        [
+          45,
+          95
+        ]
+      ],
+      "type": "clip"
+    },
+    {
+      "contentSha256": "e6c35bd3db59d0a2fb4e7d9edc7964deaa48fd1c51c7657968401566cb6a3e22",
+      "framing": "workspace",
+      "id": "admin-models",
+      "ownerId": "admin-models",
+      "recipeSha256": "5ff0f3fc406ba3dc580aac50575d83adcdc7ce51a09f6a33ce05e717fe79f88b",
+      "recipeVersion": "skybao-capture-v4",
+      "trimRanges": [],
+      "type": "still"
+    }
+  ],
+  "inputFingerprint": "02d0f29304bda8ea3303cd4c58abea87e903aa990e1aaba55583b1739911487d",
+  "profileFingerprint": "3ed8b879c79f7a9d5e5942c70d5a0eda959d97c7d181fa708e02bf5e1a53263e",
+  "artifacts": {
+    "blend": {
+      "path": "artifacts/skybao-film/skybao-film-preview.blend",
+      "sha256": "708576cef3763e954fc5dccc2ee464f924a80f185ff0c2090f6627cfdfa1fae8"
+    }
+  }
+}

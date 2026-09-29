@@ -13,3 +13,6 @@ yarn.lock
 artifacts/.skybao-film-staging/
 artifacts/.skybao-ui-staging-*/
 artifacts/.skybao-ui-backup-*/
+artifacts/.skybao-ui-zoom-150-staging-*/
+artifacts/.skybao-ui-zoom-150-backup-*/
+artifacts/skybao-ui-zoom-review/

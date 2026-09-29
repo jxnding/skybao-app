@@ -1,0 +1,114 @@
+{
+  "schemaVersion": 2,
+  "inputFingerprint": "02d0f29304bda8ea3303cd4c58abea87e903aa990e1aaba55583b1739911487d",
+  "title": "SkyBao · The Acme Workspace Flow",
+  "mode": "preview",
+  "durationSeconds": 40,
+  "frames": 1200,
+  "fps": 30,
+  "dimensions": "960x540",
+  "validation": {
+    "contiguousFrames": true,
+    "blackSegments": 0,
+    "framesRetained": false,
+    "silent": true,
+    "audioStreams": 0
+  },
+  "render": {
+    "engine": "CYCLES",
+    "cycles": {
+      "requestedDevice": "metal",
+      "manifestRequestedDevice": "metal",
+      "resolvedDevice": "metal",
+      "fallback": null,
+      "computeDeviceType": "METAL",
+      "activeDeviceIds": [
+        "METAL_Apple M1 Max (GPU - 32 cores)"
+      ],
+      "metalRT": "AUTO",
+      "profile": "preview",
+      "samples": 32,
+      "adaptiveThreshold": 0.029999999329447746,
+      "resolutionPercentage": 50,
+      "seed": 830194,
+      "animatedSeed": false,
+      "persistentData": true,
+      "denoise": {
+        "inputPasses": "RGB_ALBEDO_NORMAL",
+        "prefilter": "ACCURATE",
+        "quality": "HIGH",
+        "type": "OPENIMAGEDENOISE",
+        "useGpu": true
+      },
+      "bounces": {
+        "causticsReflective": false,
+        "causticsRefractive": false,
+        "diffuse": 2,
+        "glossy": 4,
+        "indirectClamp": 10,
+        "max": 8,
+        "transmission": 8,
+        "transparent": 8
+      },
+      "devices": [
+        {
+          "id": "CPU",
+          "name": "Apple M1 Max",
+          "type": "CPU",
+          "use": false
+        },
+        {
+          "id": "METAL_Apple M1 Max (GPU - 32 cores)",
+          "name": "Apple M1 Max (GPU - 32 cores)",
+          "type": "METAL",
+          "use": true
+        }
+      ],
+      "elapsedRenderSeconds": 3094.9243944580085
+    },
+    "elapsed": {
+      "totalMs": 3109270.589667,
+      "blenderMs": 3096190.824292,
+      "encodeMs": 3621.126
+    }
+  },
+  "video": {
+    "index": 0,
+    "codec_name": "h264",
+    "codec_type": "video",
+    "width": 960,
+    "height": 540,
+    "pix_fmt": "yuv420p",
+    "color_space": "bt709",
+    "color_transfer": "bt709",
+    "color_primaries": "bt709",
+    "r_frame_rate": "30/1"
+  },
+  "audio": null,
+  "deliveryTransform": {
+    "videoStreamCopy": true,
+    "audioRemoved": true,
+    "sourceVideoSha256": "15969fbef5835d30561eb5bc74054d9e2d19a558bc657793d2e53dbce56b49d9",
+    "videoPacketSha256": "08527ca1e6503765782a3e5292979d4c46e92c136f512b2f3a90d7ca5d2ee04d"
+  },
+  "files": {
+    "video": "artifacts/skybao-film/deliverables/skybao-40s-preview.mp4",
+    "blend": "artifacts/skybao-film/skybao-film-preview.blend",
+    "mix": "artifacts/skybao-film/audio/skybao-mix.wav",
+    "buildManifest": "artifacts/skybao-film/deliverables/build-manifest-preview.json"
+  },
+  "sha256": {
+    "video": "a6b68fd854e8598875f17978ca4b748d3a96133067bf18792358de6347ddbfed",
+    "blend": "708576cef3763e954fc5dccc2ee464f924a80f185ff0c2090f6627cfdfa1fae8",
+    "mix": "ff4c45fa4973e7c71936ec4cdb93e3d4f9283aa5de4aa699e6a7ed22197f2833",
+    "buildManifest": "e8bb67b215760f0e297883e217f2bee831248904369ee338451e330ccdb5db07"
+  },
+  "provenance": {
+    "inputFingerprint": "02d0f29304bda8ea3303cd4c58abea87e903aa990e1aaba55583b1739911487d",
+    "buildManifest": {
+      "path": "artifacts/skybao-film/deliverables/build-manifest-preview.json",
+      "schemaVersion": 2,
+      "sha256": "e8bb67b215760f0e297883e217f2bee831248904369ee338451e330ccdb5db07"
+    }
+  }
+}

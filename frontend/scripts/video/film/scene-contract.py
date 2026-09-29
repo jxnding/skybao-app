@@ -13,6 +13,7 @@ import sys
 # Keep the shared helper import normal and deterministic in Blender.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from cursor_window import event_for_frame
+from ui_plane_window import ui_plane_render_window
 
 import bpy
 from mathutils import Vector
@@ -188,12 +189,13 @@ def assert_scene_collection(obj, label):
     assert_collection_visible(scene, collection, label)
 
 
-def assert_clean_object(obj, parent, label, scale):
+def assert_clean_object(obj, parent, label, scale=None):
     if obj.parent != parent: die(label + " has the wrong parent")
     assert_scene_collection(obj, label)
     if any(not math.isfinite(float(v)) or abs(float(v)) < 1e-9 for v in obj.scale):
         die(label + " has zero or non-finite scale")
-    for actual, wanted in zip(obj.scale, scale): close(actual, wanted, label + ".scale")
+    if scale is not None:
+        for actual, wanted in zip(obj.scale, scale): close(actual, wanted, label + ".scale")
     if obj.hide_viewport or obj.hide_get():
         die(label + " has a visibility override")
     if obj.constraints: die(label + " has unexpected constraints")
@@ -229,8 +231,40 @@ def assert_material_links(mat, label, expected_color=None, strength=None):
         if getattr(item, "modifiers", None): die(label + " has an F-curve modifier")
 
 
+def assert_ui_material_graph(mat, label, environment):
+    if not mat or not mat.use_nodes:
+        die(label + " is missing its UI material nodes")
+    nt = mat.node_tree
+    names = {"Tex", "UIBrightness", "Emit", "Opacity", "Alpha", "Transparent", "Mix", "Out"}
+    if any(nt.nodes.get(name) is None for name in names):
+        die(label + " has an incomplete UI graph")
+    close(nt.nodes["Emit"].inputs["Strength"].default_value,
+          float(environment.get("glass", {}).get("uiEmission", 1.12)),
+          label + " emission")
+    close(nt.nodes["UIBrightness"].inputs["Gamma"].default_value,
+          float(environment.get("glass", {}).get("uiTextureGamma", 1.0)),
+          label + " texture gamma")
+    def connected(a, b):
+        return any(link.from_socket == a and link.to_socket == b for link in nt.links)
+    if not connected(nt.nodes["Tex"].outputs.get("Color"), nt.nodes["UIBrightness"].inputs.get("Color")) or \
+       not connected(nt.nodes["UIBrightness"].outputs.get("Color"), nt.nodes["Emit"].inputs.get("Color")) or \
+       not connected(nt.nodes["Tex"].outputs.get("Alpha"), nt.nodes["Alpha"].inputs[0]) or \
+       not connected(nt.nodes["Opacity"].outputs[0], nt.nodes["Alpha"].inputs[1]) or \
+       not connected(nt.nodes["Alpha"].outputs[0], nt.nodes["Mix"].inputs[0]) or \
+       not connected(nt.nodes["Transparent"].outputs.get("BSDF"), nt.nodes["Mix"].inputs[1]) or \
+       not connected(nt.nodes["Emit"].outputs.get("Emission"), nt.nodes["Mix"].inputs[2]) or \
+       not connected(nt.nodes["Mix"].outputs.get("Shader"), nt.nodes["Out"].inputs.get("Surface")):
+        die(label + " has disconnected required UI sockets")
+    assert_animation_clean(
+        nt, label,
+        {'nodes["Opacity"].outputs[0].default_value',
+         'nodes["Opacity"].inputs[0].default_value'})
+
+
 def source_events(repo, shotlist):
-    catalog = read_json(os.path.join(repo, "artifacts/skybao-ui/catalog.json"))
+    catalog_file = os.path.join(repo, ENVIRONMENT.get("toolInputs", {}).get("uiCatalog", "artifacts/skybao-ui/catalog.json"))
+    catalog_root = os.path.dirname(catalog_file)
+    catalog = read_json(catalog_file)
     entries = {(x.get("type"), x.get("id"), x.get("framing")): x
                for x in catalog.get("assets", []) if isinstance(x, dict)}
     tracks = {"front": [], "back": []}
@@ -241,7 +275,7 @@ def source_events(repo, shotlist):
         entry = entries.get((source["type"], source["id"], source.get("framing")))
         if not entry:
             die("missing catalog entry for {0}".format(shot["id"]))
-        timeline_path = os.path.join(repo, "artifacts/skybao-ui", entry["timeline"])
+        timeline_path = os.path.join(catalog_root, entry["timeline"])
         timeline = read_json(timeline_path)
         trim_zero = source["startFrame"] - 1
         events = [e for e in timeline.get("cursor", [])
@@ -289,15 +323,22 @@ def check_cursor(repo, shotlist, environment):
     ui_w = float(glass["widthM"]) - 2 * float(glass["uiInsetM"])
     ui_h = ui_w * 9 / 16
     ui_offset = float(glass["layers"]["ui"]["offsetM"])
-    catalog = read_json(os.path.join(repo, "artifacts/skybao-ui/catalog.json"))
+    catalog_file = os.path.join(repo, environment.get("toolInputs", {}).get("uiCatalog", "artifacts/skybao-ui/catalog.json"))
+    catalog_root = os.path.dirname(catalog_file)
+    catalog = read_json(catalog_file)
     assets = {(x.get("type"), x.get("id"), x.get("framing")): x for x in catalog.get("assets", [])}
     for face, shot_tracks in tracks.items():
         for shot, windows in shot_tracks:
             expected[face].extend((a, b) for a, b, _ in windows)
             entry = assets[(shot["source"]["type"], shot["source"]["id"], shot["source"].get("framing"))]
-            timeline = read_json(os.path.join(repo, "artifacts/skybao-ui", entry["timeline"]))
+            timeline = read_json(os.path.join(catalog_root, entry["timeline"]))
             trim_zero = shot["source"]["startFrame"] - 1
             events = [e for e in timeline["cursor"] if trim_zero <= int(e["frame"]) <= shot["source"]["endFrame"] - 1]
+            crop = dict(scale=[1.0, 1.0], center=[0.5, 0.5])
+            for event in events:
+                if (not crop["center"][0] - crop["scale"][0] / 2 <= float(event["nx"]) <= crop["center"][0] + crop["scale"][0] / 2 or
+                        not crop["center"][1] - crop["scale"][1] / 2 <= float(event["ny"]) <= crop["center"][1] + crop["scale"][1] / 2):
+                    die("cursor event falls outside crop window for " + shot["id"])
             for a, b, items in windows:
                 # Merged activity windows can contain samples from adjacent runs.
                 # Keep the event stream chronological so a click never causes the
@@ -307,9 +348,9 @@ def check_cursor(repo, shotlist, environment):
                     # captured event.  The shared resolver also preserves the
                     # latest position after sparse samples and navigation clicks.
                     event = event_for_frame(items, frame)
-                    x = (float(event["nx"]) - .5) * ui_w
+                    x = (float(event["nx"]) - crop["center"][0]) * ui_w / crop["scale"][0]
                     if face == "back": x *= -1
-                    positions[face][frame] = (x, (0.5 - float(event["ny"])) * ui_h)
+                    positions[face][frame] = (x, (crop["center"][1] - float(event["ny"])) * ui_h / crop["scale"][1])
     for face in ("front", "back"):
         root = bpy.data.objects.get("CursorRig." + face)
         children = [root, bpy.data.objects.get("CursorRig.outer." + face), bpy.data.objects.get("CursorRig.inner." + face)]
@@ -375,7 +416,12 @@ def check_callouts(shotlist, environment):
         slab = bpy.data.objects.get("Glass.slab")
         if not slab: die("Glass.slab is missing")
         face = callout["face"]
-        assert_clean_object(obj, slab, "callout " + callout["id"], (-1.0, -1.0, 1.0) if face == "back" else (1.0, 1.0, 1.0))
+        transition = callout.get("transition") or {}
+        rest_scale = (-1.0, -1.0, 1.0) if face == "back" else (1.0, 1.0, 1.0)
+        # The blend is commonly saved after a late review frame.  Do not
+        # inspect the evaluated transform here: the authored transition curves
+        # below are the source of truth and are checked at every key.
+        assert_clean_object(obj, slab, "callout " + callout["id"])
         if len(obj.data.materials) != 1 or obj.data.materials[0] != mat:
             die("callout " + callout["id"] + " material linkage is wrong")
         if obj.data.body != callout["text"]: die("callout text mismatch: " + callout["id"])
@@ -383,11 +429,11 @@ def check_callouts(shotlist, environment):
         sign = 1 if face == "back" else -1
         glass = environment["glass"]
         expected_loc = (-callout["positionM"][0] if face == "back" else callout["positionM"][0], sign * (float(glass["thicknessM"])/2 + float(glass["layers"]["ui"]["offsetM"]) + .0012), callout["positionM"][1])
-        for i, value in enumerate(expected_loc): close(obj.location[i], value, callout["id"] + " position")
+        entrance = transition.get("entranceOffsetM", [0.0, 0.0])
         expected_rot = (math.radians(-90 if face == "back" else 90), 0, 0)
         for i, value in enumerate(expected_rot): close(obj.rotation_euler[i], value, callout["id"] + " orientation")
         assert_material_links(mat, "callout " + callout["id"], expected_color, environment["editorial"]["emissionStrength"])
-        assert_animation_clean(obj, "callout " + callout["id"], {"hide_render"})
+        assert_animation_clean(obj, "callout " + callout["id"], {"hide_render", "location", "scale"})
         assert_animation_clean(mat.node_tree, "callout " + callout["id"] + " material", {'nodes["Opacity"].outputs[0].default_value', 'nodes["Opacity"].inputs[0].default_value'})
         start, end, fade = callout["frames"]["start"], callout["frames"]["end"], callout["fadeFrames"]
         hide = curve(obj, "hide_render"); exact_keys(hide, [max(1, start-fade-1), max(1, start-fade), min(1200, end+fade+1)], callout["id"] + ".hide_render"); interpolation(hide, "CONSTANT", callout["id"] + ".hide_render")
@@ -396,6 +442,157 @@ def check_callouts(shotlist, environment):
         opacity = curve(mat.node_tree, 'nodes["Opacity"].outputs[0].default_value') or curve(mat.node_tree, 'nodes["Opacity"].inputs[0].default_value')
         exact_keys(opacity, [max(1, start-fade), start, end, min(1200, end+fade)], callout["id"] + ".opacity"); interpolation(opacity, "BEZIER", callout["id"] + ".opacity")
         exact_values(opacity, [(max(1, start-fade), 0.0), (start, 1.0), (end, 1.0), (min(1200, end+fade), 0.0)], callout["id"] + ".opacity")
+        transition = callout.get("transition")
+        if not isinstance(transition, dict): die(callout["id"] + " transition is missing")
+        keys_for_transition = [max(1, start-fade), start, end, min(1200, end+fade)]
+        base_location = tuple(expected_loc)
+        entrance = transition["entranceOffsetM"]
+        exit_offset = transition["exitOffsetM"]
+        if face == "back":
+            entrance = [-float(entrance[0]), float(entrance[1])]
+            exit_offset = [-float(exit_offset[0]), float(exit_offset[1])]
+        locations = [
+            (base_location[0] + entrance[0], base_location[1], base_location[2] + entrance[1]),
+            base_location,
+            base_location,
+            (base_location[0] + exit_offset[0], base_location[1], base_location[2] + exit_offset[1]),
+        ]
+        for axis in range(3):
+            track = curve(obj, "location", axis)
+            exact_values(track, [(keys_for_transition[i], locations[i][axis]) for i in range(4)], callout["id"] + ".location[" + str(axis) + "]")
+            interpolation(track, "BEZIER", callout["id"] + ".location[" + str(axis) + "]")
+        base_scale = rest_scale
+        factors = [float(transition["startScale"]), 1.0, 1.0, float(transition["exitScale"])]
+        for axis in range(3):
+            track = curve(obj, "scale", axis)
+            exact_values(track, [(keys_for_transition[i], base_scale[axis] * factors[i]) for i in range(4)], callout["id"] + ".scale[" + str(axis) + "]")
+            interpolation(track, "BEZIER", callout["id"] + ".scale[" + str(axis) + "]")
+
+
+def check_floating_highlights(shotlist, environment):
+    beats = shotlist.get("floatingHighlights")
+    if not isinstance(beats, list) or len(beats) != 7:
+        die("floatingHighlights must contain exactly seven authored beats")
+    if len({beat.get("id") for beat in beats}) != 7:
+        die("floating highlight IDs must be unique")
+    for index, beat in enumerate(beats):
+        shot = next((item for item in shotlist["shots"] if item.get("id") == beat.get("shotId")), None)
+        if not shot: die("floating highlight references unknown shot: " + str(beat.get("shotId")))
+        frame = int(beat.get("globalFrame", 0))
+        if not shot["frames"]["start"] <= frame <= shot["frames"]["end"]:
+            die("floating highlight is outside its shot: " + str(beat.get("id")))
+        for key in ("targetId", "capturePhase"):
+            if not isinstance(beat.get(key), str) or not beat[key]:
+                die("floating highlight {0} is missing {1}".format(beat.get("id"), key))
+        names = {
+            "panel": "FloatingHighlight.{0}.{1}".format(beat["id"], index),
+            "front": "FloatingFront.{0}.{1}".format(beat["id"], index),
+            "back": "FloatingBack.{0}.{1}".format(beat["id"], index),
+        }
+        panel = bpy.data.objects.get(names["panel"])
+        front = bpy.data.objects.get(names["front"])
+        back = bpy.data.objects.get(names["back"])
+        if not all((panel, front, back)): die("missing floating highlight objects for " + beat["id"])
+        for obj in (panel, front, back):
+            if obj.parent != bpy.data.objects.get("Glass.slab"):
+                die(obj.name + " must be parented to Glass.slab")
+            assert_animation_clean(obj, obj.name, {"location", "scale", "hide_render"})
+            if len(obj.data.materials) != 1: die(obj.name + " material linkage is wrong")
+        if len(panel.modifiers) != 1 or panel.modifiers[0].type != "BEVEL":
+            die(panel.name + " must have one rounded bevel")
+        design_path = os.path.join(REPO, environment["toolInputs"]["designLanguage"])
+        design = read_json(design_path)
+        floating = design["floatingElement"]
+        extrusion = float(
+            floating["openingExtrusionM"]
+            if beat["shotId"] == "assistant-research"
+            else floating["extrusionM"])
+        peak_lift = float(
+            floating["openingLiftM"]
+            if beat["shotId"] == "assistant-research"
+            else floating["liftM"])
+        close(panel.dimensions.y, extrusion, panel.name + ".extrusion", 2e-5)
+        surface_frame = max(1, frame - 6)
+        panel_y = curve(panel, "location", 1)
+        close(abs(panel_y.evaluate(frame) - panel_y.evaluate(surface_frame)),
+              peak_lift, panel.name + ".peakLift", 2e-5)
+        front_y = curve(front, "location", 1).evaluate(surface_frame)
+        back_y = curve(back, "location", 1).evaluate(surface_frame)
+        if abs(front_y - back_y) < extrusion:
+            die("floating highlight caps overlap or are not separated by extrusion: " + beat["id"])
+        expected_scale_x = -1.0 if shot.get("face") == "back" else 1.0
+        for obj in (front, back):
+            scale_x = curve(obj, "scale", 0).evaluate(surface_frame)
+            if scale_x * expected_scale_x <= 0:
+                die(obj.name + " has incorrect back-face orientation")
+        front_mat = front.data.materials[0]
+        if back.data.materials[0] != front_mat:
+            die(beat["id"] + " front/back caps must share one UI material")
+        assert_ui_material_graph(
+            front_mat, "floating highlight " + beat["id"], environment)
+        front_nodes = front_mat.node_tree.nodes
+        front_image = next((node.image for node in front_nodes.values()
+                            if getattr(node, "type", None) == "TEX_IMAGE" and node.image), None)
+        back_image = next((node.image for node in back.data.materials[0].node_tree.nodes.values()
+                           if getattr(node, "type", None) == "TEX_IMAGE" and node.image), None)
+        if not front_image or front_image != back_image:
+            die(beat["id"] + " front/back caps do not share the transparent cutout")
+        catalog_path = os.path.join(REPO, environment["toolInputs"]["uiCatalog"])
+        catalog = read_json(catalog_path)
+        source = shot["source"]
+        entry = next((item for item in catalog.get("assets", [])
+                      if item.get("type") == source.get("type") and
+                      item.get("id") == source.get("id") and
+                      item.get("framing") == source.get("framing")), None)
+        descriptors = [entry.get("targets"), entry.get("captureTargets"), entry.get("elementTargets"),
+                       catalog.get("targets"), catalog.get("captureTargets"),
+                       catalog.get("elementTargets"), catalog.get("highlights")]
+        descriptor = None
+        for collection in descriptors:
+            values = collection.items() if isinstance(collection, dict) else enumerate(collection) if isinstance(collection, list) else []
+            for key, candidate in values:
+                if isinstance(candidate, dict) and beat["targetId"] in (key, candidate.get("targetId"), candidate.get("id"), candidate.get("target")):
+                    candidate_frame = candidate.get("frame", candidate.get("sourceFrame"))
+                    if candidate_frame is None or candidate_frame == beat["sourceFrame"]:
+                        descriptor = dict(candidate, targetId=key) if isinstance(collection, dict) else candidate
+                        break
+            if descriptor:
+                break
+        cutout = descriptor.get("cutout") if descriptor else None
+        if not descriptor or descriptor.get("capturePhase", descriptor.get("phase")) != beat.get("capturePhase"):
+            die(beat["id"] + " capture phase does not match its descriptor")
+        expected_path = os.path.realpath(os.path.join(os.path.dirname(catalog_path), cutout.get("path"))) if isinstance(cutout, dict) else None
+        actual_path = os.path.realpath(str(front_image.get("anything_llm_capture_source", "")))
+        if not expected_path or actual_path != expected_path or front_image.get("anything_llm_capture_sha256") != cutout.get("sha256", cutout.get("contentSha256")):
+            die(beat["id"] + " cap texture is not the descriptor-owned transparent cutout")
+        edge_mat = panel.data.materials[0]
+        edge_nodes = edge_mat.node_tree.nodes
+        if any(edge_nodes.get(name) is None for name in ("LayerWeight", "FresnelPower", "RimRamp", "HighlightGlowMask", "Transparent", "RimEmission", "EdgeMix", "HighlightGlow")):
+            die(panel.name + " edge material is missing the Layer Weight/Fresnel AOV graph")
+        glow_mask = edge_nodes.get("HighlightGlowMask")
+        glow_aov = edge_nodes.get("HighlightGlow")
+        if not any(link.from_node == glow_mask and link.to_node == glow_aov
+                   for link in edge_mat.node_tree.links):
+            die(panel.name + " HighlightGlow AOV must be fed by the masked rim color")
+        for obj in (panel, front, back):
+            curves = all_curves(obj, "location") + all_curves(obj, "scale")
+            if not curves: die(obj.name + " has no eased lift animation")
+            if any(key.co.x < max(1, frame - 6) or key.co.x > min(1200, frame + 18)
+                   for curve_item in curves for key in curve_item.keyframe_points):
+                die(obj.name + " animation exceeds its 18-frame treatment window")
+    if not any(getattr(aov, "name", None) == "HighlightGlow" for aov in bpy.context.scene.view_layers[0].aovs):
+        die("HighlightGlow AOV is missing")
+    compositor_tree = getattr(bpy.context.scene, "compositing_node_group", None)
+    if compositor_tree is None:
+        compositor_tree = getattr(bpy.context.scene, "node_tree", None)
+    nodes = compositor_tree.nodes if bpy.context.scene.use_nodes and compositor_tree else []
+    if any(nodes.get(name) is None for name in ("Render Layers", "AOV Fog Glow", "Highlight Glow Add", "Group Output")):
+        die("isolated HighlightGlow compositor is incomplete")
+    add_node = nodes.get("Highlight Glow Add")
+    group_output = nodes.get("Group Output")
+    if not any(link.from_node == add_node and link.to_node == group_output
+               for link in compositor_tree.links):
+        die("HighlightGlow compositor must terminate at Group Output")
 
 
 def check_camera(environment, shotlist):
@@ -484,9 +681,10 @@ def check_dissolves(shotlist):
         following = shotlist["shots"][index + 1] if index + 1 < len(shotlist["shots"]) else None
         if following and following.get("transitionIn", {}).get("type") == "same-face-dissolve":
             start = following["frames"]["start"]
-            initial = shot["frames"]["start"]
-            if previous and previous.get("face") != shot.get("face"):
-                initial = max(1, initial - 10)
+            initial, _ = ui_plane_render_window(
+                shotlist["shots"], index,
+                int(shotlist["format"]["frames"]),
+                int(shotlist["direction"]["sameFaceDissolveFrames"]))
             values.setdefault(initial, 1.0)
             values.update({start: 1.0, start + 5: 0.0})
     count = 0
@@ -585,7 +783,9 @@ def _expected_capture_path(source, entry):
     first frame of the source trim (not necessarily frame 1 of the sequence),
     using the builder's six-digit frame naming convention.
     """
-    ui_root = os.path.realpath(os.path.join(REPO, "artifacts/skybao-ui"))
+    catalog_relative = ENVIRONMENT.get("toolInputs", {}).get(
+        "uiCatalog", "artifacts/skybao-ui/catalog.json")
+    ui_root = os.path.realpath(os.path.join(REPO, os.path.dirname(catalog_relative)))
     if source.get("type") == "still":
         relative = entry.get("file")
     elif source.get("type") == "clip":
@@ -679,6 +879,8 @@ def check_ui_materials(shotlist):
         die("UI face object set differs (missing or extra faces)")
     glass = bpy.data.objects.get("Glass.slab")
     if not glass: die("Glass.slab is missing")
+    total_frames = int(shotlist["format"]["frames"])
+    dissolve_frames = int(shotlist["direction"]["sameFaceDissolveFrames"])
     for index, shot in enumerate(shotlist["shots"]):
         obj = bpy.data.objects.get("UI.S%02d.%s" % (shot["number"], shot["face"]))
         expected_location, expected_rotation, expected_scale = ui_plane_transform(index, shot["face"], ENVIRONMENT)
@@ -686,12 +888,30 @@ def check_ui_materials(shotlist):
         assert_local_transform(obj, (expected_location, expected_rotation, expected_scale), obj.name)
         close(obj.dimensions.x, float(glass.dimensions.x) - 2 * float(ENVIRONMENT["glass"]["uiInsetM"]), obj.name + ".width", 2e-4)
         close(obj.dimensions.z, obj.dimensions.x * 9 / 16, obj.name + ".aspect", 2e-4)
+        try:
+            render_start, render_end = ui_plane_render_window(
+                shotlist["shots"], index, total_frames, dissolve_frames)
+        except ValueError as exc:
+            die(obj.name + " visibility recipe is invalid: " + str(exc))
+        hide = curve(obj, "hide_render")
+        hide_values = []
+        if render_start > 1:
+            hide_values.append((render_start - 1, 1.0))
+        hide_values.extend(((render_start, 0.0), (render_end + 1, 1.0)))
+        exact_values(hide, hide_values, obj.name + ".hide_render")
+        interpolation(hide, "CONSTANT", obj.name + ".hide_render")
+        for frame in range(1, total_frames + 1):
+            expected_hidden = not (render_start <= frame <= render_end)
+            if bool(round(hide.evaluate(frame))) != expected_hidden:
+                die("{0}.hide_render visibility mismatch at frame {1}".format(
+                    obj.name, frame))
         if len(obj.data.materials) != 1 or obj.data.materials[0].name != "UI.mat.S%02d" % shot["number"]:
             die(obj.name + " material linkage is wrong")
         mat = obj.data.materials[0]
         tex = mat.node_tree.nodes.get("Tex")
         source = shot["source"]
-        entry = _catalog_entry(read_json(os.path.join(REPO, "artifacts/skybao-ui/catalog.json")), source)
+        catalog_file = os.path.join(REPO, ENVIRONMENT.get("toolInputs", {}).get("uiCatalog", "artifacts/skybao-ui/catalog.json"))
+        entry = _catalog_entry(read_json(catalog_file), source)
         expected = _expected_capture_path(source, entry) if entry else None
         image = tex.image if tex else None
         image_user = getattr(tex, "image_user", None) if tex else None
@@ -714,19 +934,35 @@ def check_ui_materials(shotlist):
     for shot in shotlist["shots"]:
         mat = bpy.data.materials.get("UI.mat.S%02d" % shot["number"])
         if not mat: die("missing UI material S%02d" % shot["number"])
-        nt = mat.node_tree
-        names = {"Tex", "Emit", "Opacity", "Alpha", "Transparent", "Mix", "Out"}
-        if any(nt.nodes.get(name) is None for name in names): die(mat.name + " has incomplete UI graph")
-        def connected(a, b): return any(x.from_socket == a and x.to_socket == b for x in nt.links)
-        if not connected(nt.nodes["Tex"].outputs.get("Color"), nt.nodes["Emit"].inputs.get("Color")) or \
-           not connected(nt.nodes["Tex"].outputs.get("Alpha"), nt.nodes["Alpha"].inputs[0]) or \
-           not connected(nt.nodes["Opacity"].outputs[0], nt.nodes["Alpha"].inputs[1]) or \
-           not connected(nt.nodes["Alpha"].outputs[0], nt.nodes["Mix"].inputs[0]) or \
-           not connected(nt.nodes["Transparent"].outputs.get("BSDF"), nt.nodes["Mix"].inputs[1]) or \
-           not connected(nt.nodes["Emit"].outputs.get("Emission"), nt.nodes["Mix"].inputs[2]) or \
-           not connected(nt.nodes["Mix"].outputs.get("Shader"), nt.nodes["Out"].inputs.get("Surface")):
-            die(mat.name + " has disconnected required UI sockets")
-        assert_animation_clean(nt, mat.name, {'nodes["Opacity"].outputs[0].default_value', 'nodes["Opacity"].inputs[0].default_value'})
+        assert_ui_material_graph(mat, mat.name, ENVIRONMENT)
+
+
+def check_color_management(environment):
+    settings = bpy.context.scene.view_settings
+    config = environment.get("colorManagement", {})
+    expected_transform = str(config.get("viewTransform", "AgX"))
+    if settings.view_transform != expected_transform:
+        die("color management view transform differs")
+    curve_config = config.get("contrastCurve", {})
+    enabled = bool(curve_config.get("enabled", False))
+    if bool(settings.use_curve_mapping) != enabled:
+        die("color management contrast curve enabled state differs")
+    if not enabled:
+        return
+    mapping = settings.curve_mapping
+    if mapping is None or len(mapping.curves) < 4:
+        die("color management contrast curve is missing")
+    expected = [(float(point[0]), float(point[1]))
+                for point in curve_config.get("points", [])]
+    actual = [(float(point.location[0]), float(point.location[1]))
+              for point in mapping.curves[3].points]
+    if len(actual) != len(expected):
+        die("color management contrast curve point count differs")
+    for index, (actual_point, expected_point) in enumerate(zip(actual, expected)):
+        close(actual_point[0], expected_point[0],
+              "color management curve point %d x" % index)
+        close(actual_point[1], expected_point[1],
+              "color management curve point %d y" % index)
 
 
 def check_slab(shotlist, environment):
@@ -783,8 +1019,12 @@ def main():
     repo=os.path.abspath(args.repo or os.path.join(os.path.dirname(__file__),"../../../..")); REPO=repo
     shotlist=read_json(os.path.join(repo,"frontend/scripts/video/film/shotlist.json")); environment=read_json(os.path.join(repo,"frontend/scripts/video/film/environment.json"))
     ENVIRONMENT=environment
-    tracks=check_cursor(repo,shotlist,environment); check_callouts(shotlist,environment); check_ui_materials(shotlist); check_slab(shotlist,environment); check_camera(environment, shotlist); dissolves=check_dissolves(shotlist); check_audio(repo, args.manifest, args.allow_staged, args.audio)
-    print("scene-contract: PASS (cursorWindows=%d, dissolves=%d, callouts=%d, focusWindows=%d)"%(tracks,dissolves,len(shotlist["editorialCallouts"]),len(environment["camera"]["focusMoves"])))
+    # Validate authored animation against a late saved-frame state as well as
+    # its direct F-curves. This prevents a blend's last rendered frame from
+    # changing the contract result.
+    bpy.context.scene.frame_set(min(1180, int(shotlist.get("format", {}).get("frames", 1200))))
+    tracks=check_cursor(repo,shotlist,environment); check_callouts(shotlist,environment); check_floating_highlights(shotlist,environment); check_ui_materials(shotlist); check_color_management(environment); check_slab(shotlist,environment); check_camera(environment, shotlist); dissolves=check_dissolves(shotlist); check_audio(repo, args.manifest, args.allow_staged, args.audio)
+    print("scene-contract: PASS (cursorWindows=%d, dissolves=%d, callouts=%d, floatingHighlights=%d, focusWindows=%d)"%(tracks,dissolves,len(shotlist["editorialCallouts"]),len(shotlist.get("floatingHighlights", [])),len(environment["camera"]["focusMoves"])))
 
 
 if __name__ == "__main__": main()

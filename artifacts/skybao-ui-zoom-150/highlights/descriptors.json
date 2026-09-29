@@ -1,0 +1,408 @@
+[
+  {
+    "assetId": "assistant-research",
+    "border": {
+      "bottom": "1px solid color(srgb 0.203922 0.827451 0.6 / 0.3)",
+      "left": "1px solid color(srgb 0.203922 0.827451 0.6 / 0.3)",
+      "right": "1px solid color(srgb 0.203922 0.827451 0.6 / 0.3)",
+      "top": "1px solid color(srgb 0.203922 0.827451 0.6 / 0.3)"
+    },
+    "cornerRadii": {
+      "bottomLeft": "10px",
+      "bottomRight": "10px",
+      "topLeft": "10px",
+      "topRight": "10px"
+    },
+    "cssBounds": {
+      "height": 48,
+      "left": 188,
+      "top": 385.5,
+      "width": 336
+    },
+    "cutout": {
+      "paddingPx": [
+        9,
+        9
+      ],
+      "path": "highlights/assistant-research-card-0.png",
+      "sha256": "145f31736736b39ec79785e96b46b3bc37c91f2c946fd83fdfba189135d7458c"
+    },
+    "designLanguageSha256": "645a535bfb085ccb388489dbcd4d857324a96e50d17596f26157b1addcb8f765",
+    "dpr": 1.5,
+    "normalizedBounds": {
+      "height": 0.06666666666666667,
+      "left": 0.146875,
+      "top": 0.5354166666666667,
+      "width": 0.2625
+    },
+    "padding": {
+      "cssPx": 6,
+      "physicalPx": 9
+    },
+    "phase": "after-action",
+    "physicalBounds": {
+      "height": 72,
+      "left": 282,
+      "top": 578,
+      "width": 504
+    },
+    "shadow": "none",
+    "sourceFrame": 11,
+    "target": "assistant-research-card-0",
+    "targetId": "assistant-research-card-0",
+    "theme": "dark",
+    "viewport": {
+      "dpr": 1.5,
+      "height": 720,
+      "width": 1280
+    }
+  },
+  {
+    "assetId": "assistant-research",
+    "border": {
+      "bottom": "1px solid color(srgb 0.203922 0.827451 0.6 / 0.3)",
+      "left": "1px solid color(srgb 0.203922 0.827451 0.6 / 0.3)",
+      "right": "1px solid color(srgb 0.203922 0.827451 0.6 / 0.3)",
+      "top": "1px solid color(srgb 0.203922 0.827451 0.6 / 0.3)"
+    },
+    "cornerRadii": {
+      "bottomLeft": "10px",
+      "bottomRight": "10px",
+      "topLeft": "10px",
+      "topRight": "10px"
+    },
+    "cssBounds": {
+      "height": 48,
+      "left": 532,
+      "top": 385.5,
+      "width": 336
+    },
+    "cutout": {
+      "paddingPx": [
+        9,
+        9
+      ],
+      "path": "highlights/assistant-research-card-1.png",
+      "sha256": "f9078948998970e9ff1bda3ad7367554a5ef0ad62877eaba4f643beab764239a"
+    },
+    "designLanguageSha256": "645a535bfb085ccb388489dbcd4d857324a96e50d17596f26157b1addcb8f765",
+    "dpr": 1.5,
+    "normalizedBounds": {
+      "height": 0.06666666666666667,
+      "left": 0.415625,
+      "top": 0.5354166666666667,
+      "width": 0.2625
+    },
+    "padding": {
+      "cssPx": 6,
+      "physicalPx": 9
+    },
+    "phase": "after-action",
+    "physicalBounds": {
+      "height": 72,
+      "left": 798,
+      "top": 578,
+      "width": 504
+    },
+    "shadow": "none",
+    "sourceFrame": 35,
+    "target": "assistant-research-card-1",
+    "targetId": "assistant-research-card-1",
+    "theme": "dark",
+    "viewport": {
+      "dpr": 1.5,
+      "height": 720,
+      "width": 1280
+    }
+  },
+  {
+    "assetId": "assistant-research",
+    "border": {
+      "bottom": "1px solid color(srgb 0.203922 0.827451 0.6 / 0.3)",
+      "left": "1px solid color(srgb 0.203922 0.827451 0.6 / 0.3)",
+      "right": "1px solid color(srgb 0.203922 0.827451 0.6 / 0.3)",
+      "top": "1px solid color(srgb 0.203922 0.827451 0.6 / 0.3)"
+    },
+    "cornerRadii": {
+      "bottomLeft": "10px",
+      "bottomRight": "10px",
+      "topLeft": "10px",
+      "topRight": "10px"
+    },
+    "cssBounds": {
+      "height": 48,
+      "left": 188,
+      "top": 441.5,
+      "width": 336
+    },
+    "cutout": {
+      "paddingPx": [
+        9,
+        9
+      ],
+      "path": "highlights/assistant-research-card-2.png",
+      "sha256": "cdb1fe3ac21f06ca4cabeec9b0f6ec124abd26197c1d9dc4b575b3a7b499eb88"
+    },
+    "designLanguageSha256": "645a535bfb085ccb388489dbcd4d857324a96e50d17596f26157b1addcb8f765",
+    "dpr": 1.5,
+    "normalizedBounds": {
+      "height": 0.06666666666666667,
+      "left": 0.146875,
+      "top": 0.6131944444444445,
+      "width": 0.2625
+    },
+    "padding": {
+      "cssPx": 6,
+      "physicalPx": 9
+    },
+    "phase": "after-action",
+    "physicalBounds": {
+      "height": 72,
+      "left": 282,
+      "top": 662,
+      "width": 504
+    },
+    "shadow": "none",
+    "sourceFrame": 59,
+    "target": "assistant-research-card-2",
+    "targetId": "assistant-research-card-2",
+    "theme": "dark",
+    "viewport": {
+      "dpr": 1.5,
+      "height": 720,
+      "width": 1280
+    }
+  },
+  {
+    "assetId": "assistant-research",
+    "border": {
+      "bottom": "1px solid color(srgb 0.203922 0.827451 0.6 / 0.3)",
+      "left": "1px solid color(srgb 0.203922 0.827451 0.6 / 0.3)",
+      "right": "1px solid color(srgb 0.203922 0.827451 0.6 / 0.3)",
+      "top": "1px solid color(srgb 0.203922 0.827451 0.6 / 0.3)"
+    },
+    "cornerRadii": {
+      "bottomLeft": "10px",
+      "bottomRight": "10px",
+      "topLeft": "10px",
+      "topRight": "10px"
+    },
+    "cssBounds": {
+      "height": 48,
+      "left": 532,
+      "top": 441.5,
+      "width": 336
+    },
+    "cutout": {
+      "paddingPx": [
+        9,
+        9
+      ],
+      "path": "highlights/assistant-research-card-3.png",
+      "sha256": "d6e24c13e697c64e1727fee7a5be5b6d43e0fc71b8fa55b9ee02a73db9b4ea54"
+    },
+    "designLanguageSha256": "645a535bfb085ccb388489dbcd4d857324a96e50d17596f26157b1addcb8f765",
+    "dpr": 1.5,
+    "normalizedBounds": {
+      "height": 0.06666666666666667,
+      "left": 0.415625,
+      "top": 0.6131944444444445,
+      "width": 0.2625
+    },
+    "padding": {
+      "cssPx": 6,
+      "physicalPx": 9
+    },
+    "phase": "after-action",
+    "physicalBounds": {
+      "height": 72,
+      "left": 798,
+      "top": 662,
+      "width": 504
+    },
+    "shadow": "none",
+    "sourceFrame": 83,
+    "target": "assistant-research-card-3",
+    "targetId": "assistant-research-card-3",
+    "theme": "dark",
+    "viewport": {
+      "dpr": 1.5,
+      "height": 720,
+      "width": 1280
+    }
+  },
+  {
+    "assetId": "knowledge-source-preview",
+    "border": {
+      "bottom": "0px none rgb(39, 112, 107)",
+      "left": "0px none rgb(39, 112, 107)",
+      "right": "0px none rgb(39, 112, 107)",
+      "top": "0px none rgb(39, 112, 107)"
+    },
+    "cornerRadii": {
+      "bottomLeft": "0px",
+      "bottomRight": "0px",
+      "topLeft": "0px",
+      "topRight": "0px"
+    },
+    "cssBounds": {
+      "height": 30,
+      "left": 1175.984375,
+      "top": 445,
+      "width": 35
+    },
+    "cutout": {
+      "paddingPx": [
+        9,
+        9
+      ],
+      "path": "highlights/knowledge-file-preview-0.png",
+      "sha256": "c3c8885d2ed1e326cafde9c722968cf679316c5c6c743872a9bbf10affc8eece"
+    },
+    "designLanguageSha256": "645a535bfb085ccb388489dbcd4d857324a96e50d17596f26157b1addcb8f765",
+    "dpr": 1.5,
+    "normalizedBounds": {
+      "height": 0.041666666666666664,
+      "left": 0.91873779296875,
+      "top": 0.6180555555555556,
+      "width": 0.02734375
+    },
+    "padding": {
+      "cssPx": 6,
+      "physicalPx": 9
+    },
+    "phase": "before-action",
+    "physicalBounds": {
+      "height": 45,
+      "left": 1764,
+      "top": 668,
+      "width": 53
+    },
+    "shadow": "none",
+    "sourceFrame": 28,
+    "target": "knowledge-file-preview-0",
+    "targetId": "knowledge-file-preview-0",
+    "theme": "dark",
+    "viewport": {
+      "dpr": 1.5,
+      "height": 720,
+      "width": 1280
+    }
+  },
+  {
+    "assetId": "work-task-approval",
+    "border": {
+      "bottom": "1px solid rgba(125, 211, 252, 0.35)",
+      "left": "1px solid rgba(125, 211, 252, 0.35)",
+      "right": "1px solid rgba(125, 211, 252, 0.35)",
+      "top": "1px solid rgba(125, 211, 252, 0.35)"
+    },
+    "cornerRadii": {
+      "bottomLeft": "10px",
+      "bottomRight": "10px",
+      "topLeft": "10px",
+      "topRight": "10px"
+    },
+    "cssBounds": {
+      "height": 36,
+      "left": 903,
+      "top": 641,
+      "width": 334
+    },
+    "cutout": {
+      "paddingPx": [
+        9,
+        9
+      ],
+      "path": "highlights/work-task-approve.png",
+      "sha256": "6fe4c61a332663c517536ad18ab46648f8a3e293e6312acf19f63fddfb14424c"
+    },
+    "designLanguageSha256": "645a535bfb085ccb388489dbcd4d857324a96e50d17596f26157b1addcb8f765",
+    "dpr": 1.5,
+    "normalizedBounds": {
+      "height": 0.05,
+      "left": 0.70546875,
+      "top": 0.8902777777777777,
+      "width": 0.2609375
+    },
+    "padding": {
+      "cssPx": 6,
+      "physicalPx": 9
+    },
+    "phase": "before-action",
+    "physicalBounds": {
+      "height": 54,
+      "left": 1355,
+      "top": 962,
+      "width": 501
+    },
+    "shadow": "rgba(37, 99, 235, 0.22) 0px 10px 24px 0px",
+    "sourceFrame": 76,
+    "target": "work-task-approve",
+    "targetId": "work-task-approve",
+    "theme": "dark",
+    "viewport": {
+      "dpr": 1.5,
+      "height": 720,
+      "width": 1280
+    }
+  },
+  {
+    "assetId": "admin-privacy-to-users",
+    "border": {
+      "bottom": "0px none rgb(255, 255, 255)",
+      "left": "0px none rgb(255, 255, 255)",
+      "right": "0px none rgb(255, 255, 255)",
+      "top": "0px none rgb(255, 255, 255)"
+    },
+    "cornerRadii": {
+      "bottomLeft": "8px",
+      "bottomRight": "8px",
+      "topLeft": "8px",
+      "topRight": "8px"
+    },
+    "cssBounds": {
+      "height": 30,
+      "left": 882.640625,
+      "top": 48.5,
+      "width": 49.859375
+    },
+    "cutout": {
+      "paddingPx": [
+        9,
+        9
+      ],
+      "path": "highlights/native-tab-users.png",
+      "sha256": "ff5bd350a5374d5c3d5f3216cb3af9eb644e55d64ef09c79a70156884be276b4"
+    },
+    "designLanguageSha256": "645a535bfb085ccb388489dbcd4d857324a96e50d17596f26157b1addcb8f765",
+    "dpr": 1.5,
+    "normalizedBounds": {
+      "height": 0.041666666666666664,
+      "left": 0.68956298828125,
+      "top": 0.06736111111111111,
+      "width": 0.03895263671875
+    },
+    "padding": {
+      "cssPx": 6,
+      "physicalPx": 9
+    },
+    "phase": "after-action",
+    "physicalBounds": {
+      "height": 45,
+      "left": 1324,
+      "top": 73,
+      "width": 75
+    },
+    "shadow": "none",
+    "sourceFrame": 30,
+    "target": "native-tab-users",
+    "targetId": "native-tab-users",
+    "theme": "dark",
+    "viewport": {
+      "dpr": 1.5,
+      "height": 720,
+      "width": 1280
+    }
+  }
+]

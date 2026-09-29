@@ -2,54 +2,97 @@
   "schemaVersion": 2,
   "targetedReviewReceipt": {
     "path": "artifacts/skybao-film/provenance/targeted-review-receipt.json",
-    "sha256": "d9ded2a1bbbc70fb27e288f41a5b38c7ab52464312e5ba05a02a2e2ebc38c45d",
-    "inputFingerprint": "8191fc100bd71f126906707aef1c0a045405fe5a7f66bab1eef5d37d2d6f1920"
+    "sha256": "6f2981027dcd725eba2a74ab362560fda8834329a923b7c564f7f75e885c8950",
+    "inputFingerprint": "7f7a9285438a04347d2c89e050727dbeab357b5d33c293ee09b0c81e290ae6e3"
   },
   "sourceFrames": {
-    "count": 16,
+    "count": 58,
     "order": [
+      8,
+      10,
+      11,
+      14,
+      15,
+      18,
+      21,
+      29,
+      32,
+      35,
+      38,
+      39,
       45,
+      52,
+      59,
+      63,
+      80,
+      83,
+      87,
       94,
       223,
       241,
-      296,
+      265,
+      269,
+      323,
+      327,
+      366,
       370,
+      374,
+      378,
       481,
-      535,
+      506,
+      510,
+      560,
+      564,
       721,
-      775,
+      746,
+      750,
       800,
+      804,
+      852,
       856,
+      857,
+      860,
+      861,
+      864,
+      865,
       961,
-      1015,
+      986,
+      990,
+      997,
+      1001,
+      1005,
+      1009,
+      1040,
+      1044,
       1085,
       1180
     ],
-    "orderDigest": "fbd1001e03fabd12afbbe044cbdc3d7d2420a62772052c2f12a28d910e84351e"
+    "orderDigest": "c2713ffd7c33b8d04855fe015d07911df4b55a9ca3e558247dcd6741edab3401"
   },
   "artifacts": {
     "reel": {
       "path": "artifacts/skybao-film/review/skybao-targeted-review-reel.mp4",
-      "sha256": "5a7ca1a14507c140f4a777f83bde9eea8b09ecf59567e46fb49ad8b9d6a5088c",
+      "sha256": "6c274ac3c88cbdf952e42a3b0c59a30060927dc9e7e51d402bf74bfa8c579c60",
       "metadata": {
         "width": 1920,
         "height": 1080,
         "codec": "h264",
         "pixFmt": "yuv420p",
         "fps": 30,
-        "duration": 8,
-        "frameCount": 240
+        "duration": 14.5,
+        "frameCount": 435
       }
     },
     "contactSheet": {
       "path": "artifacts/skybao-film/review/skybao-targeted-review-contact-sheet.png",
-      "sha256": "e9e2ba90572251654473139c41200224186faf4e6d1faed2c883406995d091ce",
+      "sha256": "ca59cda8904d97cb16e7772bd8a32f10224089e6cb98e546e6aa99d620b7424b",
       "metadata": {
         "width": 1920,
         "height": 1080,
-        "columns": 4,
-        "rows": 4,
-        "frameCount": 16
+        "columns": 8,
+        "rows": 8,
+        "frameCount": 58,
+        "offsetY": 0
       }
     }
   }

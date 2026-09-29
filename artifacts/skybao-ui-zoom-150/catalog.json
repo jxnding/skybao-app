@@ -1,0 +1,855 @@
+{
+  "aggregateSha256": "c7874fd221ea81354f18c7362b058943e065bc6f06cb5d640d42ec8c2b024ed5",
+  "assets": [
+    {
+      "area": "admin",
+      "capturedFrames": 90,
+      "contentSha256": "e91809fdab1415a0621583d71796eb8852303e618d5989cd25ef48601581e115",
+      "directory": "clips/admin/admin-privacy-to-users",
+      "durationSeconds": 3,
+      "fps": 30,
+      "frameCount": 90,
+      "framing": "workspace",
+      "height": 1080,
+      "id": "admin-privacy-to-users",
+      "label": "Admin · privacy to users",
+      "ownerId": "admin-privacy-to-users",
+      "recipeSha256": "729fa04402a099c47d10cc345abbf3df09e8d0bc4b1c5cb505973adc3555e385",
+      "recipeVersion": "skybao-capture-v4",
+      "route": "/admin?view=Privacy",
+      "sampled": false,
+      "state": "admin-privacy-to-users",
+      "timeline": "clips/admin/admin-privacy-to-users/timeline.json",
+      "type": "clip",
+      "width": 1920
+    },
+    {
+      "area": "admin",
+      "capturedFrames": 90,
+      "contentSha256": "7f247374f4323d3516fe172e2fdeb9e98c032e1f402f48f5bbd41b9412e7e624",
+      "directory": "clips/admin/admin-users-to-models",
+      "durationSeconds": 3,
+      "fps": 30,
+      "frameCount": 90,
+      "framing": "workspace",
+      "height": 1080,
+      "id": "admin-users-to-models",
+      "label": "Admin · users to models",
+      "ownerId": "admin-users-to-models",
+      "recipeSha256": "3ff2e549fcd6964c20177961addae90c02fa91e5fa8d2d99ea9f99e2eb7eda32",
+      "recipeVersion": "skybao-capture-v4",
+      "route": "/admin?view=Users",
+      "sampled": false,
+      "state": "admin-users-to-models",
+      "timeline": "clips/admin/admin-users-to-models/timeline.json",
+      "type": "clip",
+      "width": 1920
+    },
+    {
+      "area": "admin",
+      "contentSha256": "1b90399c265177b0366a6061e67adb20dfd15a8b6e7406a79771ba3ca25b5438",
+      "file": "stills/workspace/admin/admin-models.png",
+      "framing": "workspace",
+      "height": 1080,
+      "id": "admin-models",
+      "label": "Admin · Models",
+      "ownerId": "admin-models",
+      "recipeSha256": "798c29a9af3e4e71e23e019a897588c032a0ca46f2be70955da1b8ab7ce4e0be",
+      "recipeVersion": "skybao-capture-v4",
+      "route": "/admin?view=Models",
+      "state": "admin-models",
+      "type": "still",
+      "width": 1920
+    },
+    {
+      "area": "assistant",
+      "capturedFrames": 44,
+      "contentSha256": "325beeb610efdef5d339bf4045646684267ad614f23da79bbf88ed604bda7bf1",
+      "directory": "clips/assistant/area-nav-assistant-knowledge",
+      "durationSeconds": 1.4666666666666666,
+      "fps": 30,
+      "frameCount": 44,
+      "framing": "workspace",
+      "height": 1080,
+      "id": "area-nav-assistant-knowledge",
+      "label": "Navigation · Assistant to Knowledge",
+      "ownerId": "area-nav-assistant-knowledge",
+      "recipeSha256": "40eaff3c95507f72b9ac7e6402173b4f3a1bb5d8fbfd053a82135b4268ee2e5f",
+      "recipeVersion": "skybao-capture-v4",
+      "route": "/?demo=acme",
+      "sampled": false,
+      "state": "area-nav-assistant-knowledge",
+      "timeline": "clips/assistant/area-nav-assistant-knowledge/timeline.json",
+      "type": "clip",
+      "width": 1920
+    },
+    {
+      "area": "assistant",
+      "capturedFrames": 180,
+      "contentSha256": "583371f595821784d29d5207094c2c1a42899e5acb527e566e9f2934e4e750dc",
+      "directory": "clips/assistant/assistant-answer-typing",
+      "durationSeconds": 6,
+      "fps": 30,
+      "frameCount": 180,
+      "framing": "workspace",
+      "height": 1080,
+      "id": "assistant-answer-typing",
+      "label": "Assistant · grounded answer typing",
+      "ownerId": "assistant-answer-typing",
+      "recipeSha256": "0d156cc278261c3e0cb133bd25320ab062e1926451a81ebb93339a63b2783d61",
+      "recipeVersion": "skybao-capture-v4",
+      "route": "/?demo=acme",
+      "sampled": false,
+      "state": "assistant-answer-typing",
+      "timeline": "clips/assistant/assistant-answer-typing/timeline.json",
+      "type": "clip",
+      "width": 1920
+    },
+    {
+      "area": "assistant",
+      "capturedFrames": 120,
+      "contentSha256": "172cba767201f84a9d2dff280c49f34a18faba8c0fc560ebb2b430ef2602e7c7",
+      "directory": "clips/assistant/assistant-draft",
+      "durationSeconds": 4,
+      "fps": 30,
+      "frameCount": 120,
+      "framing": "workspace",
+      "height": 1080,
+      "id": "assistant-draft",
+      "label": "Assistant · editable response draft",
+      "ownerId": "assistant-draft",
+      "recipeSha256": "5b573df729512527c3ae3571d9c8d9423a9bbee7a09c0f0f1b2d07f2bd91ac20",
+      "recipeVersion": "skybao-capture-v4",
+      "route": "/?demo=acme",
+      "sampled": false,
+      "state": "assistant-draft",
+      "timeline": "clips/assistant/assistant-draft/timeline.json",
+      "type": "clip",
+      "width": 1920
+    },
+    {
+      "area": "assistant",
+      "capturedFrames": 120,
+      "contentSha256": "593b536509e1da5fde4ba2d0dfb8cdbe47ff25ea0050c34b6218bd23f2501854",
+      "directory": "clips/assistant/assistant-research",
+      "durationSeconds": 4,
+      "fps": 30,
+      "frameCount": 120,
+      "framing": "workspace",
+      "height": 1080,
+      "id": "assistant-research",
+      "label": "Assistant · source research",
+      "ownerId": "assistant-research",
+      "recipeSha256": "973b1acc5e99891e1f289bf38734d510413094f3bc382f819bd0c47c30d03664",
+      "recipeVersion": "skybao-capture-v4",
+      "route": "/?demo=acme",
+      "sampled": false,
+      "state": "assistant-research",
+      "timeline": "clips/assistant/assistant-research/timeline.json",
+      "type": "clip",
+      "width": 1920
+    },
+    {
+      "area": "communications",
+      "capturedFrames": 44,
+      "contentSha256": "d22e17c9ce579f4fc16bf26fb33bdb216d75678313081e897686a59cf5d20ede",
+      "directory": "clips/communications/area-nav-communications-work",
+      "durationSeconds": 1.4666666666666666,
+      "fps": 30,
+      "frameCount": 44,
+      "framing": "workspace",
+      "height": 1080,
+      "id": "area-nav-communications-work",
+      "label": "Navigation · Communications to Work",
+      "ownerId": "area-nav-communications-work",
+      "recipeSha256": "ea330e69c6bae6241d1d4cb6bcc1896492f3df2c465296ef2c1328feb9d2c069",
+      "recipeVersion": "skybao-capture-v4",
+      "route": "/communications?view=Inbox",
+      "sampled": false,
+      "state": "area-nav-communications-work",
+      "timeline": "clips/communications/area-nav-communications-work/timeline.json",
+      "type": "clip",
+      "width": 1920
+    },
+    {
+      "area": "communications",
+      "capturedFrames": 150,
+      "contentSha256": "0e845778b2123cbe39e7dc0f710d5e502d4d3649250a50526dd6dfa730335ed7",
+      "directory": "clips/communications/communications-draft-review",
+      "durationSeconds": 5,
+      "fps": 30,
+      "frameCount": 150,
+      "framing": "workspace",
+      "height": 1080,
+      "id": "communications-draft-review",
+      "label": "Communications · draft and submit for review",
+      "ownerId": "communications-draft-review",
+      "recipeSha256": "7fa6309515e91bfdb35f4eee77029b400636e363b5b37fb13a4c0a31afee5b11",
+      "recipeVersion": "skybao-capture-v4",
+      "route": "/communications?view=Inbox",
+      "sampled": false,
+      "state": "communications-draft-review",
+      "timeline": "clips/communications/communications-draft-review/timeline.json",
+      "type": "clip",
+      "width": 1920
+    },
+    {
+      "area": "communications",
+      "capturedFrames": 120,
+      "contentSha256": "974a9b447fd57c92004875a47faa5cfc376f5ef1bf2de31462bc89e7dceb8499",
+      "directory": "clips/communications/communications-filter-select",
+      "durationSeconds": 4,
+      "fps": 30,
+      "frameCount": 120,
+      "framing": "workspace",
+      "height": 1080,
+      "id": "communications-filter-select",
+      "label": "Communications · filter and select",
+      "ownerId": "communications-filter-select",
+      "recipeSha256": "4fafca215289d98bb279b273fab8f216deae86eb315758fdf5f763fe5020e22f",
+      "recipeVersion": "skybao-capture-v4",
+      "route": "/communications?view=Inbox",
+      "sampled": false,
+      "state": "communications-filter-select",
+      "timeline": "clips/communications/communications-filter-select/timeline.json",
+      "type": "clip",
+      "width": 1920
+    },
+    {
+      "area": "communications",
+      "capturedFrames": 90,
+      "contentSha256": "174507a1923a2b1fcbf8633a6994522542bf3ae51e71949c184252785fd23060",
+      "directory": "clips/communications/communications-source-preview",
+      "durationSeconds": 3,
+      "fps": 30,
+      "frameCount": 90,
+      "framing": "workspace",
+      "height": 1080,
+      "id": "communications-source-preview",
+      "label": "Communications · cited context",
+      "ownerId": "communications-source-preview",
+      "recipeSha256": "d77639f93fe5380d7fa3ac7026e68b5c3ea222174983055c94bf9d2d175c3b4f",
+      "recipeVersion": "skybao-capture-v4",
+      "route": "/communications?view=Inbox",
+      "sampled": false,
+      "state": "communications-source-preview",
+      "timeline": "clips/communications/communications-source-preview/timeline.json",
+      "type": "clip",
+      "width": 1920
+    },
+    {
+      "area": "knowledge",
+      "capturedFrames": 44,
+      "contentSha256": "035d0b9f2c37d28e45b6379c6cd9ac5fce168c3c655cea29caa8f262bc469869",
+      "directory": "clips/knowledge/area-nav-knowledge-communications",
+      "durationSeconds": 1.4666666666666666,
+      "fps": 30,
+      "frameCount": 44,
+      "framing": "workspace",
+      "height": 1080,
+      "id": "area-nav-knowledge-communications",
+      "label": "Navigation · Knowledge to Communications",
+      "ownerId": "area-nav-knowledge-communications",
+      "recipeSha256": "c1bdbd410986e4b0b45e067cb0a73f254d1d6b6085396912c3d582d77cfab8c5",
+      "recipeVersion": "skybao-capture-v4",
+      "route": "/knowledge?view=Files",
+      "sampled": false,
+      "state": "area-nav-knowledge-communications",
+      "timeline": "clips/knowledge/area-nav-knowledge-communications/timeline.json",
+      "type": "clip",
+      "width": 1920
+    },
+    {
+      "area": "knowledge",
+      "capturedFrames": 150,
+      "contentSha256": "97711b2f2fddc75b80890304c4c1dad8753c1d9d5ff77992c278ae79ad16c0f9",
+      "directory": "clips/knowledge/knowledge-data-analysis",
+      "durationSeconds": 5,
+      "fps": 30,
+      "frameCount": 150,
+      "framing": "workspace",
+      "height": 1080,
+      "id": "knowledge-data-analysis",
+      "label": "Knowledge · switch dataset and ask",
+      "ownerId": "knowledge-data-analysis",
+      "recipeSha256": "bef6d665bbfbac58789dea7f76a0f23fbdc6532bcaaf381c6140dc962ce57fe4",
+      "recipeVersion": "skybao-capture-v4",
+      "route": "/knowledge?view=Data",
+      "sampled": false,
+      "state": "knowledge-data-analysis",
+      "timeline": "clips/knowledge/knowledge-data-analysis/timeline.json",
+      "type": "clip",
+      "width": 1920
+    },
+    {
+      "area": "knowledge",
+      "capturedFrames": 120,
+      "contentSha256": "dc45c940c41e9af1cc976d39ecdfe397ba47e8eaccd31eb9df3ba40ba24da6e9",
+      "directory": "clips/knowledge/knowledge-file-search",
+      "durationSeconds": 4,
+      "fps": 30,
+      "frameCount": 120,
+      "framing": "workspace",
+      "height": 1080,
+      "id": "knowledge-file-search",
+      "label": "Knowledge · search and filter files",
+      "ownerId": "knowledge-file-search",
+      "recipeSha256": "52f569abe8e1c2881984f9f627b10a864f18176d13962ca5d61ff0d019c577bf",
+      "recipeVersion": "skybao-capture-v4",
+      "route": "/knowledge?view=Files",
+      "sampled": false,
+      "state": "knowledge-file-search",
+      "timeline": "clips/knowledge/knowledge-file-search/timeline.json",
+      "type": "clip",
+      "width": 1920
+    },
+    {
+      "area": "knowledge",
+      "capturedFrames": 90,
+      "contentSha256": "0b650f7aa687de6b034fcbb9e0d3ac3549854a2ab2aff35bab18321485538c74",
+      "directory": "clips/knowledge/knowledge-source-preview",
+      "durationSeconds": 3,
+      "fps": 30,
+      "frameCount": 90,
+      "framing": "workspace",
+      "height": 1080,
+      "id": "knowledge-source-preview",
+      "label": "Knowledge · source preview",
+      "ownerId": "knowledge-source-preview",
+      "recipeSha256": "6c1d2646a0d30f939d56b6bfbe58e5b1998e9c93d7f044b2a25b6192993ea552",
+      "recipeVersion": "skybao-capture-v4",
+      "route": "/knowledge?view=Files",
+      "sampled": false,
+      "state": "knowledge-source-preview",
+      "timeline": "clips/knowledge/knowledge-source-preview/timeline.json",
+      "type": "clip",
+      "width": 1920
+    },
+    {
+      "area": "work",
+      "capturedFrames": 44,
+      "contentSha256": "6ef6449f8a74f21a7ee58600040fd3a6fafa6448253fadc4d998a88f42433686",
+      "directory": "clips/work/area-nav-work-admin",
+      "durationSeconds": 1.4666666666666666,
+      "fps": 30,
+      "frameCount": 44,
+      "framing": "workspace",
+      "height": 1080,
+      "id": "area-nav-work-admin",
+      "label": "Navigation · Work to Admin",
+      "ownerId": "area-nav-work-admin",
+      "recipeSha256": "d17eda306d87eefaaaaea9fed410440745753c1c6d756e6122d63d66348c8326",
+      "recipeVersion": "skybao-capture-v4",
+      "route": "/work?view=Board&created=1&focus=acme",
+      "sampled": false,
+      "state": "area-nav-work-admin",
+      "timeline": "clips/work/area-nav-work-admin/timeline.json",
+      "type": "clip",
+      "width": 1920
+    },
+    {
+      "area": "work",
+      "capturedFrames": 90,
+      "contentSha256": "a83917ad81566712a0159267375926175c52b03a6268cc20fe549d491d8536c5",
+      "directory": "clips/work/work-agent-run-detail",
+      "durationSeconds": 3,
+      "fps": 30,
+      "frameCount": 90,
+      "framing": "workspace",
+      "height": 1080,
+      "id": "work-agent-run-detail",
+      "label": "Work · open agent run detail",
+      "ownerId": "work-agent-run-detail",
+      "recipeSha256": "9fc3574052e7c4fc9c599ad6bb9521f4759dd49bdaf716d08e4028be6429c36e",
+      "recipeVersion": "skybao-capture-v4",
+      "route": "/work?view=Agent+runs",
+      "sampled": false,
+      "state": "work-agent-run-detail",
+      "timeline": "clips/work/work-agent-run-detail/timeline.json",
+      "type": "clip",
+      "width": 1920
+    },
+    {
+      "area": "work",
+      "capturedFrames": 120,
+      "contentSha256": "e1d341a29a0200e02af1ff423db53b4deb6ea17c2ebcef2527323f9ecb5b15ff",
+      "directory": "clips/work/work-board-drag",
+      "durationSeconds": 4,
+      "fps": 30,
+      "frameCount": 120,
+      "framing": "workspace",
+      "height": 1080,
+      "id": "work-board-drag",
+      "label": "Work · drag Acme review to complete",
+      "ownerId": "work-board-drag",
+      "recipeSha256": "6967190a49f487e33615018302b0c49a27907978b595bea62fe424aa740d0ab8",
+      "recipeVersion": "skybao-capture-v4",
+      "route": "/work?view=Board&created=1&focus=acme",
+      "sampled": false,
+      "state": "work-board-drag",
+      "timeline": "clips/work/work-board-drag/timeline.json",
+      "type": "clip",
+      "width": 1920
+    },
+    {
+      "area": "work",
+      "capturedFrames": 150,
+      "contentSha256": "e92cc72f03130b4d82a838a4a98bcfdf783e9d26a20a02814d5adbf281ed53a0",
+      "directory": "clips/work/work-task-approval",
+      "durationSeconds": 5,
+      "fps": 30,
+      "frameCount": 150,
+      "framing": "workspace",
+      "height": 1080,
+      "id": "work-task-approval",
+      "label": "Work · approve Acme response",
+      "ownerId": "work-task-approval",
+      "recipeSha256": "b2ec6616fe5ae7a9f8563882a9bb112b05e5192246cbf95e78a08bff5f5cd470",
+      "recipeVersion": "skybao-capture-v4",
+      "route": "/work?view=Board&created=1&focus=acme",
+      "sampled": false,
+      "state": "work-task-approval",
+      "timeline": "clips/work/work-task-approval/timeline.json",
+      "type": "clip",
+      "width": 1920
+    }
+  ],
+  "generatedAt": "2026-08-13T01:30:39.976Z",
+  "generator": {
+    "fontConfig": null,
+    "node": "v26.5.0",
+    "path": "frontend/scripts/video/capture-skybao-assets.mjs",
+    "platform": "darwin-arm64",
+    "puppeteer": "25.4.0",
+    "recipeVersion": "skybao-capture-v4"
+  },
+  "highlights": [
+    {
+      "assetId": "assistant-research",
+      "border": {
+        "bottom": "1px solid color(srgb 0.203922 0.827451 0.6 / 0.3)",
+        "left": "1px solid color(srgb 0.203922 0.827451 0.6 / 0.3)",
+        "right": "1px solid color(srgb 0.203922 0.827451 0.6 / 0.3)",
+        "top": "1px solid color(srgb 0.203922 0.827451 0.6 / 0.3)"
+      },
+      "cornerRadii": {
+        "bottomLeft": "10px",
+        "bottomRight": "10px",
+        "topLeft": "10px",
+        "topRight": "10px"
+      },
+      "cssBounds": {
+        "height": 48,
+        "left": 188,
+        "top": 385.5,
+        "width": 336
+      },
+      "cutout": {
+        "paddingPx": [
+          9,
+          9
+        ],
+        "path": "highlights/assistant-research-card-0.png",
+        "sha256": "145f31736736b39ec79785e96b46b3bc37c91f2c946fd83fdfba189135d7458c"
+      },
+      "designLanguageSha256": "645a535bfb085ccb388489dbcd4d857324a96e50d17596f26157b1addcb8f765",
+      "dpr": 1.5,
+      "normalizedBounds": {
+        "height": 0.06666666666666667,
+        "left": 0.146875,
+        "top": 0.5354166666666667,
+        "width": 0.2625
+      },
+      "padding": {
+        "cssPx": 6,
+        "physicalPx": 9
+      },
+      "phase": "after-action",
+      "physicalBounds": {
+        "height": 72,
+        "left": 282,
+        "top": 578,
+        "width": 504
+      },
+      "shadow": "none",
+      "sourceFrame": 11,
+      "target": "assistant-research-card-0",
+      "targetId": "assistant-research-card-0",
+      "theme": "dark",
+      "viewport": {
+        "dpr": 1.5,
+        "height": 720,
+        "width": 1280
+      }
+    },
+    {
+      "assetId": "assistant-research",
+      "border": {
+        "bottom": "1px solid color(srgb 0.203922 0.827451 0.6 / 0.3)",
+        "left": "1px solid color(srgb 0.203922 0.827451 0.6 / 0.3)",
+        "right": "1px solid color(srgb 0.203922 0.827451 0.6 / 0.3)",
+        "top": "1px solid color(srgb 0.203922 0.827451 0.6 / 0.3)"
+      },
+      "cornerRadii": {
+        "bottomLeft": "10px",
+        "bottomRight": "10px",
+        "topLeft": "10px",
+        "topRight": "10px"
+      },
+      "cssBounds": {
+        "height": 48,
+        "left": 532,
+        "top": 385.5,
+        "width": 336
+      },
+      "cutout": {
+        "paddingPx": [
+          9,
+          9
+        ],
+        "path": "highlights/assistant-research-card-1.png",
+        "sha256": "f9078948998970e9ff1bda3ad7367554a5ef0ad62877eaba4f643beab764239a"
+      },
+      "designLanguageSha256": "645a535bfb085ccb388489dbcd4d857324a96e50d17596f26157b1addcb8f765",
+      "dpr": 1.5,
+      "normalizedBounds": {
+        "height": 0.06666666666666667,
+        "left": 0.415625,
+        "top": 0.5354166666666667,
+        "width": 0.2625
+      },
+      "padding": {
+        "cssPx": 6,
+        "physicalPx": 9
+      },
+      "phase": "after-action",
+      "physicalBounds": {
+        "height": 72,
+        "left": 798,
+        "top": 578,
+        "width": 504
+      },
+      "shadow": "none",
+      "sourceFrame": 35,
+      "target": "assistant-research-card-1",
+      "targetId": "assistant-research-card-1",
+      "theme": "dark",
+      "viewport": {
+        "dpr": 1.5,
+        "height": 720,
+        "width": 1280
+      }
+    },
+    {
+      "assetId": "assistant-research",
+      "border": {
+        "bottom": "1px solid color(srgb 0.203922 0.827451 0.6 / 0.3)",
+        "left": "1px solid color(srgb 0.203922 0.827451 0.6 / 0.3)",
+        "right": "1px solid color(srgb 0.203922 0.827451 0.6 / 0.3)",
+        "top": "1px solid color(srgb 0.203922 0.827451 0.6 / 0.3)"
+      },
+      "cornerRadii": {
+        "bottomLeft": "10px",
+        "bottomRight": "10px",
+        "topLeft": "10px",
+        "topRight": "10px"
+      },
+      "cssBounds": {
+        "height": 48,
+        "left": 188,
+        "top": 441.5,
+        "width": 336
+      },
+      "cutout": {
+        "paddingPx": [
+          9,
+          9
+        ],
+        "path": "highlights/assistant-research-card-2.png",
+        "sha256": "cdb1fe3ac21f06ca4cabeec9b0f6ec124abd26197c1d9dc4b575b3a7b499eb88"
+      },
+      "designLanguageSha256": "645a535bfb085ccb388489dbcd4d857324a96e50d17596f26157b1addcb8f765",
+      "dpr": 1.5,
+      "normalizedBounds": {
+        "height": 0.06666666666666667,
+        "left": 0.146875,
+        "top": 0.6131944444444445,
+        "width": 0.2625
+      },
+      "padding": {
+        "cssPx": 6,
+        "physicalPx": 9
+      },
+      "phase": "after-action",
+      "physicalBounds": {
+        "height": 72,
+        "left": 282,
+        "top": 662,
+        "width": 504
+      },
+      "shadow": "none",
+      "sourceFrame": 59,
+      "target": "assistant-research-card-2",
+      "targetId": "assistant-research-card-2",
+      "theme": "dark",
+      "viewport": {
+        "dpr": 1.5,
+        "height": 720,
+        "width": 1280
+      }
+    },
+    {
+      "assetId": "assistant-research",
+      "border": {
+        "bottom": "1px solid color(srgb 0.203922 0.827451 0.6 / 0.3)",
+        "left": "1px solid color(srgb 0.203922 0.827451 0.6 / 0.3)",
+        "right": "1px solid color(srgb 0.203922 0.827451 0.6 / 0.3)",
+        "top": "1px solid color(srgb 0.203922 0.827451 0.6 / 0.3)"
+      },
+      "cornerRadii": {
+        "bottomLeft": "10px",
+        "bottomRight": "10px",
+        "topLeft": "10px",
+        "topRight": "10px"
+      },
+      "cssBounds": {
+        "height": 48,
+        "left": 532,
+        "top": 441.5,
+        "width": 336
+      },
+      "cutout": {
+        "paddingPx": [
+          9,
+          9
+        ],
+        "path": "highlights/assistant-research-card-3.png",
+        "sha256": "d6e24c13e697c64e1727fee7a5be5b6d43e0fc71b8fa55b9ee02a73db9b4ea54"
+      },
+      "designLanguageSha256": "645a535bfb085ccb388489dbcd4d857324a96e50d17596f26157b1addcb8f765",
+      "dpr": 1.5,
+      "normalizedBounds": {
+        "height": 0.06666666666666667,
+        "left": 0.415625,
+        "top": 0.6131944444444445,
+        "width": 0.2625
+      },
+      "padding": {
+        "cssPx": 6,
+        "physicalPx": 9
+      },
+      "phase": "after-action",
+      "physicalBounds": {
+        "height": 72,
+        "left": 798,
+        "top": 662,
+        "width": 504
+      },
+      "shadow": "none",
+      "sourceFrame": 83,
+      "target": "assistant-research-card-3",
+      "targetId": "assistant-research-card-3",
+      "theme": "dark",
+      "viewport": {
+        "dpr": 1.5,
+        "height": 720,
+        "width": 1280
+      }
+    },
+    {
+      "assetId": "knowledge-source-preview",
+      "border": {
+        "bottom": "0px none rgb(39, 112, 107)",
+        "left": "0px none rgb(39, 112, 107)",
+        "right": "0px none rgb(39, 112, 107)",
+        "top": "0px none rgb(39, 112, 107)"
+      },
+      "cornerRadii": {
+        "bottomLeft": "0px",
+        "bottomRight": "0px",
+        "topLeft": "0px",
+        "topRight": "0px"
+      },
+      "cssBounds": {
+        "height": 30,
+        "left": 1175.984375,
+        "top": 445,
+        "width": 35
+      },
+      "cutout": {
+        "paddingPx": [
+          9,
+          9
+        ],
+        "path": "highlights/knowledge-file-preview-0.png",
+        "sha256": "c3c8885d2ed1e326cafde9c722968cf679316c5c6c743872a9bbf10affc8eece"
+      },
+      "designLanguageSha256": "645a535bfb085ccb388489dbcd4d857324a96e50d17596f26157b1addcb8f765",
+      "dpr": 1.5,
+      "normalizedBounds": {
+        "height": 0.041666666666666664,
+        "left": 0.91873779296875,
+        "top": 0.6180555555555556,
+        "width": 0.02734375
+      },
+      "padding": {
+        "cssPx": 6,
+        "physicalPx": 9
+      },
+      "phase": "before-action",
+      "physicalBounds": {
+        "height": 45,
+        "left": 1764,
+        "top": 668,
+        "width": 53
+      },
+      "shadow": "none",
+      "sourceFrame": 28,
+      "target": "knowledge-file-preview-0",
+      "targetId": "knowledge-file-preview-0",
+      "theme": "dark",
+      "viewport": {
+        "dpr": 1.5,
+        "height": 720,
+        "width": 1280
+      }
+    },
+    {
+      "assetId": "work-task-approval",
+      "border": {
+        "bottom": "1px solid rgba(125, 211, 252, 0.35)",
+        "left": "1px solid rgba(125, 211, 252, 0.35)",
+        "right": "1px solid rgba(125, 211, 252, 0.35)",
+        "top": "1px solid rgba(125, 211, 252, 0.35)"
+      },
+      "cornerRadii": {
+        "bottomLeft": "10px",
+        "bottomRight": "10px",
+        "topLeft": "10px",
+        "topRight": "10px"
+      },
+      "cssBounds": {
+        "height": 36,
+        "left": 903,
+        "top": 641,
+        "width": 334
+      },
+      "cutout": {
+        "paddingPx": [
+          9,
+          9
+        ],
+        "path": "highlights/work-task-approve.png",
+        "sha256": "6fe4c61a332663c517536ad18ab46648f8a3e293e6312acf19f63fddfb14424c"
+      },
+      "designLanguageSha256": "645a535bfb085ccb388489dbcd4d857324a96e50d17596f26157b1addcb8f765",
+      "dpr": 1.5,
+      "normalizedBounds": {
+        "height": 0.05,
+        "left": 0.70546875,
+        "top": 0.8902777777777777,
+        "width": 0.2609375
+      },
+      "padding": {
+        "cssPx": 6,
+        "physicalPx": 9
+      },
+      "phase": "before-action",
+      "physicalBounds": {
+        "height": 54,
+        "left": 1355,
+        "top": 962,
+        "width": 501
+      },
+      "shadow": "rgba(37, 99, 235, 0.22) 0px 10px 24px 0px",
+      "sourceFrame": 76,
+      "target": "work-task-approve",
+      "targetId": "work-task-approve",
+      "theme": "dark",
+      "viewport": {
+        "dpr": 1.5,
+        "height": 720,
+        "width": 1280
+      }
+    },
+    {
+      "assetId": "admin-privacy-to-users",
+      "border": {
+        "bottom": "0px none rgb(255, 255, 255)",
+        "left": "0px none rgb(255, 255, 255)",
+        "right": "0px none rgb(255, 255, 255)",
+        "top": "0px none rgb(255, 255, 255)"
+      },
+      "cornerRadii": {
+        "bottomLeft": "8px",
+        "bottomRight": "8px",
+        "topLeft": "8px",
+        "topRight": "8px"
+      },
+      "cssBounds": {
+        "height": 30,
+        "left": 882.640625,
+        "top": 48.5,
+        "width": 49.859375
+      },
+      "cutout": {
+        "paddingPx": [
+          9,
+          9
+        ],
+        "path": "highlights/native-tab-users.png",
+        "sha256": "ff5bd350a5374d5c3d5f3216cb3af9eb644e55d64ef09c79a70156884be276b4"
+      },
+      "designLanguageSha256": "645a535bfb085ccb388489dbcd4d857324a96e50d17596f26157b1addcb8f765",
+      "dpr": 1.5,
+      "normalizedBounds": {
+        "height": 0.041666666666666664,
+        "left": 0.68956298828125,
+        "top": 0.06736111111111111,
+        "width": 0.03895263671875
+      },
+      "padding": {
+        "cssPx": 6,
+        "physicalPx": 9
+      },
+      "phase": "after-action",
+      "physicalBounds": {
+        "height": 45,
+        "left": 1324,
+        "top": 73,
+        "width": 75
+      },
+      "shadow": "none",
+      "sourceFrame": 30,
+      "target": "native-tab-users",
+      "targetId": "native-tab-users",
+      "theme": "dark",
+      "viewport": {
+        "dpr": 1.5,
+        "height": 720,
+        "width": 1280
+      }
+    }
+  ],
+  "profile": "zoom150",
+  "recipeVersion": "skybao-capture-v4",
+  "sampled": false,
+  "schemaVersion": 2,
+  "settings": {
+    "alphaMode": "straight",
+    "colorSpace": "sRGB",
+    "cssHeight": 720,
+    "cssWidth": 1280,
+    "dpr": 1.5,
+    "fps": 30,
+    "height": 1080,
+    "theme": "dark",
+    "width": 1920
+  },
+  "source": {
+    "buildSha256": "a3f8b3872592ae81a5e929bc05f97c631ff20839f100efb7dcec9bfe2f4b5323",
+    "designLanguageSha256": "645a535bfb085ccb388489dbcd4d857324a96e50d17596f26157b1addcb8f765",
+    "frontendSourceSha256": "49a85a8fb233895c72c0f0729a273d37ba7f742a50dbe6f3d3bdeb1c4f499b82"
+  },
+  "zoomPercent": 150
+}

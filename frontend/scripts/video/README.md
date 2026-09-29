@@ -41,6 +41,23 @@ or start a browser. If it reports a stale capture after UI work, use a targeted
 
 `--smoke` advances every interaction through its complete timeline but saves only the start, middle, and end frames. It is for fast selector and alpha validation, not editing. Unless `--out` is supplied, smoke runs write to `artifacts/skybao-ui-smoke/` so they cannot replace the complete library in `artifacts/skybao-ui/`.
 
+### Zoom review
+
+To compare the five deterministic hero states at browser-style 100–200% zoom,
+run:
+
+```bash
+yarn video:assets:zoom-review
+```
+
+This capture-only workflow writes an ignored package to
+`artifacts/skybao-ui-zoom-review/`: 25 sharp 1920×1080 PNGs, a labeled 5×5
+contact sheet, area strips, and a manifest containing the CSS viewport, DPR,
+runtime measurements, source frame, cursor events, and canonical hash. The
+100% column is copied byte-for-byte from `artifacts/skybao-ui`; 125–200% uses
+the real capture-enabled production UI with responsive overflow/cropping left
+visible. It never replaces canonical assets.
+
 The default command builds with `VITE_SKYBAO_CAPTURE=1`. Artifact mode is compiled out of ordinary production builds, so query parameters cannot bypass the normal application shell or authentication flow. Use `--skip-build` only after a capture-enabled build; a custom `--base-url` must likewise have been started with that environment flag.
 
 ## Artifact layout

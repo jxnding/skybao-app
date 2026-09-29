@@ -1,18 +1,18 @@
 {
   "audio": {
-    "path": "artifacts/skybao-film/audio/targeted-review-mix.wav",
+    "path": "artifacts/skybao-film/audio/skybao-mix.wav",
     "sha256": "ff4c45fa4973e7c71936ec4cdb93e3d4f9283aa5de4aa699e6a7ed22197f2833"
   },
   "blender": {
     "engine": "CYCLES",
-    "objects": 62,
+    "objects": 70,
     "version": "5.2.0 LTS"
   },
   "environment": {
     "id": "skybao-glass-atmosphere",
     "path": "frontend/scripts/video/film/environment.json",
     "seed": 830194,
-    "sha256": "c78468645dd5d8bd67f224f2c4fd76f46cdc08c3b0b9906cc64b6ece006755ac"
+    "sha256": "eaca80cc68dde6799474dd18d25bb796e3c417c4d985914230e164cdec13fffe"
   },
   "format": {
     "fps": 30,
@@ -23,7 +23,7 @@
   "inputAssets": {
     "builder": {
       "path": "frontend/scripts/video/film/build-blender.py",
-      "sha256": "af477e3e17193091dfd5cb7841b1c84e78c901a11c1efe308431e36a6b470b15"
+      "sha256": "374cded294f63f6195a95b8cb0b843ea6f03c59c5c6d1a1ab9c3c11ff8460d71"
     },
     "cloudCard-far": {
       "path": "frontend/public/clouds-dark.webp",
@@ -43,7 +43,7 @@
     },
     "consumer": {
       "path": "frontend/scripts/video/film/build-blender.py",
-      "sha256": "af477e3e17193091dfd5cb7841b1c84e78c901a11c1efe308431e36a6b470b15"
+      "sha256": "374cded294f63f6195a95b8cb0b843ea6f03c59c5c6d1a1ab9c3c11ff8460d71"
     },
     "cursorHelper": {
       "path": "frontend/scripts/video/film/cursor_window.py",
@@ -51,11 +51,11 @@
     },
     "sceneContract": {
       "path": "frontend/scripts/video/film/scene-contract.py",
-      "sha256": "81b406c197b4bdce146c33232a5b2460ff9bde5cf284be62bb0646e4b28b80d3"
+      "sha256": "5b09c2bb339e4107859a0e6612dbbb05d3b6cb9883ed8ce1779229560937a060"
     },
     "shotlist": {
       "path": "frontend/scripts/video/film/shotlist.json",
-      "sha256": "433e5f9243029cfd881f054f1d3d44d2c516a14c93f41ea6de91a0d58e1eefd9"
+      "sha256": "8a582adba80ff0af92386635297368392ac636c92c4f7d4f4184ead2e0254c2e"
     },
     "uiCatalog": {
       "path": "artifacts/skybao-ui/catalog.json",
@@ -66,7 +66,7 @@
     "activeDeviceIds": [
       "METAL_Apple M1 Max (GPU - 32 cores)"
     ],
-    "adaptiveThreshold": 0.03999999910593033,
+    "adaptiveThreshold": 0.029999999329447746,
     "animatedSeed": false,
     "bounces": {
       "causticsReflective": false,
@@ -87,7 +87,7 @@
       "useGpu": true
     },
     "deviceFallback": null,
-    "deviceRequested": "auto",
+    "deviceRequested": "metal",
     "deviceResolved": "metal",
     "devices": [
       {
@@ -103,13 +103,13 @@
         "use": true
       }
     ],
-    "elapsedRenderSeconds": 72.41635454099742,
+    "elapsedRenderSeconds": 3094.9243944580085,
     "engine": "CYCLES",
     "metalRT": "AUTO",
     "persistentData": true,
-    "profile": "targeted",
-    "resolutionPercentage": 100,
-    "samples": 16,
+    "profile": "preview",
+    "resolutionPercentage": 50,
+    "samples": 32,
     "seed": 830194
   },
   "scene": {
@@ -500,6 +500,112 @@
     ],
     "cursor_tracks": 16,
     "editorial_callouts": 5,
+    "emphasis_beats": [
+      {
+        "crop": {
+          "center": [
+            0.5,
+            0.5
+          ],
+          "scale": [
+            0.58,
+            0.58
+          ]
+        },
+        "frame": 11,
+        "id": "assistant-source-1",
+        "object": "Emphasis.assistant-source-1.0",
+        "overlay": "ElementPop.assistant-source-1.0",
+        "radiusM": 0.16,
+        "shotId": "assistant-research",
+        "sourceNormalized": [
+          0.352,
+          0.38
+        ],
+        "sourceSizeNormalized": [
+          0.18,
+          0.06
+        ]
+      },
+      {
+        "crop": {
+          "center": [
+            0.5,
+            0.5
+          ],
+          "scale": [
+            0.58,
+            0.58
+          ]
+        },
+        "frame": 35,
+        "id": "assistant-source-2",
+        "object": "Emphasis.assistant-source-2.1",
+        "overlay": "ElementPop.assistant-source-2.1",
+        "radiusM": 0.16,
+        "shotId": "assistant-research",
+        "sourceNormalized": [
+          0.531,
+          0.38
+        ],
+        "sourceSizeNormalized": [
+          0.18,
+          0.06
+        ]
+      },
+      {
+        "crop": {
+          "center": [
+            0.5,
+            0.5
+          ],
+          "scale": [
+            0.58,
+            0.58
+          ]
+        },
+        "frame": 59,
+        "id": "assistant-source-3",
+        "object": "Emphasis.assistant-source-3.2",
+        "overlay": "ElementPop.assistant-source-3.2",
+        "radiusM": 0.16,
+        "shotId": "assistant-research",
+        "sourceNormalized": [
+          0.352,
+          0.431
+        ],
+        "sourceSizeNormalized": [
+          0.18,
+          0.06
+        ]
+      },
+      {
+        "crop": {
+          "center": [
+            0.5,
+            0.5
+          ],
+          "scale": [
+            0.58,
+            0.58
+          ]
+        },
+        "frame": 83,
+        "id": "assistant-source-4",
+        "object": "Emphasis.assistant-source-4.3",
+        "overlay": "ElementPop.assistant-source-4.3",
+        "radiusM": 0.16,
+        "shotId": "assistant-research",
+        "sourceNormalized": [
+          0.531,
+          0.431
+        ],
+        "sourceSizeNormalized": [
+          0.18,
+          0.06
+        ]
+      }
+    ],
     "environment": "skybao-glass-atmosphere",
     "portable_dependencies": {
       "images": 20,
@@ -743,7 +849,7 @@
   "schemaVersion": 2,
   "shotlist": {
     "path": "frontend/scripts/video/film/shotlist.json",
-    "sha256": "433e5f9243029cfd881f054f1d3d44d2c516a14c93f41ea6de91a0d58e1eefd9"
+    "sha256": "8a582adba80ff0af92386635297368392ac636c92c4f7d4f4184ead2e0254c2e"
   },
   "uiCatalog": {
     "aggregateSha256": "c288346c2a55d92ef5ca4397ed16e0453c06fb32907fc5774c700685ff03adc7",
@@ -1068,6 +1174,6 @@
       "type": "still"
     }
   ],
-  "inputFingerprint": "8191fc100bd71f126906707aef1c0a045405fe5a7f66bab1eef5d37d2d6f1920",
-  "profileFingerprint": "533178cf9b068eb8f3d5d14afb83003e1f4b12842d85bf51472322ec5b40dc22"
+  "inputFingerprint": "02d0f29304bda8ea3303cd4c58abea87e903aa990e1aaba55583b1739911487d",
+  "profileFingerprint": "3ed8b879c79f7a9d5e5942c70d5a0eda959d97c7d181fa708e02bf5e1a53263e"
 }

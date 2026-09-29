@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { assertCurrentProfileManifest, assertCurrentRenderReport, assertManifestInputsCurrent, bindManifest, inputFingerprint, profileFingerprint, sha256 } from "./provenance.mjs";
+import { assertCurrentProfileManifest, assertCurrentRenderReport, assertFullPackageReceipt, assertManifestInputsCurrent, assertReviewPackageReceipt, bindManifest, inputFingerprint, profileFingerprint, reviewPackageSpec, sha256, sha256Json } from "./provenance.mjs";
 
 // Fast fixture for the handoff contract. This deliberately constructs the same
 // profile-manifest/report envelope without invoking Blender or encoding frames.
@@ -58,6 +58,77 @@ changed.scene.objects = 2;
 assert.notEqual(inputFingerprint(changed), final.inputFingerprint);
 assert.throws(() => assertCurrentProfileManifest(changed, final.inputFingerprint));
 assert.throws(() => assertCurrentRenderReport({ ...report, inputFingerprint: "0".repeat(64) }, final.inputFingerprint, "2".repeat(64)));
+
+// Lifecycle fixtures: the full approval is paired to both exact review
+// receipts, not merely to their shared source fingerprint.
+const lifecycleFull = {
+  schemaVersion: 2,
+  inputFingerprint: "3".repeat(64),
+  reviewReceipt: {
+    path: "artifacts/skybao-film/provenance/targeted-review-receipt.json",
+    sha256: "4".repeat(64),
+    inputFingerprint: "3".repeat(64),
+  },
+  reviewPackageReceipt: {
+    path: "artifacts/skybao-film/provenance/review-package-receipt.json",
+    sha256: "5".repeat(64),
+    inputFingerprint: "3".repeat(64),
+  },
+  artifacts: { "deliverables/skybao-40s-master.mp4": "6".repeat(64) },
+};
+assert.doesNotThrow(() => assertFullPackageReceipt(lifecycleFull));
+assert.doesNotThrow(() => assertFullPackageReceipt({ ...lifecycleFull, reviewReceipt: { ...lifecycleFull.reviewReceipt, sha256: "7".repeat(64) } }));
+assert.throws(() => assertFullPackageReceipt(lifecycleFull, {
+  expectedReviewReceiptSha256: "7".repeat(64),
+}));
+assert.throws(() => assertFullPackageReceipt(lifecycleFull, {
+  expectedReviewPackageReceiptSha256: "7".repeat(64),
+}));
+assert.throws(() => assertFullPackageReceipt({ ...lifecycleFull, reviewPackageReceipt: undefined }));
+assert.notEqual(inputFingerprint({ ...final, scene: { objects: 99 } }), final.inputFingerprint); // changed-input refresh
+assert.equal(inputFingerprint(final), inputFingerprint(fixture("final"))); // same-input preserve
+
+// Review package metadata is derived from the exact current frame list. The
+// fixture exercises the full 38-frame contract plus its rejection boundaries.
+const reviewFrames = Array.from({ length: 38 }, (_, index) => index + 1);
+const reviewSpec = reviewPackageSpec(reviewFrames);
+const validReviewPackage = {
+  schemaVersion: 2,
+  targetedReviewReceipt: { path: "artifacts/skybao-film/provenance/targeted-review-receipt.json", sha256: "7".repeat(64), inputFingerprint: "3".repeat(64) },
+  sourceFrames: { count: reviewFrames.length, order: reviewFrames, orderDigest: sha256Json(reviewFrames) },
+  artifacts: {
+    reel: { path: "artifacts/skybao-film/review/skybao-targeted-review-reel.mp4", sha256: "8".repeat(64), metadata: { width: reviewSpec.width, height: reviewSpec.height, codec: "h264", pixFmt: "yuv420p", fps: 30, frameCount: reviewSpec.frameCount, duration: reviewSpec.duration } },
+    contactSheet: { path: "artifacts/skybao-film/review/skybao-targeted-review-contact-sheet.png", sha256: "9".repeat(64), metadata: { width: reviewSpec.width, height: reviewSpec.height, columns: reviewSpec.columns, rows: reviewSpec.rows, frameCount: reviewFrames.length, offsetY: reviewSpec.padTop } },
+  },
+};
+assert.doesNotThrow(() => assertReviewPackageReceipt(validReviewPackage, { expectedFrames: reviewFrames }));
+const clone = (value) => JSON.parse(JSON.stringify(value));
+const wrongFrameCount = clone(validReviewPackage);
+wrongFrameCount.sourceFrames.count = 37;
+assert.throws(() => assertReviewPackageReceipt(wrongFrameCount, { expectedFrames: reviewFrames }));
+const wrongGrid = clone(validReviewPackage);
+wrongGrid.artifacts.contactSheet.metadata.columns = 4;
+assert.throws(() => assertReviewPackageReceipt(wrongGrid, { expectedFrames: reviewFrames }));
+const wrongOffset = clone(validReviewPackage);
+wrongOffset.artifacts.contactSheet.metadata.offsetY = 0;
+assert.throws(() => assertReviewPackageReceipt(wrongOffset, { expectedFrames: reviewFrames }));
+const wrongDuration = clone(validReviewPackage);
+wrongDuration.artifacts.reel.metadata.duration = 8;
+assert.throws(() => assertReviewPackageReceipt(wrongDuration, { expectedFrames: reviewFrames }));
+
+// The pre-render receipt gate and the post-render manifest deliberately share
+// scene portability data; observed render duration must not alter their input
+// fingerprint.
+const portableScene = { objects: 1, portable_dependencies: { images: 19, sounds: 1, missing: 0 } };
+const preRenderManifest = bindManifest({
+  ...fixture("final"), scene: portableScene,
+  render: { ...fixture("final").render, elapsedRenderSeconds: 0 },
+});
+const postRenderManifest = bindManifest({
+  ...fixture("final"), scene: portableScene,
+  render: { ...fixture("final").render, elapsedRenderSeconds: 42.5 },
+});
+assert.equal(preRenderManifest.inputFingerprint, postRenderManifest.inputFingerprint);
 
 // Two checkouts with identical relative inputs must share provenance; an
 // absolute checkout path must never become part of the fingerprint.
